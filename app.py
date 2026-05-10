@@ -42,21 +42,24 @@ if df is not None:
     # Sidebar për filtrat
     st.sidebar.header("Filtrat e Kërkimit")
     
-    # 1. Filtri i Agjentit
+    # 1. Filtri i Agjentit (I rregulluar)
+    # Kthejmë çdo gjë në tekst dhe heqim vlerat bosh që të mos japë error sorted()
+    lista_agjenteve = df['ForcaShitese'].astype(str).unique().tolist()
     agjentet = st.sidebar.multiselect(
         "Zgjidh Forcën Shitëse:",
-        options=sorted(df['ForcaShitese'].unique().tolist())
+        options=sorted([x for x in lista_agjenteve if x != 'nan'])
     )
     
     # 2. Kërkimi i Klientit
     search_klient = st.sidebar.text_input("Kërko Klientin (Shkruaj emrin):")
     
-    # 3. Filtri i Kategorisë
+    # 3. Filtri i Kategorisë (I rregulluar)
+    lista_kat = df['kat'].astype(str).unique().tolist()
     kategorite = st.sidebar.multiselect(
         "Filtro sipas Kategorisë:",
-        options=sorted(df['kat'].unique().tolist())
+        options=sorted([x for x in lista_kat if x != 'nan'])
     )
-
+    
     # --- APLIKIMI I FILTRAVE ---
     filtered_df = df.copy()
     
