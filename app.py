@@ -296,7 +296,7 @@ elif page == "Realizimi":
         # --- 2. METRIKAT KRYESORE ---
         t_target = df_comp['KG_Target'].sum()
         t_real = df_comp['KG_Real'].sum()
-        perq_realizimit = (t_real / t_target * 100) if t_target > 0 else 0
+        total_perc = (t_real / t_target * 100) if t_target > 0 else 0
         
         dita_sot = sot.day
         ditet_muajit = pd.Period(sot.strftime("%Y-%m")).days_in_month
@@ -352,15 +352,15 @@ elif page == "Realizimi":
             df_kl['%'] = (df_kl['Real'] / df_kl['Target'] * 100).clip(upper=100)
             st.dataframe(df_kl[df_kl['Target'] > 0].sort_values('%', ascending=False), hide_index=True, use_container_width=True)
 # --- MESAZHI I ANALIZËS SË TRENDIT (Në fund të faqes) ---
-        st.divider()
+       st.divider()
         
-        # Llogaritja e trendit
         ritmi_ditor = t_real / dita_sot if dita_sot > 0 else 0
         parashikimi_mbylljes = ritmi_ditor * ditet_muajit
         mungesa_kg = t_target - t_real
         ditët_e_mbetura = ditet_muajit - dita_sot
         ritmi_nevojshem = (mungesa_kg / ditët_e_mbetura) if ditët_e_mbetura > 0 else 0
 
+        # Tani kjo funksionon sepse total_perc u llogarit sipër
         if total_perc < koha_perq:
             st.info(f"""
             💡 **Analiza e Trendit:** Me ritmin aktual (mesatarisht **{ritmi_ditor:,.0f} kg** në ditë), muaji pritet të mbyllet me **{parashikimi_mbylljes:,.0f} kg**.  
