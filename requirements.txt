@@ -1,7 +1,5 @@
 streamlit
 pandas
-pyodbc
-st-sqlalchemy
+pymssql
 sqlalchemy
-pyxlsb
 openpyxl
