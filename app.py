@@ -351,7 +351,7 @@ elif page == "Realizimi":
 
             st.divider()
 
-            # --- 5. TABET ME BARET E PROGRESIT (Barat e kuqe) ---
+# --- 5. TABET (Kategoritë, Agjentët, Klientët) ---
             t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
             
             with t1:
@@ -364,14 +364,64 @@ elif page == "Realizimi":
                     df_cat.sort_values('KG_Target', ascending=False),
                     column_config={
                         "kat": "Kategoria",
-                        "KG_Target": st.column_config.NumberColumn("Target", format="%d"),
-                        "KG_Real": st.column_config.NumberColumn("Realizuar", format="%d"),
+                        "KG_Target": st.column_config.NumberColumn("Target KG", format="%d"),
+                        "KG_Real": st.column_config.NumberColumn("Realizuar KG", format="%d"),
                         "Progresi": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%")
                     },
                     hide_index=True, use_container_width=True
                 )
-            
-            # Përsërit të njëjtën logjikë me ProgressColumn edhe te Agjentët dhe Klientët...
+
+            with t2:
+                # Llogaritja e Targetit për Agjentët
+                gp_agj_t = dff_ref.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+                gp_agj_t['Target_KG'] = (gp_agj_t['kg'] / n_months_ref) * rritja_faktori
+                
+                # Llogaritja e Realizimit për Agjentët
+                gp_agj_r = df_live.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+                gp_agj_r.rename(columns={'kg': 'Real_KG'}, inplace=True)
+                
+                # Bashkimi
+                df_agj_tab = pd.merge(gp_agj_t[['ForcaShitese', 'Target_KG']], gp_agj_r, on='ForcaShitese', how='left').fillna(0)
+                df_agj_tab['%'] = (df_agj_tab['Real_KG'] / df_agj_tab['Target_KG'] * 100).clip(upper=100)
+                
+                st.dataframe(
+                    df_agj_tab.sort_values('Target_KG', ascending=False),
+                    column_config={
+                        "ForcaShitese": "Agjenti",
+                        "Target_KG": st.column_config.NumberColumn("Target KG", format="%d"),
+                        "Real_KG": st.column_config.NumberColumn("Realizuar KG", format="%d"),
+                        "%": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%")
+                    },
+                    hide_index=True, use_container_width=True
+                )
+
+            with t3:
+                # Llogaritja e Targetit për Klientët
+                gp_kl_t = dff_ref.groupby(['Klienti', 'ForcaShitese']).agg({'kg': 'sum'}).reset_index()
+                gp_kl_t['Target_KG'] = (gp_kl_t['kg'] / n_months_ref) * rritja_faktori
+                
+                # Llogaritja e Realizimit për Klientët
+                gp_kl_r = df_live.groupby(['Klienti']).agg({'kg': 'sum'}).reset_index()
+                gp_kl_r.rename(columns={'kg': 'Real_KG'}, inplace=True)
+                
+                # Bashkimi
+                df_kl_tab = pd.merge(gp_kl_t[['Klienti', 'ForcaShitese', 'Target_KG']], gp_kl_r, on='Klienti', how='left').fillna(0)
+                df_kl_tab['%'] = (df_kl_tab['Real_KG'] / df_kl_tab['Target_KG'] * 100).clip(upper=100)
+                
+                # Shfaqim vetëm klientët që kanë target ose kanë blerë diçka këtë muaj
+                df_kl_tab = df_kl_tab[(df_kl_tab['Target_KG'] > 0) | (df_kl_tab['Real_KG'] > 0)]
+                
+                st.dataframe(
+                    df_kl_tab.sort_values('Target_KG', ascending=False),
+                    column_config={
+                        "Klienti": "Klienti",
+                        "ForcaShitese": "Agjenti",
+                        "Target_KG": st.column_config.NumberColumn("Target KG", format="%d"),
+                        "Real_KG": st.column_config.NumberColumn("Realizuar KG", format="%d"),
+                        "%": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%")
+                    },
+                    hide_index=True, use_container_width=True
+                )
 
 
 # --- 7. EKSPORTI NË HTML (Me Filtra dhe Emër Dinamik) ---
