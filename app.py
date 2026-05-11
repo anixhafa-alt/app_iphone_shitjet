@@ -372,87 +372,110 @@ elif page == "Realizimi":
                 )
             
             # Përsërit të njëjtën logjikë me ProgressColumn edhe te Agjentët dhe Klientët...
-# --- 7. EKSPORTI NË HTML ---
+
+
+# --- 7. EKSPORTI NË HTML (Me Filtra dhe Emër Dinamik) ---
         st.divider()
         
-        # Përgatitja e të dhënave për raportin HTML
+        # Përgatitja e emrit të fajlit
+        agj_emri_fajl = agj_sel.replace(" ", "_") if agj_sel != "Të gjithë" else "Gjithe_Agjentet"
+        file_name_custom = f"Raport_{agj_emri_fajl}_{sot.strftime('%d_%m_%Y')}.html"
+
+        # Përgatitja e tekstit të klientëve për HTML
+        klientet_text = ", ".join(klientet_selected) if klientet_selected else "Të gjithë"
+
         html_report = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; }}
-                .header {{ background-color: #003366; color: white; padding: 20px; text-align: center; border-radius: 10px; }}
-                .stats-container {{ display: flex; justify-content: space-around; margin-top: 20px; }}
-                .stat-box {{ background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 22%; text-align: center; }}
-                .stat-box h3 {{ margin: 0; color: #666; font-size: 14px; }}
-                .stat-box p {{ font-size: 20px; font-weight: bold; margin: 10px 0; color: #333; }}
-                .trend-section {{ margin-top: 30px; background: white; padding: 20px; border-radius: 10px; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-                th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
-                th {{ background-color: #f8f9fa; color: #333; }}
-                .positive {{ color: green; font-weight: bold; }}
-                .negative {{ color: red; font-weight: bold; }}
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 30px; background-color: #f8f9fa; color: #333; }}
+                .header {{ background-color: #1a237e; color: white; padding: 25px; border-radius: 12px 12px 0 0; text-align: center; }}
+                .filter-bar {{ background-color: #ffffff; padding: 15px; border: 1px solid #e0e0e0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 20px; }}
+                .filter-item {{ color: #555; }}
+                .filter-item strong {{ color: #1a237e; }}
+                .stats-container {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 15px; }}
+                .stat-box {{ background: white; padding: 20px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 23%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+                .stat-box h3 {{ margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #777; }}
+                .stat-box p {{ font-size: 22px; font-weight: bold; margin: 10px 0; color: #1a237e; }}
+                .trend-section {{ background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ padding: 15px; text-align: left; border-bottom: 1px solid #eee; }}
+                th {{ background-color: #fcfcfc; font-weight: 600; color: #555; }}
+                .positive {{ color: #2e7d32; font-weight: bold; }}
+                .negative {{ color: #c62828; font-weight: bold; }}
+                .footer {{ text-align: center; margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }}
             </style>
         </head>
         <body>
             <div class="header">
-                <h1>Raporti i Realizimit: {muajt_sq.get(sot.month)} {sot.year}</h1>
-                <p>Gjeneruar më: {sot.strftime('%d/%m/%Y %H:%M')} | Grupi: {grup_sel}</p>
+                <h1 style="margin:0;">Analiza e Realizimit: {muajt_sq.get(sot.month)} {sot.year}</h1>
+                <p style="margin:10px 0 0 0; opacity: 0.8;">Raport zyrtar i performancës së shitjeve</p>
+            </div>
+
+            <div class="filter-bar">
+                <div class="filter-item">📅 Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div>
+                <div class="filter-item">📈 Rritja e aplikuar: <strong>{rritja}%</strong></div>
+                <div class="filter-item">📦 Grupi: <strong>{grup_sel}</strong></div>
+                <div class="filter-item">👤 Agjenti: <strong>{agj_sel}</strong></div>
+                <div class="filter-item">🏪 Klientët: <strong>{klientet_text}</strong></div>
             </div>
 
             <div class="stats-container">
-                <div class="stat-box"><h3>Targeti</h3><p>{t_target:,.0f} kg</p></div>
-                <div class="stat-box"><h3>Realizuar</h3><p>{t_real:,.0f} kg</p></div>
-                <div class="stat-box"><h3>Realizimi %</h3><p>{total_perc:.1f}%</p></div>
-                <div class="stat-box"><h3>Ditë Pune</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale}</p></div>
+                <div class="stat-box"><h3>Targeti (Muaj)</h3><p>{t_target:,.0f} kg</p></div>
+                <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div>
+                <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div>
+                <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div>
             </div>
 
             <div class="trend-section">
-                <h2>🔍 Analiza e Trendeve</h2>
+                <h2 style="margin-top:0; color: #1a237e; font-size: 18px;">🔍 Krahasimi i Trendeve (Pa të diela)</h2>
                 <table>
                     <thead>
                         <tr>
-                            <th>Indikatori</th>
-                            <th>Vlera Aktuale</th>
-                            <th>Krahasimi / Mbyllja e Pritshme</th>
+                            <th>Lloji i Trendit</th>
+                            <th>Vlera e Krahasuar</th>
+                            <th>Devijimi / Rritja</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Trendi Linear (Mbyllja e muajit)</td>
-                            <td><strong>{projeksioni:,.0f} kg</strong></td>
+                            <td><strong>Trendi Linear</strong> (Parashikimi i mbylljes)</td>
+                            <td>{projeksioni:,.0f} kg</td>
                             <td class="{'positive' if projeksioni >= t_target else 'negative'}">
-                                {projeksioni - t_target:,.0f} kg vs Plani
+                                {projeksioni - t_target:,.0f} kg vs Objektivi
                             </td>
                         </tr>
                         <tr>
-                            <td>vs Muaji i Kaluar (Periudhë e njëjtë)</td>
-                            <td>{t_real:,.0f} kg</td>
-                            <td class="{'positive' if rritja_m >= 0 else 'negative'}">{rritja_m:.1f}%</td>
+                            <td><strong>vs Muaji i Kaluar</strong> (Deri në datën {sot.day})</td>
+                            <td>{t_m_kaluar:,.0f} kg</td>
+                            <td class="{'positive' if rritja_m >= 0 else 'negative'}">
+                                {rritja_m:+.1f}%
+                            </td>
                         </tr>
                         <tr>
-                            <td>vs Viti i Kaluar (Periudhë e njëjtë)</td>
-                            <td>{t_real:,.0f} kg</td>
-                            <td class="{'positive' if rritja_v >= 0 else 'negative'}">{rritja_v:.1f}%</td>
+                            <td><strong>vs Viti i Kaluar</strong> (Deri në datën {sot.day})</td>
+                            <td>{t_v_kaluar:,.0f} kg</td>
+                            <td class="{'positive' if rritja_v >= 0 else 'negative'}">
+                                {rritja_v:+.1f}%
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <p style="text-align: center; color: #888; margin-top: 50px; font-size: 12px;">
-                Ky raport është gjeneruar automatikisht nga Sistemi i Analizës së Shitjeve.
-            </p>
+            <div class="footer">
+                Gjeneruar nga Sistemi i Monitorimit të Shitjeve | Data: {sot.strftime('%d/%m/%Y %H:%M:%S')}
+            </div>
         </body>
         </html>
         """
 
-        # Butoni për shkarkim
         st.download_button(
-            label="💾 Shkarko Raportin HTML",
+            label=f"💾 Shkarko Raportin: {file_name_custom}",
             data=html_report,
-            file_name=f"Raport_Realizimi_{sot.strftime('%d_%m_%Y')}.html",
+            file_name=file_name_custom,
             mime="text/html",
             use_container_width=True
         )
