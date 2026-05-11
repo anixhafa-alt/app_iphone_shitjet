@@ -118,7 +118,8 @@ if df_raw is not None:
 
 
 
-
+# --- 1. NGARKIMI I TË DHËNAVE KRYESORE ---
+df_raw = pd.read_excel("produkte+.xlsx") # (ose emri që ka skedari yt)
 
 # --- 2. KËTU FUTET KODI I RI PËR EMRA_KATEGORIVE (Linja 67 e tutje) ---
 try:
