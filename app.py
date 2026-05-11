@@ -1,100 +1,96 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
-# 1. Konfigurimi i faqes (Mobile Friendly)
-st.set_page_config(
-    page_title="Planifikimi Shitjeve",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(page_title="Planifikimi Profesional", layout="wide")
 
-# 2. Funksioni i optimizuar për leximin e të dhënave
 @st.cache_data
 def load_data():
-    # Emri i skedarit fiks siç është në GitHub
     file_name = 'SAD-DATAbase1.xlsb'
-    
-    # Lexojmë vetëm kolonat që na duhen për të kursyer RAM-in e serverit
+    # Shtojmë kolonën 'Vlera' ose 'Cmimi' nëse i ke në Excel për pikën 7
+    # Po supozoj që kolonat janë: Data, ForcaShitese, Klienti, Artikulli, kg, kat, VleraNeto
     cols = ['Data', 'ForcaShitese', 'Klienti', 'Artikulli', 'kg', 'kat']
-    
-    try:
-        # Leximi i skedarit XLSB
-        df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
-        
-        # Pastrimi i emrave të kolonave nga hapësirat ose thonjëzat
-        df.columns = df.columns.str.strip().str.replace('"', '')
-        
-        # Konvertimi i datës nga formati Excel (numër) në formatin Data
-        df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
-        
-        return df
-    except Exception as e:
-        st.error(f"Gabim gjatë leximit: {e}")
-        return None
+    df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
+    df.columns = df.columns.str.strip().str.replace('"', '')
+    df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
+    return df
 
-# Ngarkojmë të dhënat në memorje
 df = load_data()
 
 if df is not None:
-    # --- FILTRAT (Sidebar) ---
-    st.sidebar.header("🔍 Filtrat")
+    # --- SIDEBAR (Pika 4 dhe 8) ---
+    st.sidebar.header("Konfigurimi i Planit")
+    
+    # Pika 4: Zgjedhja e periudhës referente
+    min_date = df['Data'].min().date()
+    max_date = df['Data'].max().date()
+    start_date, end_date = st.sidebar.date_input(
+        "Periudha referente për llogaritje:",
+        [min_date, max_date],
+        min_value=min_date,
+        max_value=max_date
+    )
+    
+    # Pika 8: Kuti për rritjen në %
+    rritja_perqindje = st.sidebar.number_input("Përcakto rritjen e planit (%)", min_value=-100, max_value=500, value=10)
 
-    # Filtri i Agjentit - I blinduar kundër TypeError
+    # --- FILTRAT (Pika 3 dhe 6) ---
     agj_list = sorted([str(x) for x in df['ForcaShitese'].unique() if pd.notna(x)])
-    agjentet = st.sidebar.multiselect("Zgjidh Forcën Shitëse:", options=agj_list)
+    agjenti_select = st.sidebar.selectbox("Zgjidh Agjentin (Pika 3):", ["Të gjithë"] + agj_list)
     
-    # Kërkimi i Klientit
-    search_klient = st.sidebar.text_input("Kërko Klientin:")
-    
-    # Filtri i Kategorisë - I blinduar kundër TypeError
-    kat_list = sorted([str(x) for x in df['kat'].unique() if pd.notna(x)])
-    kategorite = st.sidebar.multiselect("Filtro sipas Kategorisë:", options=kat_list)
+    search_klient = st.sidebar.text_input("Kërko Klientin (Pika 6):")
 
-    # --- LOGJIKA E FILTRIMIT ---
-    filtered_df = df.copy()
-    
-    if agjentet:
-        filtered_df = filtered_df[filtered_df['ForcaShitese'].astype(str).isin(agjentet)]
+    # --- PROCESIMI I TË DHËNAVE ---
+    # Filtrojmë sipas periudhës referente
+    mask = (df['Data'].date >= start_date) & (df['Data'].date <= end_date)
+    dff = df.loc[mask].copy()
+
+    if agjenti_select != "Të gjithë":
+        dff = dff[dff['ForcaShitese'].astype(str) == agjenti_select]
     
     if search_klient:
-        filtered_df = filtered_df[filtered_df['Klienti'].str.contains(search_klient, case=False, na=False)]
-        
-    if kategorite:
-        filtered_df = filtered_df[filtered_df['kat'].astype(str).isin(kategorite)]
+        dff = dff[dff['Klienti'].str.contains(search_klient, case=False, na=False)]
 
-    # --- KALKULIMET ---
-    # Gjejmë numrin e muajve unikë për të llogaritur objektivin
-    unique_months = df['Data'].dt.to_period('M').nunique()
-    if unique_months == 0: unique_months = 1
+    # Llogarisim muajt e periudhës referente
+    n_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    if n_months <= 0: n_months = 1
+
+    # --- PIKA 5: Titulli me Muajin/Vitin e Planit ---
+    next_month_date = end_date + pd.DateOffset(months=1)
+    st.title(f"🎯 Plani i Shitjeve: {next_month_date.strftime('%B %Y')}")
+    st.caption(f"Bazuar në periudhën: {start_date} deri {end_date} ({n_months} muaj referencë)")
+
+    # --- LLOGARITJET ---
+    # Grupimi bazë (Pika 2 dhe 6)
+    gp = dff.groupby(['ForcaShitese', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
     
-    # Agregimi: Mbledhim KG për çdo kombinim
-    summary = filtered_df.groupby(['ForcaShitese', 'Klienti', 'Artikulli', 'kat'])['kg'].sum().reset_index()
+    # Kalkulimi i planit mujor me rritjen (Pika 8)
+    gp['Mesatarja_Referente'] = gp['kg'] / n_months
+    gp['Plani_i_Ri_KG'] = (gp['Mesatarja_Referente'] * (1 + rritja_perqindje/100)).round(1)
+
+    # --- PIKA 1: Totalet ---
+    total_kg_referent = gp['kg'].sum()
+    total_plani_kg = gp['Plani_i_Ri_KG'].sum()
     
-    # Llogaritja e Objektivit Mujor (Mesatarja e kg për muaj)
-    summary['Objektivi_Mujor'] = (summary['kg'] / unique_months).round(1)
-    
-    # Renditja sipas shitjeve më të larta
-    summary = summary.sort_values(by='kg', ascending=False)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total KG (Referenca)", f"{total_kg_referent:,.1f}")
+    col2.metric(f"Plani i ri (+{rritja_perqindje}%)", f"{total_plani_kg:,.1f} KG")
+    col3.metric("Nr. Artikujve", len(gp['Artikulli'].unique()))
 
-    # --- SHFAQJA NË EKRAN ---
-    st.title("📊 Sistemi i Planifikimit")
-    st.info(f"Kalkulimi bazohet në {unique_months} muaj të dhëna.")
+    # --- SHFAQJA E PLANIT (Pika 2, 3, 6) ---
+    if search_klient:
+        st.subheader(f"Plani i detajuar për: {search_klient}")
+        # Grupimi sipas Kategorive dhe Artikujve (Pika 2 dhe 6)
+        st.dataframe(gp[['kat', 'Artikulli', 'Plani_i_Ri_KG']], use_container_width=True, hide_index=True)
+    else:
+        # Shfaqja e përgjithshme e grupuar (Pika 2 dhe 3)
+        tab1, tab2 = st.tabs(["Sipas Kategorive", "Sipas Agjentëve"])
+        with tab1:
+            kat_summary = gp.groupby('kat')['Plani_i_Ri_KG'].sum().reset_index()
+            st.dataframe(kat_summary, use_container_width=True)
+        with tab2:
+            agj_summary = gp.groupby('ForcaShitese')['Plani_i_Ri_KG'].sum().reset_index()
+            st.dataframe(agj_summary, use_container_width=True)
 
-    # Tabela kryesore e detajuar
-    st.subheader("📋 Detajet e Planit")
-    st.dataframe(
-        summary[['ForcaShitese', 'Klienti', 'Artikulli', 'Objektivi_Mujor', 'kg']],
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # Butoni për shkarkim (nëse të duhet në Excel/CSV përsëri)
-    csv = summary.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Shkarko Raportin",
-        data=csv,
-        file_name="plani_shitjeve.csv",
-        mime="text/csv",
-    )
-else:
-    st.warning("Skedari nuk u gjet. Sigurohu që 'SAD-DATAbase1.xlsb' është në GitHub.")
+    # Shënim për pikën 7: Çmimi mesatar kërkon kolonën 'Vlera' në Excel.
+    # Nëse e shton, mund të llogarisim: gp['Cmimi_Mesatar'] = gp['Vlera'] / gp['kg']
