@@ -29,7 +29,7 @@ def load_data():
         # --- LOGJIKA E GRUPIMIT TE RI (OLIM, ETJ, DEKA) ---
         def klasifiko_kategorine(k):
             val = str(k).upper()
-            if "OLIM" in val:
+            if "V" in val:
                 return "OLIM"
             elif val == "ETJ":
                 return "ETJ"
