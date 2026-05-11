@@ -49,14 +49,14 @@ def load_data_combined():
         # Leximi i Sheet: produktet
         df_mapping = pd.read_excel('produkte+.xlsx', sheet_name='produktet')
         df_mapping.columns = df_mapping.columns.str.strip()
-        df_mapping = df_mapping[['KODI', 'KATEG', 'KG/SKU']].copy()
+        df_mapping = df_mapping[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_mapping['KODI'] = df_mapping['KODI'].astype(str).str.strip()
         df_mapping['KG/SKU'] = pd.to_numeric(df_mapping['KG/SKU'], errors='coerce').fillna(0)
 
         # Merge dhe Llogaritja e KG
         df = pd.merge(df_sql, df_mapping, left_on='KodiArt', right_on='KODI', how='left')
         df['kg'] = df['Sasia'] * df['KG/SKU']
-        df.rename(columns={'KATEG': 'kat'}, inplace=True)
+        df.rename(columns={'KATEG.': 'kat'}, inplace=True)
         df['kat'] = df['kat'].fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0).astype('float32')
 
