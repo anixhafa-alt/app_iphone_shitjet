@@ -61,12 +61,7 @@ def load_all_data():
         df.rename(columns={'KATEG.': 'kat'}, inplace=True)
         df['kat'] = df['kat'].fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
-       
-
-
-
-
- 
+        
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
@@ -81,9 +76,6 @@ def load_all_data():
         return None
 
 df_raw = load_all_data()
-
-
-
 
 # --- KETU FILLON PJESA QE DUHET TE FUSH ---
 
@@ -103,29 +95,6 @@ if df_raw is not None:
         "Periudha referente:", 
         value=(st.session_state['start_d'], st.session_state['end_d'])
     )
-
-
-# 1. Leximi i emrave të kategorive nga sheet-i 'kat_prod'
-try:
-    # Lexojmë vetëm kolonat që na duhen për të kursyer memorie
-    df_kat_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")[['KOD KAT', 'EMRI KAT']]
-except Exception as e:
-    st.error(f"Gabim në leximin e 'kat_prod' te produkte+.xlsx: {e}")
-    df_kat_names = None
-
-# 2. Zëvendësimi i Kodeve me Emra te df_raw
-if df_raw is not None and df_kat_names is not None:
-    # Bashkojmë tabelat duke përdorur kolonën e përbashkët 'KOD KAT'
-    df_raw = pd.merge(df_raw, df_kat_names, on='KOD KAT', how='left')
-    
-    # Krijojmë një kolonë të re 'kat' që përmban Emrin, 
-    # por nëse emri mungon, mban Kodin (për siguri)
-    df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT'])
-    
-    # Opsionale: Heqim kolonat e tepërta nëse nuk të duhen më
-    # df_raw.drop(columns=['EMRI KAT'], inplace=True)
-
-
 
     # Përditësojmë memorien nëse ndryshon data
     if isinstance(date_range, tuple) and len(date_range) == 2:
