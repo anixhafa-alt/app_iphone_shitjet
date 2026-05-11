@@ -77,6 +77,55 @@ def load_all_data():
 
 df_raw = load_all_data()
 
+
+
+
+# --- KETU FILLON PJESA QE DUHET TE FUSH ---
+
+if df_raw is not None:
+    # 1. Inicimi i Session State (Kjo mban mend zgjedhjet tua)
+    if 'start_d' not in st.session_state:
+        st.session_state['start_d'] = df_raw['Data'].min().date()
+    if 'end_d' not in st.session_state:
+        st.session_state['end_d'] = df_raw['Data'].max().date()
+    if 'rritja_val' not in st.session_state:
+        st.session_state['rritja_val'] = 10
+
+    # 2. NDËRTIMI I SIDEBARIT (Menuja që do jetë kudo fiks si në foto)
+    st.sidebar.header("⚙️ Kontrolli i Planit")
+    
+    date_range = st.sidebar.date_input(
+        "Periudha referente:", 
+        value=(st.session_state['start_d'], st.session_state['end_d'])
+    )
+
+    # Përditësojmë memorien nëse ndryshon data
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        st.session_state['start_d'], st.session_state['end_d'] = date_range
+
+    rritja = st.sidebar.number_input("Rritja e planit (%)", value=st.session_state['rritja_val'])
+    st.session_state['rritja_val'] = rritja
+
+    grup_sel = st.sidebar.selectbox("Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"])
+    
+    agj_list = sorted([str(x) for x in df_raw['ForcaShitese'].unique() if x not in ['nan', 'None']])
+    agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
+    
+    k_list = df_raw[df_raw['ForcaShitese'] == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else df_raw['Klienti'].unique()
+    klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
+
+    # Shkurtesat për t'i përdorur më poshtë në kod
+    start_date = st.session_state['start_d']
+    end_date = st.session_state['end_d']
+
+    # --- KETU FILLON LOGJIKA E FAQEVE ---
+
+    if page == "Planifikimi":
+        sot = datetime.now()
+        st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
+        # Vazhdo me pjesën tjetër të kodit të Planifikimit (gp, dff, etj.)
+        # SHËNIM: Te Planifikimi, mos i kërko më filtrat nga sidebar sepse i llogaritëm sipër.
+
 # ---------------------------------------------------------
 # MODULI: PLANIFIKIMI
 # ---------------------------------------------------------
@@ -93,23 +142,23 @@ if page == "Planifikimi" and df_raw is not None:
     last_prices.rename(columns={'Cmimi_Rresht': 'Cmimi_Fundit_Artikulli'}, inplace=True)
 
     # --- SIDEBAR ---
-    st.sidebar.header("⚙️ Kontrolli")
-    if st.sidebar.button("Log Out"):
-        st.session_state["password_correct"] = False
-        st.rerun()
+    #st.sidebar.header("⚙️ Kontrolli")
+    #if st.sidebar.button("Log Out"):
+        #st.session_state["password_correct"] = False
+      #  st.rerun()
 
-    min_d, max_d = df_raw['Data'].min().date(), df_raw['Data'].max().date()
-    date_range = st.sidebar.date_input("Periudha referente:", value=(min_d, max_d))
-    start_date, end_date = date_range if isinstance(date_range, tuple) and len(date_range) == 2 else (min_d, max_d)
+    #min_d, max_d = df_raw['Data'].min().date(), df_raw['Data'].max().date()
+    #date_range = st.sidebar.date_input("Periudha referente:", value=(min_d, max_d))
+    #start_date, end_date = date_range if isinstance(date_range, tuple) and len(date_range) == 2 else (min_d, max_d)
     
-    rritja = st.sidebar.number_input("Rritja e planit (%)", value=10)
-    grup_sel = st.sidebar.selectbox("Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"])
+    #rritja = st.sidebar.number_input("Rritja e planit (%)", value=10)
+    #grup_sel = st.sidebar.selectbox("Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"])
     
-    agj_list = sorted([str(x) for x in df_raw['ForcaShitese'].unique() if x not in ['nan', 'None']])
-    agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
+    #agj_list = sorted([str(x) for x in df_raw['ForcaShitese'].unique() if x not in ['nan', 'None']])
+    #agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
     
-    k_list = df_raw[df_raw['ForcaShitese'] == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else df_raw['Klienti'].unique()
-    klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
+    #k_list = df_raw[df_raw['ForcaShitese'] == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else #df_raw['Klienti'].unique()
+    #klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
 
     # --- FILTRIMI ---
     mask = (df_raw['Data'].dt.date >= start_date) & (df_raw['Data'].dt.date <= end_date)
@@ -207,7 +256,7 @@ if page == "Planifikimi" and df_raw is not None:
 # MODALET TJERA (Placeholder)
 elif page == "Historiku": st.title("📚 Historiku i Shitjeve")
 
-
+     
 # ---------------------------------------------------------
 # MODULI: REALIZIMI (Zëvendëso bllokun tënd me këtë)
 # ---------------------------------------------------------
