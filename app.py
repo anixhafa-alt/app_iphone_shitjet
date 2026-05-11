@@ -1,87 +1,110 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Konfigurimi
-st.set_page_config(page_title="Sistemi i Shitjeve", layout="wide")
+# 1. Konfigurimi i faqes
+st.set_page_config(page_title="Planifikimi Profesional", layout="wide")
 
-# Funksion i optimizuar deri në ekstrem
-@st.cache_data(ttl=300, max_entries=1) # Fshin memorjen çdo 5 minuta automatikisht
+@st.cache_data
 def load_data():
     file_name = 'SAD-DATAbase1.xlsb'
     cols = ['Data', 'ForcaShitese', 'Klienti', 'Artikulli', 'kg', 'kat', 'VleraRresht']
     
     try:
-        # Lexojmë skedarin
         df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
         df.columns = df.columns.str.strip().str.replace('"', '')
-        
-        # Konvertojmë në formate "të lehta"
         df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
-        
-        # Llogarisim çmimin dhe fshijmë kolonën VleraRresht menjëherë
-        df['Cmimi'] = (df['VleraRresht'] / df['kg'].replace(0, 1)).astype('float32')
-        df.drop(columns=['VleraRresht'], inplace=True)
-        
-        # Kthejmë tekstet në kategori për të kursyer 90% të RAM
-        for c in ['ForcaShitese', 'Klienti', 'kat']:
-            df[c] = df[c].astype('category')
-            
+        # Llogarisim çmimin për çdo rresht
+        df['Cmimi_Rreshtit'] = df['VleraRresht'] / df['kg'].replace(0, 1)
         return df
     except Exception as e:
-        st.error(f"Gabim: {e}")
+        st.error(f"Gabim gjatë ngarkimit: {e}")
         return None
 
 df = load_data()
 
 if df is not None:
-    # Llogarisim çmimet e fundit në një tabelë shumë të vogël
-    last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')[['Artikulli', 'Cmimi']]
-    last_prices.columns = ['Artikulli', 'Cmimi_Fundit']
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT ---
+    last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')
+    last_prices = last_prices[['Artikulli', 'Cmimi_Rreshtit']].rename(columns={'Cmimi_Rreshtit': 'Cmimi_Fundit'})
 
     # --- SIDEBAR ---
-    st.sidebar.header("⚙️ Kontrolli")
-    rritja = st.sidebar.number_input("Rritja (%)", value=10)
+    st.sidebar.header("⚙️ Parametrat e Planit")
     
-    # Filtra të shpejtë
-    agj_list = sorted(df['ForcaShitese'].dropna().unique().tolist())
-    agj_sel = st.sidebar.selectbox("Agjenti:", ["Të gjithë"] + agj_list)
+    min_d = df['Data'].min().date()
+    max_d = df['Data'].max().date()
+    date_range = st.sidebar.date_input("Periudha referente për KG:", value=(min_d, max_d))
     
-    # Filtri i klientëve
-    if agj_sel != "Të gjithë":
-        k_list = df[df['ForcaShitese'] == agj_sel]['Klienti'].dropna().unique().tolist()
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
     else:
-        k_list = df['Klienti'].dropna().unique().tolist()
+        start_date, end_date = min_d, max_d
+
+    rritja_perqindje = st.sidebar.number_input("Rritja e planit (%)", value=10)
+
+    # --- FILTRAT E BLINDUAR (Zgjidhja e Gabimit TypeError) ---
+    # 1. Filtri i Agjentit
+    # Përdorim set() për unicitet dhe str() për çdo element për të evituar TypeError
+    agj_list = sorted([str(x) for x in df['ForcaShitese'].unique() if pd.notna(x)])
+    agjenti_select = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
     
-    klientet = st.sidebar.multiselect("Zgjidh Klientin:", options=sorted([str(x) for x in k_list]))
+    # 2. Filtri i Klientit (I blinduar)
+    if agjenti_select != "Të gjithë":
+        temp_klient_list = df[df['ForcaShitese'].astype(str) == agjenti_select]['Klienti'].unique()
+    else:
+        temp_klient_list = df['Klienti'].unique()
+        
+    # Kthejmë çdo element në string DHE heqim NaN përpara renditjes
+    klient_list = sorted([str(x) for x in temp_klient_list if pd.notna(x)])
+    klientet_selected = st.sidebar.multiselect("Zgjidh Klientin (Search):", options=klient_list)
 
-    # --- FILTRIMI ---
-    # Përdorim dff vetëm me kolonat që duhen për tabelën finale
-    dff = df[['ForcaShitese', 'Klienti', 'kat', 'Artikulli', 'kg']].copy()
-    if agj_sel != "Të gjithë":
-        dff = dff[dff['ForcaShitese'] == agj_sel]
-    if klientet:
-        dff = dff[dff['Klienti'].isin(klientet)]
+    # --- FILTRIMI I TË DHËNAVE ---
+    mask = (df['Data'].dt.date >= start_date) & (df['Data'].dt.date <= end_date)
+    dff = df.loc[mask].copy()
 
-    # --- AGREGIMI ---
-    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli'], observed=True)['kg'].sum().reset_index()
+    if agjenti_select != "Të gjithë":
+        dff = dff[dff['ForcaShitese'].astype(str) == agjenti_select]
+    if klientet_selected:
+        # Sigurohemi që krahasimi bëhet midis stringjeve
+        dff = dff[dff['Klienti'].astype(str).isin(klientet_selected)]
+
+    # Llogaritja e muajve
+    delta = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    n_months = max(1, delta)
+
+    # --- AGREGIMI DHE PLANIFIKIMI ---
+    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
     gp = gp.merge(last_prices, on='Artikulli', how='left')
     
-    # Llogaritja e planit (bazuar në 12 muaj)
-    gp['Plani_KG'] = (gp['kg'] / 12 * (1 + rritja/100)).round(1)
-    gp['Vlera_Lekë'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(0)
+    gp['Plani_KG'] = ((gp['kg'] / n_months) * (1 + rritja_perqindje/100)).round(1)
+    gp['Vlera_Planifikuar'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(2)
 
-    # --- METRICS ---
-    st.title("📊 Plani i Shitjeve")
-    t_kg = gp['Plani_KG'].sum()
-    t_v = gp['Vlera_Lekë'].sum()
-    c_m = t_v / t_kg if t_kg > 0 else 0
+    # Metrics
+    total_plani_kg = gp['Plani_KG'].sum()
+    total_plani_vlera = gp['Vlera_Planifikuar'].sum()
+    cmimi_mesatar_planit = total_plani_vlera / total_plani_kg if total_plani_kg > 0 else 0
 
+    # --- SHFAQJA ---
+    st.title("📊 Sistemi i Planifikimit")
+    
     c1, c2, c3 = st.columns(3)
-    c1.metric("Plani KG", f"{t_kg:,.0f}")
-    c2.metric("Cmimi Mesatar", f"{c_m:,.2f}")
-    c3.metric("Vlera Totale", f"{t_v:,.0f} L")
+    c1.metric("Plani KG Totale", f"{total_plani_kg:,.0f}")
+    c2.metric("Cmimi Mesatar Planit", f"{cmimi_mesatar_planit:,.2f} L/kg")
+    c3.metric("Vlera Totale e Planit", f"{total_plani_vlera:,.0f} Lekë")
 
     st.divider()
-    # Shfaqim vetëm rreshtat që kanë KG (për të kursyer hapësirë në iPhone)
-    final_table = gp[gp['Plani_KG'] > 0][['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Lekë']]
-    st.dataframe(final_table, use_container_width=True, hide_index=True)
+
+    if klientet_selected:
+        st.subheader(f"📍 Plani i Detajuar")
+        st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Planifikuar']], 
+                     use_container_width=True, hide_index=True)
+    else:
+        t1, t2, t3 = st.tabs(["Sipas Kategorive", "Sipas Agjentëve", "Sipas Klientëve"])
+        with t1:
+            kat_v = gp.groupby('kat').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
+            st.dataframe(kat_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+        with t2:
+            agj_v = gp.groupby('ForcaShitese').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
+            st.dataframe(agj_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+        with t3:
+            klient_v = gp.groupby(['Klienti', 'ForcaShitese']).agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
+            st.dataframe(klient_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
