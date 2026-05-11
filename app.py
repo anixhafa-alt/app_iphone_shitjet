@@ -1,79 +1,87 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Plani Shitjeve", layout="wide")
+# 1. Konfigurimi
+st.set_page_config(page_title="Sistemi i Shitjeve", layout="wide")
 
-@st.cache_data(ttl=600)
-def load_data_safe():
+# Funksion i optimizuar deri në ekstrem
+@st.cache_data(ttl=300, max_entries=1) # Fshin memorjen çdo 5 minuta automatikisht
+def load_data():
     file_name = 'SAD-DATAbase1.xlsb'
-    # Lexojmë vetëm kolonat që na duhen vërtet
     cols = ['Data', 'ForcaShitese', 'Klienti', 'Artikulli', 'kg', 'kat', 'VleraRresht']
     
     try:
         # Lexojmë skedarin
         df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
-        
-        # 1. Pastrojmë emrat e kolonave menjëherë
         df.columns = df.columns.str.strip().str.replace('"', '')
         
-        # 2. KONVERTIMI I TIPIT (Ky hap kursen 80% të RAM-it)
+        # Konvertojmë në formate "të lehta"
         df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
-        df['ForcaShitese'] = df['ForcaShitese'].astype('category')
-        df['kat'] = df['kat'].astype('category')
         
-        # 3. LLOGARISIM ÇMIMIN DHE FSHIJMË KOLONËN E RËNDË
+        # Llogarisim çmimin dhe fshijmë kolonën VleraRresht menjëherë
         df['Cmimi'] = (df['VleraRresht'] / df['kg'].replace(0, 1)).astype('float32')
         df.drop(columns=['VleraRresht'], inplace=True)
         
-        # 4. KTHEJMË ÇDO GJË TJETËR NË STR DHE PASTRON RAM-in
-        df['Klienti'] = df['Klienti'].astype(str)
-        df['Artikulli'] = df['Artikulli'].astype(str)
-        
+        # Kthejmë tekstet në kategori për të kursyer 90% të RAM
+        for c in ['ForcaShitese', 'Klienti', 'kat']:
+            df[c] = df[c].astype('category')
+            
         return df
     except Exception as e:
-        st.error(f"Gabim kritik në memorje: {e}")
+        st.error(f"Gabim: {e}")
         return None
 
-df = load_data_safe()
+df = load_data()
 
 if df is not None:
-    # LLOGARITJA E ÇMIMIT TË FUNDIT (Mënyra e shpejtë)
+    # Llogarisim çmimet e fundit në një tabelë shumë të vogël
     last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')[['Artikulli', 'Cmimi']]
-    last_prices.rename(columns={'Cmimi': 'Cmimi_Fundit'}, inplace=True)
+    last_prices.columns = ['Artikulli', 'Cmimi_Fundit']
 
-    # SIDEBAR
-    st.sidebar.header("⚙️ Parametrat")
+    # --- SIDEBAR ---
+    st.sidebar.header("⚙️ Kontrolli")
     rritja = st.sidebar.number_input("Rritja (%)", value=10)
     
     # Filtra të shpejtë
-    agj_list = sorted([str(x) for x in df['ForcaShitese'].unique() if x != 'nan'])
+    agj_list = sorted(df['ForcaShitese'].dropna().unique().tolist())
     agj_sel = st.sidebar.selectbox("Agjenti:", ["Të gjithë"] + agj_list)
     
-    # Filtri i klientëve (limiton memorjen duke treguar vetëm unikët)
-    k_list = df[df['ForcaShitese'].astype(str) == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else df['Klienti'].unique()
-    klientet = st.sidebar.multiselect("Zgjidh Klientët:", options=sorted([str(x) for x in k_list if x != 'nan']))
-
-    # FILTRIMI
-    dff = df.copy()
+    # Filtri i klientëve
     if agj_sel != "Të gjithë":
-        dff = dff[dff['ForcaShitese'].astype(str) == agj_sel]
+        k_list = df[df['ForcaShitese'] == agj_sel]['Klienti'].dropna().unique().tolist()
+    else:
+        k_list = df['Klienti'].dropna().unique().tolist()
+    
+    klientet = st.sidebar.multiselect("Zgjidh Klientin:", options=sorted([str(x) for x in k_list]))
+
+    # --- FILTRIMI ---
+    # Përdorim dff vetëm me kolonat që duhen për tabelën finale
+    dff = df[['ForcaShitese', 'Klienti', 'kat', 'Artikulli', 'kg']].copy()
+    if agj_sel != "Të gjithë":
+        dff = dff[dff['ForcaShitese'] == agj_sel]
     if klientet:
         dff = dff[dff['Klienti'].isin(klientet)]
 
-    # AGREGIMI (Përdorim observed=True për të mos krijuar matrica bosh në RAM)
-    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli'], observed=True).agg({'kg': 'sum'}).reset_index()
+    # --- AGREGIMI ---
+    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli'], observed=True)['kg'].sum().reset_index()
     gp = gp.merge(last_prices, on='Artikulli', how='left')
     
-    # Llogaritja e planit (bazuar në 12 muaj mesatare)
+    # Llogaritja e planit (bazuar në 12 muaj)
     gp['Plani_KG'] = (gp['kg'] / 12 * (1 + rritja/100)).round(1)
     gp['Vlera_Lekë'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(0)
 
-    # SHFAQJA
+    # --- METRICS ---
     st.title("📊 Plani i Shitjeve")
+    t_kg = gp['Plani_KG'].sum()
+    t_v = gp['Vlera_Lekë'].sum()
+    c_m = t_v / t_kg if t_kg > 0 else 0
+
     c1, c2, c3 = st.columns(3)
-    c1.metric("KG Totale", f"{gp['Plani_KG'].sum():,.0f}")
-    c2.metric("Vlera Totale", f"{gp['Vlera_Lekë'].sum():,.0f} L")
-    c3.metric("Nr. Klientëve", len(gp['Klienti'].unique()))
+    c1.metric("Plani KG", f"{t_kg:,.0f}")
+    c2.metric("Cmimi Mesatar", f"{c_m:,.2f}")
+    c3.metric("Vlera Totale", f"{t_v:,.0f} L")
 
     st.divider()
-    st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Lekë']], use_container_width=True)
+    # Shfaqim vetëm rreshtat që kanë KG (për të kursyer hapësirë në iPhone)
+    final_table = gp[gp['Plani_KG'] > 0][['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Lekë']]
+    st.dataframe(final_table, use_container_width=True, hide_index=True)
