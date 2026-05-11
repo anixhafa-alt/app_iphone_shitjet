@@ -349,4 +349,29 @@ elif page == "Realizimi":
             rritja_v = ((t_real/t_v_kaluar)-1)*100 if t_v_kaluar > 0 else 0
             tr3.metric("vs Viti Kaluar", f"{t_v_kaluar:,.0f} kg", delta=f"{rritja_v:.1f}%")
 
+            st.divider()
+
+            # --- 5. TABET ME BARET E PROGRESIT (Barat e kuqe) ---
+            t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
+            
+            with t1:
+                gp_live_cat = df_live.groupby(['kat']).agg({'kg': 'sum'}).reset_index()
+                gp_live_cat.rename(columns={'kg': 'KG_Real'}, inplace=True)
+                df_cat = pd.merge(gp_target_cat[['kat', 'KG_Target']], gp_live_cat, on='kat', how='left').fillna(0)
+                df_cat['Progresi'] = (df_cat['KG_Real'] / df_cat['KG_Target'] * 100).clip(upper=100)
+                
+                st.dataframe(
+                    df_cat.sort_values('KG_Target', ascending=False),
+                    column_config={
+                        "kat": "Kategoria",
+                        "KG_Target": st.column_config.NumberColumn("Target", format="%d"),
+                        "KG_Real": st.column_config.NumberColumn("Realizuar", format="%d"),
+                        "Progresi": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%")
+                    },
+                    hide_index=True, use_container_width=True
+                )
+            
+            # Përsërit të njëjtën logjikë me ProgressColumn edhe te Agjentët dhe Klientët...
+
+
 elif page == "Mundësitë": st.title("🔍 Mundësitë & Risk Profile")
