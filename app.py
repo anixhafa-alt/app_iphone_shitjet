@@ -7,26 +7,34 @@ st.set_page_config(page_title="Planifikimi Profesional", layout="wide")
 @st.cache_data
 def load_data():
     file_name = 'SAD-DATAbase1.xlsb'
-    # Shtohen kolonat 'Vlera' (ose siç e ke në Excel) për pikën 7
+    # Sigurohu që kolonat janë saktë si në Excel
     cols = ['Data', 'ForcaShitese', 'Klienti', 'Artikulli', 'kg', 'kat', 'Vlera']
     
     try:
         df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
         df.columns = df.columns.str.strip().str.replace('"', '')
         df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
+        # Llogarisim çmimin për çdo rresht shitjeje
+        df['Cmimi_Rreshtit'] = df['Vlera'] / df['kg']
         return df
     except Exception as e:
-        st.error(f"Gabim në lexim: Sigurohu që kolona 'Vlera' ekziston në Excel. Error: {e}")
+        st.error(f"Gabim në lexim: {e}")
         return None
 
 df = load_data()
 
 if df is not None:
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT (Pika 7) ---
+    # Gjejmë çmimin e fundit për çdo artikull në të gjithë databazën
+    # Renditim sipas datës dhe marrim rreshtin e fundit për çdo artikull
+    last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')
+    last_prices = last_prices[['Artikulli', 'Cmimi_Rreshtit']].rename(columns={'Cmimi_Rreshtit': 'Cmimi_Fundit'})
+
     # --- SIDEBAR ---
     st.sidebar.header("⚙️ Parametrat")
     
     date_range = st.sidebar.date_input(
-        "Periudha referente:",
+        "Periudha referente për KG:",
         value=(df['Data'].min().date(), df['Data'].max().date())
     )
     
@@ -42,7 +50,7 @@ if df is not None:
     agjenti_select = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
     search_klient = st.sidebar.text_input("Kërko Klientin:")
 
-    # --- FILTRIMI ---
+    # --- FILTRIMI I PERIUDHËS REFERENTE ---
     mask = (df['Data'].dt.date >= start_date) & (df['Data'].dt.date <= end_date)
     dff = df.loc[mask].copy()
 
@@ -51,24 +59,24 @@ if df is not None:
     if search_klient:
         dff = dff[dff['Klienti'].str.contains(search_klient, case=False, na=False)]
 
+    # Llogaritja e muajve referentë
     delta = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
     n_months = max(1, delta)
 
-    # --- LLOGARITJET (Pika 7: Cmimi Mesatar) ---
-    # Grupojmë për të marrë totalet për artikull
-    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({
-        'kg': 'sum',
-        'Vlera': 'sum'
-    }).reset_index()
+    # --- AGREGIMI I PLANIT ---
+    # Grupojmë KG për periudhën e zgjedhur
+    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
     
-    # Cmimi Mesatar = Vlera Totale / KG Totale
-    gp['Cmimi_Mesatar'] = (gp['Vlera'] / gp['kg']).round(2)
+    # Bashkojmë (Merge) me çmimet e fundit që gjetëm më lart
+    gp = gp.merge(last_prices, on='Artikulli', how='left')
+    
+    # Llogaritjet e Planit
     gp['Plani_KG'] = ((gp['kg'] / n_months) * (1 + rritja_perqindje/100)).round(1)
-    gp['Vlera_Planifikuar'] = (gp['Plani_KG'] * gp['Cmimi_Mesatar']).round(2)
+    gp['Vlera_Planifikuar'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(2)
 
     # --- DISPLAY ---
-    next_month = (pd.to_datetime(end_date) + pd.DateOffset(months=1))
-    st.title(f"🎯 Plani: {next_month.strftime('%B %Y')}")
+    st.title(f"🎯 Plani i Shitjeve")
+    st.caption(f"KG bazuar në: {start_date} deri {end_date}. Çmimet janë të shitjes së fundit.")
 
     # Metrics
     c1, c2, c3 = st.columns(3)
@@ -79,26 +87,21 @@ if df is not None:
     st.divider()
 
     if search_klient:
-        st.subheader(f"📍 Plani i detajuar: {search_klient}")
-        # Shfaqim Kategorinë, Artikullin, Cmimin dhe Planin
-        klient_df = gp.groupby(['kat', 'Artikulli', 'Cmimi_Mesatar'])['Plani_KG'].sum().reset_index()
-        st.dataframe(klient_df, use_container_width=True, hide_index=True)
+        st.subheader(f"📍 Detajet e Klientit: {search_klient}")
+        # Shfaqim Kategorinë, Artikullin, Çmimin e fundit dhe Planin
+        klient_view = gp[['kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Planifikuar']]
+        st.dataframe(klient_view, use_container_width=True, hide_index=True)
     else:
-        # TABS (Shtuar Tab i Klientëve)
         t1, t2, t3 = st.tabs(["Sipas Kategorive", "Sipas Agjentëve", "Sipas Klientëve"])
         
         with t1:
-            kat_view = gp.groupby('kat').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
-            st.dataframe(kat_view.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+            kat_v = gp.groupby('kat').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
+            st.dataframe(kat_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
             
         with t2:
-            agj_view = gp.groupby('ForcaShitese').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
-            st.dataframe(agj_view.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+            agj_v = gp.groupby('ForcaShitese').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
+            st.dataframe(agj_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
 
         with t3:
-            # Lista e plotë e Klientëve me totalet e tyre
-            klient_list = gp.groupby(['Klienti', 'ForcaShitese']).agg({
-                'Plani_KG': 'sum',
-                'Vlera_Planifikuar': 'sum'
-            }).reset_index()
-            st.dataframe(klient_list.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+            klient_v = gp.groupby(['Klienti', 'ForcaShitese']).agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
+            st.dataframe(klient_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
