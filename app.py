@@ -33,7 +33,7 @@ if not check_password():
 def load_data_combined():
     try:
         # A. Merr shitjet nga SQL
-        conn = st.connection('sql')
+        conn = st.connection("sql", type="sql")
         # Marrim te dhenat nga View (sigurohu qe emrat e kolonave jane korrekt ne SQL)
         sql_query = "SELECT Data, ForcaShitese, Klienti, Artikulli, kg, VleraRresht FROM dbo.GetRaportiMadhView"
         df_sql = conn.query(sql_query)
