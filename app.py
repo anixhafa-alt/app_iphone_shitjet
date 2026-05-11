@@ -30,7 +30,7 @@ df = load_data()
 if df is not None:
     data_fundit = df['Data'].max().strftime('%d/%m/%Y')
 
-    # --- LOGJIKA E ÇMIMIT TË FUNDIT (Nga e gjithë historia) ---
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT ---
     df['Cmimi_Rresht'] = (df['Vlera_Historike'] / df['kg'].replace(0, 1))
     last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')[['Artikulli', 'Cmimi_Rresht']]
     last_prices.rename(columns={'Cmimi_Rresht': 'Cmimi_Fundit_Artikulli'}, inplace=True)
@@ -50,7 +50,7 @@ if df is not None:
     klient_list = sorted([str(x) for x in k_list if x not in ['nan', 'None']])
     klientet_selected = st.sidebar.multiselect("Zgjidh Klientin (Search):", options=klient_list)
 
-    # --- FILTRIMI I PERIUDHËS ---
+    # --- FILTRIMI ---
     mask = (df['Data'].dt.date >= start_date) & (df['Data'].dt.date <= end_date)
     dff = df.loc[mask].copy()
     if agj_sel != "Të gjithë": dff = dff[dff['ForcaShitese'] == agj_sel]
@@ -64,13 +64,9 @@ if df is not None:
         'Vlera_Historike': 'sum'
     }).reset_index()
     
-    # Llogaritja e çmimit mesatar të periudhës (HISTORIK)
     gp['Cmimi_Mes_Periudhes'] = (gp['Vlera_Historike'] / gp['kg'].replace(0, 1))
-    
-    # Lidhim me çmimin e fundit (PËR PLANIN)
     gp = gp.merge(last_prices, on='Artikulli', how='left')
     
-    # Planifikimi
     gp['Plani_KG'] = (gp['kg'] / n_months) * (1 + rritja/100)
     gp['Vlera_Planifikuar'] = gp['Plani_KG'] * gp['Cmimi_Fundit_Artikulli']
 
@@ -80,13 +76,13 @@ if df is not None:
     st.title(f"🎯 Plani: {muajt_sq.get(next_month_dt.strftime('%B'))} {next_month_dt.strftime('%Y')}")
     st.info(f"📅 Update i fundit: **{data_fundit}** | Planifikimi bazohet te **Çmimi i Fundit**.")
 
-    # --- METRICS (Shtuar Cmimi Mes. Periudhes) ---
-    t_kg_ref = gp['kg'].sum() # KG totale historike
-    t_v_ref = gp['Vlera_Historike'].sum() # Vlera totale historike
+    # --- METRICS ---
+    t_kg_ref = gp['kg'].sum()
+    t_v_ref = gp['Vlera_Historike'].sum()
     cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0
     
-    t_kg_plan = gp['Plani_KG'].sum() # KG totale plani
-    t_v_plan = gp['Vlera_Planifikuar'].sum() # Vlera totale plani
+    t_kg_plan = gp['Plani_KG'].sum()
+    t_v_plan = gp['Vlera_Planifikuar'].sum()
     cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
     c1, c2, c3, c4 = st.columns(4)
@@ -106,10 +102,11 @@ if df is not None:
 
     st.divider()
 
+    # NDRYSHIMI KRYESOR: width='stretch' në vend të use_container_width=True
     if klientet_selected:
         st.subheader("📍 Detajet Artikujve")
         st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Mes_Periudhes', 'Cmimi_Fundit_Artikulli', 'Plani_KG', 'Vlera_Planifikuar']], 
-                     use_container_width=True, hide_index=True, column_config=config_kolonave)
+                     width='stretch', hide_index=True, column_config=config_kolonave)
     else:
         t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
         with t1:
@@ -117,16 +114,16 @@ if df is not None:
             df_k['Cmimi_Mes_Periudhes'] = df_k['Vlera_Historike'] / df_k['kg'].replace(0, 1)
             df_k['Cmimi_Mes_Grup'] = df_k['Vlera_Planifikuar'] / df_k['Plani_KG'].replace(0, 1)
             st.dataframe(df_k[['kat', 'Cmimi_Mes_Periudhes', 'Cmimi_Mes_Grup', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
-                         use_container_width=True, hide_index=True, column_config=config_kolonave)
+                         width='stretch', hide_index=True, column_config=config_kolonave)
         with t2:
             df_a = gp.groupby('ForcaShitese').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum', 'kg': 'sum', 'Vlera_Historike': 'sum'}).reset_index()
             df_a['Cmimi_Mes_Periudhes'] = df_a['Vlera_Historike'] / df_a['kg'].replace(0, 1)
             df_a['Cmimi_Mes_Grup'] = df_a['Vlera_Planifikuar'] / df_a['Plani_KG'].replace(0, 1)
             st.dataframe(df_a[['ForcaShitese', 'Cmimi_Mes_Periudhes', 'Cmimi_Mes_Grup', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
-                         use_container_width=True, hide_index=True, column_config=config_kolonave)
+                         width='stretch', hide_index=True, column_config=config_kolonave)
         with t3:
             df_kl = gp.groupby(['Klienti', 'ForcaShitese']).agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum', 'kg': 'sum', 'Vlera_Historike': 'sum'}).reset_index()
             df_kl['Cmimi_Mes_Periudhes'] = df_kl['Vlera_Historike'] / df_kl['kg'].replace(0, 1)
             df_kl['Cmimi_Mes_Grup'] = df_kl['Vlera_Planifikuar'] / df_kl['Plani_KG'].replace(0, 1)
             st.dataframe(df_kl[['Klienti', 'ForcaShitese', 'Cmimi_Mes_Periudhes', 'Cmimi_Mes_Grup', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
-                         use_container_width=True, hide_index=True, column_config=config_kolonave)
+                         width='stretch', hide_index=True, column_config=config_kolonave)
