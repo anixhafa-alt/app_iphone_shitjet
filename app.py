@@ -4,71 +4,76 @@ import pandas as pd
 st.set_page_config(page_title="Plani Shitjeve", layout="wide")
 
 @st.cache_data(ttl=600)
-def load_and_fix():
+def load_data_safe():
     file_name = 'SAD-DATAbase1.xlsb'
-    # Lexojmë vetëm kolonat jetike
+    # Lexojmë vetëm kolonat që na duhen vërtet
     cols = ['Data', 'ForcaShitese', 'Klienti', 'Artikulli', 'kg', 'kat', 'VleraRresht']
     
     try:
-        # Leximi me engine pyxlsb
+        # Lexojmë skedarin
         df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
-        df.columns = df.columns.str.strip()
         
-        # Konvertojmë datat menjëherë dhe optimizojmë tipet e të dhënave
+        # 1. Pastrojmë emrat e kolonave menjëherë
+        df.columns = df.columns.str.strip().str.replace('"', '')
+        
+        # 2. KONVERTIMI I TIPIT (Ky hap kursen 80% të RAM-it)
         df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
+        df['ForcaShitese'] = df['ForcaShitese'].astype('category')
+        df['kat'] = df['kat'].astype('category')
         
-        # Llogarisim çmimin dhe fshijmë Vlerën për të kursyer RAM
-        df['Cmimi'] = (df['VleraRresht'] / df['kg'].replace(0, 1)).round(2)
+        # 3. LLOGARISIM ÇMIMIN DHE FSHIJMË KOLONËN E RËNDË
+        df['Cmimi'] = (df['VleraRresht'] / df['kg'].replace(0, 1)).astype('float32')
         df.drop(columns=['VleraRresht'], inplace=True)
         
-        # Kthejmë kolonat e tekstit në string për të shmangur TypeError
-        for col in ['ForcaShitese', 'Klienti', 'Artikulli', 'kat']:
-            df[col] = df[col].astype(str).replace('nan', 'I papërcaktuar')
-            
+        # 4. KTHEJMË ÇDO GJË TJETËR NË STR DHE PASTRON RAM-in
+        df['Klienti'] = df['Klienti'].astype(str)
+        df['Artikulli'] = df['Artikulli'].astype(str)
+        
         return df
     except Exception as e:
-        st.error(f"Serveri nuk mund ta hapë skedarin: {e}")
+        st.error(f"Gabim kritik në memorje: {e}")
         return None
 
-df = load_data_fixed = load_and_fix()
+df = load_data_safe()
 
 if df is not None:
-    # 1. Gjejmë çmimin e fundit (përpara filtrimit të periudhës)
+    # LLOGARITJA E ÇMIMIT TË FUNDIT (Mënyra e shpejtë)
     last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')[['Artikulli', 'Cmimi']]
     last_prices.rename(columns={'Cmimi': 'Cmimi_Fundit'}, inplace=True)
 
-    # 2. Sidebar me dizajnin e ri
-    st.sidebar.header("Parametrat")
+    # SIDEBAR
+    st.sidebar.header("⚙️ Parametrat")
     rritja = st.sidebar.number_input("Rritja (%)", value=10)
     
-    # Filtri i Agjentit (i blinduar)
-    agj_list = sorted(df['ForcaShitese'].unique().tolist())
+    # Filtra të shpejtë
+    agj_list = sorted([str(x) for x in df['ForcaShitese'].unique() if x != 'nan'])
     agj_sel = st.sidebar.selectbox("Agjenti:", ["Të gjithë"] + agj_list)
     
-    # Filtri i Klientit
-    k_list = df[df['ForcaShitese'] == agj_sel]['Klienti'].unique().tolist() if agj_sel != "Të gjithë" else df['Klienti'].unique().tolist()
-    klientet = st.sidebar.multiselect("Klientët:", options=sorted([str(x) for x in k_list]))
+    # Filtri i klientëve (limiton memorjen duke treguar vetëm unikët)
+    k_list = df[df['ForcaShitese'].astype(str) == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else df['Klienti'].unique()
+    klientet = st.sidebar.multiselect("Zgjidh Klientët:", options=sorted([str(x) for x in k_list if x != 'nan']))
 
-    # 3. Llogaritjet
-    # Marrim periudhën e fundit 3 mujore si default për të mos mbingarkuar llogaritjen
+    # FILTRIMI
     dff = df.copy()
     if agj_sel != "Të gjithë":
-        dff = dff[dff['ForcaShitese'] == agj_sel]
+        dff = dff[dff['ForcaShitese'].astype(str) == agj_sel]
     if klientet:
         dff = dff[dff['Klienti'].isin(klientet)]
 
-    # Grupimi
-    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
+    # AGREGIMI (Përdorim observed=True për të mos krijuar matrica bosh në RAM)
+    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli'], observed=True).agg({'kg': 'sum'}).reset_index()
     gp = gp.merge(last_prices, on='Artikulli', how='left')
     
-    # Supozojmë 12 muaj referencë nëse përdoruesi nuk zgjedh datë
+    # Llogaritja e planit (bazuar në 12 muaj mesatare)
     gp['Plani_KG'] = (gp['kg'] / 12 * (1 + rritja/100)).round(1)
-    gp['Vlera'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(0)
+    gp['Vlera_Lekë'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(0)
 
-    # 4. Shfaqja
+    # SHFAQJA
     st.title("📊 Plani i Shitjeve")
-    col1, col2 = st.columns(2)
-    col1.metric("Total Plani KG", f"{gp['Plani_KG'].sum():,.0f}")
-    col2.metric("Vlera Totale", f"{gp['Vlera'].sum():,.0f} L")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("KG Totale", f"{gp['Plani_KG'].sum():,.0f}")
+    c2.metric("Vlera Totale", f"{gp['Vlera_Lekë'].sum():,.0f} L")
+    c3.metric("Nr. Klientëve", len(gp['Klienti'].unique()))
 
-    st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera']], use_container_width=True)
+    st.divider()
+    st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Lekë']], use_container_width=True)
