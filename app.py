@@ -116,26 +116,6 @@ if df_raw is not None:
     end_date = st.session_state['end_d']
 
 
-
-
-# --- 1. NGARKIMI I TË DHËNAVE KRYESORE ---
-df_raw = pd.read_excel("produkte+.xlsx") # (ose emri që ka skedari yt)
-
-# --- 2. KËTU FUTET KODI I RI PËR EMRA_KATEGORIVE (Linja 67 e tutje) ---
-try:
-    df_kat_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
-    df_kat_names = df_kat_names[['KOD KAT', 'EMRI KAT']]
-except Exception as e:
-    st.error(f"Gabim në leximin e 'kat_prod': {e}")
-    df_kat_names = None
-
-# Bashkimi i emrave me kodet
-if df_raw is not None and df_kat_names is not None:
-    df_raw = pd.merge(df_raw, df_kat_names, on='KOD KAT', how='left')
-    df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT'])
-# -------------------------------------------------------------------
-
-
     # --- KETU FILLON LOGJIKA E FAQEVE ---
 
     #if page == "Planifikimi":
