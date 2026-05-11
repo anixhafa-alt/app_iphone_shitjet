@@ -19,7 +19,8 @@ def check_password():
         return True
 
 def password_entered():
-    if st.session_state["password"] == "admin123": # NDRYSHOJE KETE
+    # NDRYSHO "admin123" me fjalëkalimin që dëshiron
+    if st.session_state["password"] == "admin123":
         st.session_state["password_correct"] = True
         del st.session_state["password"]
     else:
@@ -32,30 +33,37 @@ if not check_password():
 @st.cache_data(ttl=3600)
 def load_data_combined():
     try:
-        # A. Merr shitjet nga SQL
+        # A. Lidhja me SQL duke perdorur Sekretet (pymssql)
         conn = st.connection("sql", type="sql")
-        # Marrim te dhenat nga View (sigurohu qe emrat e kolonave jane korrekt ne SQL)
         sql_query = "SELECT Data, ForcaShitese, Klienti, Artikulli, kg, VleraRresht FROM dbo.GetRaportiMadhView"
         df_sql = conn.query(sql_query)
-        df_sql['Artikulli'] = df_sql['Artikulli'].astype(str).str.strip()
+        
+        if df_sql is None or df_sql.empty:
+            st.error("SQL nuk ktheu asnjë të dhënë!")
+            return None
 
-        # B. Merr kategoritë nga Excel-i 'produkte+.xlsx'
+        # B. Pastrimi i te dhenave SQL
+        df_sql.columns = df_sql.columns.str.strip()
+        df_sql['Artikulli'] = df_sql['Artikulli'].astype(str).str.strip()
+        df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
+        df_sql = df_sql.dropna(subset=['Data']) # Heqim rreshtat pa date te vlefshme
+
+        # C. Merr kategoritë nga Excel-i 'produkte+.xlsx'
         # Artikulli = EMERTIMI dhe kat = KATEG
         df_mapping = pd.read_excel('produkte+.xlsx')
         df_mapping = df_mapping[['EMERTIMI', 'KATEG']].copy()
         df_mapping['EMERTIMI'] = df_mapping['EMERTIMI'].astype(str).str.strip()
         df_mapping['KATEG'] = df_mapping['KATEG'].astype(str).str.strip()
 
-        # C. Bashkimi (Merge)
+        # D. Bashkimi (Merge)
         df = pd.merge(df_sql, df_mapping, left_on='Artikulli', right_on='EMERTIMI', how='left')
         
         # Rregullojmë emrin e kolonës së kategorisë
         df.rename(columns={'KATEG': 'kat'}, inplace=True)
-        df['kat'] = df['kat'].fillna('ETJ') # Nëse nuk gjendet në Excel
+        df['kat'] = df['kat'].fillna('ETJ')
 
-        # Formatime
-        df['Data'] = pd.to_datetime(df['Data'])
-        df['Vlera_Historike'] = df['VleraRresht'].astype('float32')
+        # Formatime numerike
+        df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0).astype('float32')
 
         # Logjika e grupimit të kërkuar
         def klasifiko_kategorine(k):
@@ -76,8 +84,8 @@ def load_data_combined():
 
 df = load_data_combined()
 
-if df is not None:
-    # Llogaritja e çmimit të fundit (nga e gjithë baza e SQL)
+if df is not None and not df.empty:
+    # Llogaritja e çmimit të fundit
     df['Cmimi_Rresht'] = (df['Vlera_Historike'] / df['kg'].replace(0, 1))
     last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')[['Artikulli', 'Cmimi_Rresht']]
     last_prices.rename(columns={'Cmimi_Rresht': 'Cmimi_Fundit_Artikulli'}, inplace=True)
@@ -105,6 +113,7 @@ if df is not None:
     if grup_sel != "Të gjitha": dff = dff[dff['Grup_Filtri'] == grup_sel]
     if agj_sel != "Të gjithë": dff = dff[dff['ForcaShitese'] == agj_sel]
 
+    # Llogaritja e muajve
     n_months = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month))
 
     # --- AGREGIMI ---
@@ -114,34 +123,29 @@ if df is not None:
     gp['Plani_KG'] = (gp['kg'] / n_months) * (1 + rritja/100)
     gp['Vlera_Planifikuar'] = gp['Plani_KG'] * gp['Cmimi_Fundit_Artikulli']
 
-    # --- SHFAQJA ---
-    st.title(f"🚀 Plani Real-Time (SQL + Excel Mapping)")
+    # --- TITULLI DHE INFO ---
+    st.title("🚀 Plani Real-Time (SQL Server)")
+    max_date = df['Data'].max()
+    last_update_str = max_date.strftime('%d/%m/%Y') if pd.notnull(max_date) else "Pa datë"
+    st.info(f"📅 Update i fundit nga SQL: **{last_update_str}** | Grupi: **{grup_sel}**")
 
-
-
-st.write("A janë sekretet aktive?", "connections" in st.secrets)
-if "connections" in st.secrets:
-    st.write("Lloji i lidhjes:", st.secrets["connections"]["sql"]["dialect"])
-
-
-
-    st.info(f"📅 Update i fundit nga SQL: **{df['Data'].max().strftime('%d/%m/%Y')}**")
-
+    # --- METRICS ---
     t_kg_plan = gp['Plani_KG'].sum()
     t_v_plan = gp['Vlera_Planifikuar'].sum()
     cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
-    c2.metric("Çmimi Fundit Mes.", f"{cm_mes_plan:,.1f} L/kg")
+    c2.metric("Çmimi Fundit (Ponderuar)", f"{cm_mes_plan:,.1f} L/kg")
     c3.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     st.divider()
 
+    # --- TABET ---
     t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
     config_kol = {
-        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn("Çmimi Mes.", format="%.1f L"),
-        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi Fundit", format="%.1f L"),
+        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn("Çmimi Mes. Hist", format="%.1f L"),
+        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi i Fundit", format="%.1f L"),
         "Plani_KG": st.column_config.NumberColumn("KG Plan", format="%d"),
         "Vlera_Planifikuar": st.column_config.NumberColumn("Vlera Planit", format="%d")
     }
@@ -166,10 +170,14 @@ if "connections" in st.secrets:
             kat_df = agj_df.groupby('kat').agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
             kat_df['Cmimi'] = kat_df['Vlera_Planifikuar'] / kat_df['Plani_KG'].replace(0, 1)
             
-            html += "<table><thead><tr><th>Kategoria</th><th class='num'>Çmimi Mes.</th><th class='num'>Plani (KG)</th></tr></thead><tbody>"
+            html += "<table><thead><tr><th>Kategoria</th><th class='num'>Çmimi Fundit</th><th class='num'>Plani (KG)</th></tr></thead><tbody>"
             for _, row in kat_df.iterrows():
                 html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Cmimi']:,.1f} L</td><td class='num'>{row['Plani_KG']:,.0f}</td></tr>"
-            html += f"<tr class='total-row'><td>TOTALI</td><td class='num'>{(kat_df['Vlera_Planifikuar'].sum()/kat_df['Plani_KG'].sum()):,.1f} L</td><td class='num'>{kat_df['Plani_KG'].sum():,.0f}</td></tr>"
+            
+            t_kg_a = kat_df['Plani_KG'].sum()
+            t_vl_a = kat_df['Vlera_Planifikuar'].sum()
+            t_cm_a = t_vl_a / t_kg_a if t_kg_a > 0 else 0
+            html += f"<tr class='total-row'><td>TOTALI {agjent}</td><td class='num'>{t_cm_a:,.1f} L</td><td class='num'>{t_kg_a:,.0f}</td></tr>"
             html += "</tbody></table>"
         html += "</body></html>"
         return html
