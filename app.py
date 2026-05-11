@@ -319,7 +319,8 @@ elif page == "Realizimi":
         c4.metric("Koha e kaluar", f"{koha_perq:.1f}%", f"{dita_sot}/{ditet_muajit} Ditë")
 
 
-       st.divider()
+
+	st.divider()
 
         # --- TABET E REALIZIMIT ---
         t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
