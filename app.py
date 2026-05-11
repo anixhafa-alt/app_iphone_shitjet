@@ -372,6 +372,89 @@ elif page == "Realizimi":
                 )
             
             # Përsërit të njëjtën logjikë me ProgressColumn edhe te Agjentët dhe Klientët...
+# --- 7. EKSPORTI NË HTML ---
+        st.divider()
+        
+        # Përgatitja e të dhënave për raportin HTML
+        html_report = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; }}
+                .header {{ background-color: #003366; color: white; padding: 20px; text-align: center; border-radius: 10px; }}
+                .stats-container {{ display: flex; justify-content: space-around; margin-top: 20px; }}
+                .stat-box {{ background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 22%; text-align: center; }}
+                .stat-box h3 {{ margin: 0; color: #666; font-size: 14px; }}
+                .stat-box p {{ font-size: 20px; font-weight: bold; margin: 10px 0; color: #333; }}
+                .trend-section {{ margin-top: 30px; background: white; padding: 20px; border-radius: 10px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+                th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+                th {{ background-color: #f8f9fa; color: #333; }}
+                .positive {{ color: green; font-weight: bold; }}
+                .negative {{ color: red; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Raporti i Realizimit: {muajt_sq.get(sot.month)} {sot.year}</h1>
+                <p>Gjeneruar më: {sot.strftime('%d/%m/%Y %H:%M')} | Grupi: {grup_sel}</p>
+            </div>
 
+            <div class="stats-container">
+                <div class="stat-box"><h3>Targeti</h3><p>{t_target:,.0f} kg</p></div>
+                <div class="stat-box"><h3>Realizuar</h3><p>{t_real:,.0f} kg</p></div>
+                <div class="stat-box"><h3>Realizimi %</h3><p>{total_perc:.1f}%</p></div>
+                <div class="stat-box"><h3>Ditë Pune</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale}</p></div>
+            </div>
+
+            <div class="trend-section">
+                <h2>🔍 Analiza e Trendeve</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Indikatori</th>
+                            <th>Vlera Aktuale</th>
+                            <th>Krahasimi / Mbyllja e Pritshme</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Trendi Linear (Mbyllja e muajit)</td>
+                            <td><strong>{projeksioni:,.0f} kg</strong></td>
+                            <td class="{'positive' if projeksioni >= t_target else 'negative'}">
+                                {projeksioni - t_target:,.0f} kg vs Plani
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>vs Muaji i Kaluar (Periudhë e njëjtë)</td>
+                            <td>{t_real:,.0f} kg</td>
+                            <td class="{'positive' if rritja_m >= 0 else 'negative'}">{rritja_m:.1f}%</td>
+                        </tr>
+                        <tr>
+                            <td>vs Viti i Kaluar (Periudhë e njëjtë)</td>
+                            <td>{t_real:,.0f} kg</td>
+                            <td class="{'positive' if rritja_v >= 0 else 'negative'}">{rritja_v:.1f}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p style="text-align: center; color: #888; margin-top: 50px; font-size: 12px;">
+                Ky raport është gjeneruar automatikisht nga Sistemi i Analizës së Shitjeve.
+            </p>
+        </body>
+        </html>
+        """
+
+        # Butoni për shkarkim
+        st.download_button(
+            label="💾 Shkarko Raportin HTML",
+            data=html_report,
+            file_name=f"Raport_Realizimi_{sot.strftime('%d_%m_%Y')}.html",
+            mime="text/html",
+            use_container_width=True
+        )
 
 elif page == "Mundësitë": st.title("🔍 Mundësitë & Risk Profile")
