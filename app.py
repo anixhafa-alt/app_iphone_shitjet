@@ -147,7 +147,6 @@ except Exception as e:
 
 
 
-
     # --- KETU FILLON LOGJIKA E FAQEVE ---
 
     #if page == "Planifikimi":
