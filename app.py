@@ -31,8 +31,10 @@ def load_data():
 df = load_data()
 
 if df is not None:
-    # --- LOGJIKA E ÇMIMIT TË FUNDIT (E SHKRUAJTUR NË KOD) ---
-    # Rendisim sipas datës dhe mbajmë vetëm shitjen më të fundit për çdo artikull
+    # --- DATA E FUNDIT E DATABAZES ---
+    data_fundit = df['Data'].max().strftime('%d/%m/%Y')
+
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT ---
     last_prices = df.sort_values('Data').drop_duplicates('Artikulli', keep='last')[['Artikulli', 'Cmimi_Historik']]
     last_prices.rename(columns={'Cmimi_Historik': 'Cmimi_Fundit_Artikulli'}, inplace=True)
 
@@ -59,9 +61,8 @@ if df is not None:
 
     n_months = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month))
 
-    # --- AGREGIMI DHE LIDHJA ME CMIMIN E FUNDIT ---
+    # --- AGREGIMI ---
     gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
-    # Këtu lidhet çdo artikull me çmimin e tij më të fundit nga e gjithë baza
     gp = gp.merge(last_prices, on='Artikulli', how='left')
     
     gp['Plani_KG'] = (gp['kg'] / n_months) * (1 + rritja/100)
@@ -71,7 +72,9 @@ if df is not None:
     muajt_sq = {"January": "Janar", "February": "Shkurt", "March": "Mars", "April": "Prill", "May": "Maj", "June": "Qershor", "July": "Korrik", "August": "Gusht", "September": "Shtator", "October": "Tetor", "November": "Nëntor", "December": "Dhjetor"}
     next_month_dt = (pd.to_datetime(end_date) + pd.DateOffset(months=1))
     st.title(f"🎯 Plani: {muajt_sq.get(next_month_dt.strftime('%B'))} {next_month_dt.strftime('%Y')}")
-    st.caption("ℹ️ Llogaritjet janë bërë çmimet me**çmimet fundit**.")
+    
+    # SHFAQIM DATEN E FUNDIT TE SHITJES
+    st.info(f"📅 Data e fundit e shitjes në sistem: **{data_fundit}**")
 
     # Metrics
     t_kg, t_v = gp['Plani_KG'].sum(), gp['Vlera_Planifikuar'].sum()
@@ -81,10 +84,10 @@ if df is not None:
     c2.metric("Çmimi (Fundit) Mes.", f"{c_m:,.1f} L/kg")
     c3.metric("Vlera Totale", f"{t_v:,.0f} L")
 
-    # --- KONFIGURIMI I KOLONAVE (EMRAT VIZUALË) ---
+    # --- KONFIGURIMI I KOLONAVE ---
     config_kolonave = {
-        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi (Fundit)", format="%.1f L"),
-        "Cmimi_Grup": st.column_config.NumberColumn("Çmimi (Fundit)", format="%.1f L"),
+        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi Mes.", format="%.1f L"),
+        "Cmimi_Grup": st.column_config.NumberColumn("Çmimi Mes.", format="%.1f L"),
         "Plani_KG": st.column_config.NumberColumn("Plani KG", format="%d"),
         "Vlera_Planifikuar": st.column_config.NumberColumn("Vlera Planit", format="%d")
     }
