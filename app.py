@@ -116,6 +116,15 @@ if df is not None:
 
     # --- SHFAQJA ---
     st.title(f"🚀 Plani Real-Time (SQL + Excel Mapping)")
+
+
+
+st.write("A janë sekretet aktive?", "connections" in st.secrets)
+if "connections" in st.secrets:
+    st.write("Lloji i lidhjes:", st.secrets["connections"]["sql"]["dialect"])
+
+
+
     st.info(f"📅 Update i fundit nga SQL: **{df['Data'].max().strftime('%d/%m/%Y')}**")
 
     t_kg_plan = gp['Plani_KG'].sum()
