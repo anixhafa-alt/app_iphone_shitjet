@@ -80,7 +80,8 @@ def load_all_data():
         st.error(f"Gabim teknik: {e}")
         return None
 
-df_raw = load_all_data()
+
+
 
 # 1. Leximi i emrave të kategorive nga sheet-i 'kat_prod'
 try:
@@ -101,6 +102,13 @@ if df_raw is not None and df_kat_names is not None:
     
     # Opsionale: Heqim kolonat e tepërta nëse nuk të duhen më
     # df_raw.drop(columns=['EMRI KAT'], inplace=True)
+
+
+
+
+df_raw = load_all_data()
+
+
 
 
 # --- KETU FILLON PJESA QE DUHET TE FUSH ---
