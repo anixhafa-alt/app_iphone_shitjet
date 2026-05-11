@@ -266,74 +266,106 @@ elif page == "Realizimi":
         st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
 
         if df_raw is not None:
-            # --- 1. LLOGARITJA E TARGETIT DHE REALIZIMIT (Si më parë) ---
-            # ... (mbaj kodin e mask_ref, dff_ref, gp_target dhe gp_live siç janë) ...
-            # Sigurohu që variablat t_target, t_real dhe total_perc janë llogaritur këtu
+            # --- 1. LLOGARITJA E TARGETIT (Nga filtrat e menusë) ---
+            mask_ref = (df_raw['Data'].dt.date >= start_date) & (df_raw['Data'].dt.date <= end_date)
+            dff_ref = df_raw.loc[mask_ref].copy()
+            if grup_sel != "Të gjitha": dff_ref = dff_ref[dff_ref['Grup_Filtri'] == grup_sel]
+            if agj_sel != "Të gjithë": dff_ref = dff_ref[dff_ref['ForcaShitese'] == agj_sel]
+            if klientet_selected: dff_ref = dff_ref[dff_ref['Klienti'].isin(klientet_selected)]
 
-            # --- 2. LLOGARITJA E DITËVE TË PUNËS (Pa të diela) ---
+            n_months_ref = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month))
+            rritja_faktori = 1 + (rritja / 100)
+
+            gp_target_cat = dff_ref.groupby(['kat']).agg({'kg': 'sum'}).reset_index()
+            gp_target_cat['KG_Target'] = (gp_target_cat['kg'] / n_months_ref) * rritja_faktori
+            t_target = gp_target_cat['KG_Target'].sum()
+
+            # --- 2. LLOGARITJA E REALIZIMIT LIVE (Muaji korrent) ---
+            mask_live = (df_raw['Data'].dt.year == sot.year) & (df_raw['Data'].dt.month == sot.month)
+            df_live = df_raw[mask_live].copy()
+            if grup_sel != "Të gjitha": df_live = df_live[df_live['Grup_Filtri'] == grup_sel]
+            if agj_sel != "Të gjithë": df_live = df_live[df_live['ForcaShitese'] == agj_sel]
+            if klientet_selected: df_live = df_live[df_live['Klienti'].isin(klientet_selected)]
+            
+            t_real = df_live['kg'].sum()
+            total_perc = (t_real / t_target * 100) if t_target > 0 else 0
+
+            # --- 3. DITËT E PUNËS (Pa të diela) ---
             start_muaji = sot.replace(day=1)
             fund_muaji = (start_muaji + pd.offsets.MonthEnd(0))
             
-            # Ditët e punës deri sot (pa të diela - Java fillon nga 0 deri 6, 6 është e diel)
             ditet_deri_sot = pd.date_range(start=start_muaji, end=sot)
             ditet_punes_deri_sot = len([d for d in ditet_deri_sot if d.weekday() < 6])
             
-            # Ditët totale të punës në muaj
             ditet_totale_muaj = pd.date_range(start=start_muaji, end=fund_muaji)
             ditet_punes_totale = len([d for d in ditet_totale_muaj if d.weekday() < 6])
             
-            koha_punes_perc = (ditet_punes_deri_sot / ditet_punes_totale * 100) if ditet_punes_totale > 0 else 0
+            koha_perq = (ditet_punes_deri_sot / ditet_punes_totale * 100) if ditet_punes_totale > 0 else 0
 
-            # --- 3. KRAHASIMET HISTORIKE (Trendet tjera) ---
-            # A. Muaji i Kaluar (e njëjta periudhë ditore)
-            muaji_kaluar = start_muaji - pd.DateOffset(months=1)
-            mask_m_kaluar = (df_raw['Data'].dt.year == muaji_kaluar.year) & \
-                            (df_raw['Data'].dt.month == muaji_kaluar.month) & \
-                            (df_raw['Data'].dt.day <= sot.day)
-            t_real_m_kaluar = df_raw.loc[mask_m_kaluar, 'kg'].sum()
+            # --- 4. METRIKAT KRYESORE ---
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Target KG", f"{t_target:,.0f}")
+            c2.metric("Realizuar KG", f"{t_real:,.0f}")
+            status_color = "normal" if total_perc >= koha_perq else "inverse"
+            c3.metric("Realizimi %", f"{total_perc:.1f}%", delta=f"{total_perc - koha_perq:.1f}% vs Koha", delta_color=status_color)
+            c4.metric("Ditë Pune", f"{ditet_punes_deri_sot}/{ditet_punes_totale}", f"{koha_perq:.1f}% e kohës")
 
-            # B. Viti i Kaluar (e njëjta periudhë ditore)
-            viti_kaluar = start_muaji - pd.DateOffset(years=1)
-            mask_v_kaluar = (df_raw['Data'].dt.year == viti_kaluar.year) & \
-                            (df_raw['Data'].dt.month == viti_kaluar.month) & \
-                            (df_raw['Data'].dt.day <= sot.day)
-            t_real_v_kaluar = df_raw.loc[mask_v_kaluar, 'kg'].sum()
-
-            # --- 4. SHFAQJA E TRENDIT ME TRE KOLONA ---
             st.divider()
-            st.subheader("🔍 Analiza e 3 Trendeve")
-            
+
+            # --- 5. ANALIZA E 3 TRENDËVE ---
+            st.subheader("🔍 Analiza e Trendeve (Pa të diela)")
             tr1, tr2, tr3 = st.columns(3)
-            
-            # TRENDI LINEAR (Ditët e Punës)
+
+            # Trendi Linear
             ritmi_punes = t_real / ditet_punes_deri_sot if ditet_punes_deri_sot > 0 else 0
             projeksioni = ritmi_punes * ditet_punes_totale
             diff_proj = projeksioni - t_target
+            tr1.metric("Trendi Linear", f"{projeksioni:,.0f} kg", delta=f"{diff_proj:,.0f} vs Plani")
+
+            # vs Muaji i Kaluar (deri në të njëjtën datë)
+            m_kaluar_date = sot - pd.DateOffset(months=1)
+            mask_m = (df_raw['Data'].dt.year == m_kaluar_date.year) & (df_raw['Data'].dt.month == m_kaluar_date.month) & (df_raw['Data'].dt.day <= sot.day)
+            t_m_kaluar = df_raw.loc[mask_m, 'kg'].sum()
+            rritja_m = (t_real/t_m_kaluar - 1)*100 if t_m_kaluar > 0 else 0
+            tr2.metric("vs Muaji Kaluar", f"{t_real:,.0f} kg", delta=f"{rritja_m:.1f}%")
+
+            # vs Viti i Kaluar (deri në të njëjtën datë)
+            v_kaluar_date = sot - pd.DateOffset(years=1)
+            mask_v = (df_raw['Data'].dt.year == v_kaluar_date.year) & (df_raw['Data'].dt.month == v_kaluar_date.month) & (df_raw['Data'].dt.day <= sot.day)
+            t_v_kaluar = df_raw.loc[mask_v, 'kg'].sum()
+            rritja_v = (t_real/t_v_kaluar - 1)*100 if t_v_kaluar > 0 else 0
+            tr3.metric("vs Viti Kaluar", f"{t_real:,.0f} kg", delta=f"{rritja_v:.1f}%")
+
+            st.divider()
+
+            # --- 6. TABET (Kategoritë, Agjentët, Klientët) ---
+            t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
             
-            tr1.metric("Trendi Linear (Mbyllja)", f"{projeksioni:,.0f} kg", 
-                       delta=f"{diff_proj:,.0f} vs Plani", 
-                       delta_color="normal" if diff_proj >= 0 else "inverse")
-            tr1.caption(f"Bazuar në {ditet_punes_deri_sot} ditë pune të kaluara.")
+            with t1:
+                gp_live_cat = df_live.groupby(['kat']).agg({'kg': 'sum'}).reset_index()
+                gp_live_cat.rename(columns={'kg': 'KG_Real'}, inplace=True)
+                df_cat = pd.merge(gp_target_cat[['kat', 'KG_Target']], gp_live_cat, on='kat', how='left').fillna(0)
+                df_cat['%'] = (df_cat['KG_Real'] / df_cat['KG_Target'] * 100).clip(upper=100)
+                st.dataframe(df_cat.sort_values('KG_Target', ascending=False), hide_index=True, use_container_width=True)
 
-            # TRENDI VS MUAJI I KALUAR
-            rritja_vs_muaj = ((t_real / t_real_m_kaluar - 1) * 100) if t_real_m_kaluar > 0 else 0
-            tr2.metric("vs Muaji i Kaluar", f"{t_real:,.0f} kg", 
-                       delta=f"{rritja_vs_muaj:.1f}%", 
-                       help=f"Krahasuar me {t_real_m_kaluar:,.0f} kg të muajit të kaluar deri në datën {sot.day}")
+            with t2:
+                gp_agj_t = dff_ref.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+                gp_agj_t['Target'] = (gp_agj_t['kg'] / n_months_ref) * rritja_faktori
+                gp_agj_l = df_live.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+                gp_agj_l.rename(columns={'kg': 'Real'}, inplace=True)
+                df_agj = pd.merge(gp_agj_t[['ForcaShitese', 'Target']], gp_agj_l, on='ForcaShitese', how='left').fillna(0)
+                df_agj['%'] = (df_agj['Real'] / df_agj['Target'] * 100).clip(upper=100)
+                st.dataframe(df_agj.sort_values('%', ascending=False), hide_index=True, use_container_width=True)
 
-            # TRENDI VS VITI I KALUAR
-            rritja_vs_viti = ((t_real / t_real_v_kaluar - 1) * 100) if t_real_v_kaluar > 0 else 0
-            tr3.metric("vs Viti i Kaluar", f"{t_real:,.0f} kg", 
-                       delta=f"{rritja_vs_viti:.1f}%",
-                       help=f"Krahasuar me {t_real_v_kaluar:,.0f} kg të vitit të kaluar deri në datën {sot.day}")
+            with t3:
+                gp_kl_t = dff_ref.groupby(['Klienti', 'ForcaShitese']).agg({'kg': 'sum'}).reset_index()
+                gp_kl_t['Target'] = (gp_kl_t['kg'] / n_months_ref) * rritja_faktori
+                gp_kl_l = df_live.groupby('Klienti').agg({'kg': 'sum'}).reset_index()
+                gp_kl_l.rename(columns={'kg': 'Real'}, inplace=True)
+                df_kl = pd.merge(gp_kl_t[['Klienti', 'ForcaShitese', 'Target']], gp_kl_l, on='Klienti', how='left').fillna(0)
+                df_kl['%'] = (df_kl['Real'] / df_kl['Target'] * 100).clip(upper=100)
+                st.dataframe(df_kl[df_kl['Target']>0].sort_values('%', ascending=False), hide_index=True, use_container_width=True)
 
-            # Mesazhi përmbledhës
-            if projeksioni < t_target:
-                mungesa = t_target - t_real
-                ditet_mbetura = ditet_punes_totale - ditet_punes_deri_sot
-                nevoja = mungesa / ditet_mbetura if ditet_mbetura > 0 else 0
-                st.warning(f"⚠️ **Kujdes:** Duhen edhe **{nevoja:,.0f} kg/ditë pune** për të kapur objektivin.")
-            else:
-                st.success(f"✅ **Trend Pozitiv:** Me këtë ritëm tejkaloni planin me **{projeksioni - t_target:,.0f} kg**.")
+
 
 elif page == "Mundësitë": st.title("🔍 Mundësitë & Risk Profile")
