@@ -352,6 +352,14 @@ elif page == "Realizimi":
             df_kl['%'] = (df_kl['Real'] / df_kl['Target'] * 100).clip(upper=100)
             st.dataframe(df_kl[df_kl['Target'] > 0].sort_values('%', ascending=False), hide_index=True, use_container_width=True)
 
-
+# Mesazh paralajmërues nëse jemi prapa
+            t_real_tot = df_comp['KG_Real'].sum()
+            t_target_tot = df_comp['KG_Target'].sum()
+            total_perc = (t_real_tot / t_target_tot * 100) if t_target_tot > 0 else 0
+            
+            if total_perc < koha_perq:
+                st.error(f"🔴 Jeni prapa! Realizimi: {total_perc:.1f}% | Koha e kaluar: {koha_perq:.1f}%")
+            else:
+                st.success(f"🟢 Shumë mirë! Realizimi: {total_perc:.1f}% | Koha e kaluar: {koha_perq:.1f}%")
 
 elif page == "Mundësitë": st.title("🔍 Mundësitë & Risk Profile")
