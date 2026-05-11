@@ -16,7 +16,7 @@ def load_data():
         df['Klienti'] = df['Klienti'].astype(str).str.strip()
         df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
         
-        # Ruajmë vlerën për llogaritje mesatareje më vonë
+        # Ruajmë vlerën historike
         df['Vlera_Historike'] = df['VleraRresht'].astype('float32')
         df.drop(columns=['VleraRresht'], inplace=True)
         
@@ -50,7 +50,7 @@ if df is not None:
     klient_list = sorted([str(x) for x in k_list if x not in ['nan', 'None']])
     klientet_selected = st.sidebar.multiselect("Zgjidh Klientin (Search):", options=klient_list)
 
-    # --- FILTRIMI ---
+    # --- FILTRIMI I PERIUDHËS ---
     mask = (df['Data'].dt.date >= start_date) & (df['Data'].dt.date <= end_date)
     dff = df.loc[mask].copy()
     if agj_sel != "Të gjithë": dff = dff[dff['ForcaShitese'] == agj_sel]
@@ -58,19 +58,19 @@ if df is not None:
 
     n_months = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month))
 
-    # --- AGREGIMI (Shtohet llogaritja e çmimit mesatar të periudhës) ---
+    # --- AGREGIMI ---
     gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({
         'kg': 'sum',
         'Vlera_Historike': 'sum'
     }).reset_index()
     
-    # Llogaritja e çmimit mesatar vetëm për periudhën e zgjedhur
+    # Llogaritja e çmimit mesatar të periudhës (HISTORIK)
     gp['Cmimi_Mes_Periudhes'] = (gp['Vlera_Historike'] / gp['kg'].replace(0, 1))
     
-    # Lidhim me çmimin e fundit (nga e gjithë historia)
+    # Lidhim me çmimin e fundit (PËR PLANIN)
     gp = gp.merge(last_prices, on='Artikulli', how='left')
     
-    # Llogaritjet e planit (Bazohen te Cmimi i Fundit)
+    # Planifikimi
     gp['Plani_KG'] = (gp['kg'] / n_months) * (1 + rritja/100)
     gp['Vlera_Planifikuar'] = gp['Plani_KG'] * gp['Cmimi_Fundit_Artikulli']
 
@@ -80,13 +80,20 @@ if df is not None:
     st.title(f"🎯 Plani: {muajt_sq.get(next_month_dt.strftime('%B'))} {next_month_dt.strftime('%Y')}")
     st.info(f"📅 Update i fundit: **{data_fundit}** | Planifikimi bazohet te **Çmimi i Fundit**.")
 
-    # Metrics
-    t_kg, t_v = gp['Plani_KG'].sum(), gp['Vlera_Planifikuar'].sum()
-    c_m = t_v / t_kg if t_kg > 0 else 0
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Plani KG Totale", f"{t_kg:,.0f}")
-    c2.metric("Çmimi Fundit Mes.", f"{c_m:,.1f} L/kg")
-    c3.metric("Vlera Totale", f"{t_v:,.0f} L")
+    # --- METRICS (Shtuar Cmimi Mes. Periudhes) ---
+    t_kg_ref = gp['kg'].sum() # KG totale historike
+    t_v_ref = gp['Vlera_Historike'].sum() # Vlera totale historike
+    cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0
+    
+    t_kg_plan = gp['Plani_KG'].sum() # KG totale plani
+    t_v_plan = gp['Vlera_Planifikuar'].sum() # Vlera totale plani
+    cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
+    c2.metric("Çmimi Mes. Periudhës", f"{cm_mes_ref:,.1f} L/kg")
+    c3.metric("Çmimi Fundit Mes.", f"{cm_mes_plan:,.1f} L/kg", delta=f"{cm_mes_plan - cm_mes_ref:,.1f} L")
+    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     # --- KONFIGURIMI I KOLONAVE ---
     config_kolonave = {
@@ -100,7 +107,7 @@ if df is not None:
     st.divider()
 
     if klientet_selected:
-        st.subheader("📍 Detajet Artikujve (Krahasimi i Çmimeve)")
+        st.subheader("📍 Detajet Artikujve")
         st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Mes_Periudhes', 'Cmimi_Fundit_Artikulli', 'Plani_KG', 'Vlera_Planifikuar']], 
                      use_container_width=True, hide_index=True, column_config=config_kolonave)
     else:
