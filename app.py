@@ -78,13 +78,14 @@ def load_all_data():
 df_raw = load_all_data()
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (Stili i preferuar)
+# MODULI: PLANIFIKIMI
 # ---------------------------------------------------------
 if page == "Planifikimi" and df_raw is not None:
     sot = datetime.now()
     data_fundit_db = df_raw['Data'].max().strftime('%d/%m/%Y')
 
-    # --- LOGJIKA E ÇMIMIT TË FUNDIT (Pa muajin korrent) ---
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
+    # Marrim vetëm të dhënat që nuk i përkasin muajit dhe vitit aktual
     mask_past = (df_raw['Data'].dt.year < sot.year) | ((df_raw['Data'].dt.year == sot.year) & (df_raw['Data'].dt.month < sot.month))
     df_past = df_raw[mask_past].copy()
     df_past['Cmimi_Rresht'] = df_past['Vlera_Historike'] / df_past['kg'].replace(0, 1)
@@ -126,9 +127,8 @@ if page == "Planifikimi" and df_raw is not None:
     gp['Plani_KG'] = (gp['kg'] / n_months) * (1 + rritja/100)
     gp['Vlera_Planifikuar'] = gp['Plani_KG'] * gp['Cmimi_Fundit_Artikulli'].fillna(gp['Cmimi_Mes_Periudhes'])
 
-    # --- TITULLI DHE METRICS ---
-    next_month_dt = (pd.to_datetime(end_date) + pd.DateOffset(months=1))
-    st.title(f"🎯 Plani: {muajt_sq.get(next_month_dt.month)} {next_month_dt.year}")
+    # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
+    st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
     st.info(f"📅 Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
     t_kg_ref = gp['kg'].sum()
