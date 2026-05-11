@@ -116,37 +116,6 @@ if df_raw is not None:
     end_date = st.session_state['end_d']
 
 
-
-# --- 1. NGARKIMI I TË DHËNAVE ---
-# (Këtu ke kodin tënd ekzistues që lexon shitjet)
-
-# --- 2. DEKODIMI I KATEGORIVE (Linja 133 e tutje) ---
-try:
-    df_kat_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
-    
-    # Pastrojmë hapësirat e mundshme te emrat e kolonave (p.sh. "KOD KAT " bëhet "KOD KAT")
-    df_raw.columns = df_raw.columns.str.strip()
-    df_kat_names.columns = df_kat_names.columns.str.strip()
-
-    # Kontrollojmë nëse kolona ekziston vërtet
-    if 'KOD KAT' in df_raw.columns and 'KOD KAT' in df_kat_names.columns:
-        df_raw = pd.merge(df_raw, df_kat_names[['KOD KAT', 'EMRI KAT']], on='KOD KAT', how='left')
-        df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT'])
-    else:
-        # Nëse përsëri nuk gjendet, na trego çfarë kolonash ka df_raw që ta rregullojmë
-        st.warning(f"Kujdes: Kolona 'KOD KAT' nuk u gjet te shitjet. Kolonat e gjetura janë: {list(df_raw.columns)}")
-        # Si backup, krijojmë kolonën 'kat' nga çfarëdo kolone që mban kodet (supozojmë 'kat')
-        if 'kat' in df_raw.columns:
-             pass # Kolona 'kat' ekziston, nuk bëjmë asgjë
-        else:
-             df_raw['kat'] = "Pa Kategori"
-
-except Exception as e:
-    st.error(f"Gabim teknik: {e}")
-
-
-
-
     # --- KETU FILLON LOGJIKA E FAQEVE ---
 
     #if page == "Planifikimi":
