@@ -6,6 +6,36 @@ import base64
 # 1. Konfigurimi i faqes
 st.set_page_config(page_title="Sistemi i Planifikimit", layout="wide")
 
+# --- SISTEMI I SIGURISE (LOGIN) ---
+def check_password():
+    """Kthen True nëse përdoruesi shkruan fjalëkalimin e saktë."""
+    if "password_correct" not in st.session_state:
+        # Shfaqet forma e login-it herën e parë
+        st.markdown("<h2 style='text-align: center;'>Hyrja në Sistem</h2>", unsafe_allow_html=True)
+        st.text_input("Shkruaj fjalëkalimin:", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        # Shfaqet nëse fjalëkalimi është gabim
+        st.text_input("Fjalëkalim i gabuar! Provoje përsëri:", type="password", on_change=password_entered, key="password")
+        return False
+    else:
+        return True
+
+def password_entered():
+    """Kontrollon nëse fjalëkalimi është i saktë."""
+    # NDRYSHO "admin123" me fjalëkalimin që dëshiron ti
+    if st.session_state["password"] == "admin123":
+        st.session_state["password_correct"] = True
+        del st.session_state["password"]
+    else:
+        st.session_state["password_correct"] = False
+
+# Nëse nuk është loguar, ndalo ekzekutimin e pjesës tjetër
+if not check_password():
+    st.stop()
+
+# --- FUNDI I SISTEMIT TE SIGURISE ---
+
 @st.cache_data(ttl=600)
 def load_data():
     file_name = 'SAD-DATAbase1.xlsb'
@@ -19,7 +49,7 @@ def load_data():
         df['kat'] = df['kat'].astype(str).str.strip()
         df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
         
-        # Korrigjimi i logjikës së grupimit: V = OLIM
+        # Logjika e grupimit: V = OLIM
         def klasifiko_kategorine(k):
             val = str(k).upper()
             if val == "V" or "OLIM" in val:
@@ -49,6 +79,11 @@ if df is not None:
 
     # --- SIDEBAR ---
     st.sidebar.header("⚙️ Kontrolli")
+    # Buton për të dalë (Logout)
+    if st.sidebar.button("Log Out"):
+        st.session_state["password_correct"] = False
+        st.rerun()
+
     min_d, max_d = df['Data'].min().date(), df['Data'].max().date()
     date_range = st.sidebar.date_input("Periudha referente:", value=(min_d, max_d))
     start_date, end_date = date_range if isinstance(date_range, tuple) and len(date_range) == 2 else (min_d, max_d)
@@ -135,7 +170,7 @@ if df is not None:
             st.dataframe(df_kl[['Klienti', 'ForcaShitese', 'Cmimi_Mes_Periudhes', 'Cmimi_Mes_Grup', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
                          width='stretch', hide_index=True, column_config=config_kolonave)
 
-    # --- EKSPORTI ME RRESHT TOTALI ---
+    # --- EKSPORTI ---
     def generate_html_report(dataframe):
         report_dt = datetime.now().strftime('%d/%m/%Y %H:%M')
         html = f"<html><head><style>body{{font-family:sans-serif;}} table{{width:100%; border-collapse:collapse; margin-bottom:30px;}} th,td{{border:1px solid #ddd; padding:8px; text-align:left;}} th{{background-color:#f2f2f2;}} .num{{text-align:right;}} .total-row{{font-weight:bold; background-color:#eef2f7;}}</style></head><body>"
@@ -153,8 +188,6 @@ if df is not None:
             html += "<table><thead><tr><th>Kategoria</th><th class='num'>Çmimi i Fundit (Mes.)</th><th class='num'>Plani (KG)</th></tr></thead><tbody>"
             for _, row in kat_df.iterrows():
                 html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Cmimi_Fundit']:,.1f} L</td><td class='num'>{row['Plani_KG']:,.0f}</td></tr>"
-            
-            # Rreshti i totalit për agjentin
             html += f"<tr class='total-row'><td>TOTALI {agjent}</td><td class='num'>{t_cm_agj:,.1f} L</td><td class='num'>{t_kg_agj:,.0f}</td></tr>"
             html += "</tbody></table>"
         html += "</body></html>"
