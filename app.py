@@ -75,7 +75,7 @@ if df is not None:
     gp['Plani_KG'] = ((gp['kg'] / n_months) * (1 + rritja/100)).round(1)
     gp['Vlera_Planifikuar'] = (gp['Plani_KG'] * gp['Cmimi_Fundit']).round(0)
 
-    # --- TITULLI DINAMIK NË SHQIP ---
+    # --- TITULLI DINAMIK ---
     muajt_sq = {
         "January": "Janar", "February": "Shkurt", "March": "Mars",
         "April": "Prill", "May": "Maj", "June": "Qershor",
@@ -87,10 +87,9 @@ if df is not None:
     viti = next_month_dt.strftime('%Y')
 
     st.title(f"🎯 Plani: {muaji_sq} {viti}")
-    # Shënim me shkronja të vogla për çmimin
-    st.caption("ℹ️ Llogaritjet e vlerës bazohen në *çmimet e fundit* të shitjes për çdo artikull.")
+    st.caption("ℹ️ Llogaritjet bazohen në *çmimet e fundit* të shitjes.")
 
-    # --- METRICS ---
+    # Metrics
     t_kg = gp['Plani_KG'].sum()
     t_v = gp['Vlera_Planifikuar'].sum()
     c_m = t_v / t_kg if t_kg > 0 else 0
@@ -102,19 +101,35 @@ if df is not None:
 
     st.divider()
 
+    # --- FUNKSION PËR SHTIMIN E ÇMIMIT NË GRUPIME ---
+    def llogarit_cmimin_grup(dataframe):
+        # Cmimi mesatar i ponderuar = Vlera Totale / KG Totale
+        dataframe['Cmimi_Mes'] = (dataframe['Vlera_Planifikuar'] / dataframe['Plani_KG']).round(2)
+        return dataframe
+
     # --- SHFAQJA ---
     if klientet_selected:
-        st.subheader(f"📍 Detajet për {len(klientet_selected)} klientë")
+        st.subheader(f"📍 Detajet për klientët")
+        # Te detajet, Cmimi_Fundit është ai që kërkove (Vlera/Plani_KG)
         st.dataframe(gp[['Klienti', 'kat', 'Artikulli', 'Cmimi_Fundit', 'Plani_KG', 'Vlera_Planifikuar']], 
                      use_container_width=True, hide_index=True)
     else:
-        t1, t2, t3 = st.tabs(["📊 Sipas Kategorive", "👤 Sipas Agjentëve", "🏪 Sipas Klientëve"])
+        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
+        
         with t1:
             kat_v = gp.groupby('kat', observed=True).agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
-            st.dataframe(kat_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+            kat_v = llogarit_cmimin_grup(kat_v)
+            st.dataframe(kat_v[['kat', 'Cmimi_Mes', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
+                         use_container_width=True, hide_index=True)
+            
         with t2:
             agj_v = gp.groupby('ForcaShitese', observed=True).agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
-            st.dataframe(agj_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+            agj_v = llogarit_cmimin_grup(agj_v)
+            st.dataframe(agj_v[['ForcaShitese', 'Cmimi_Mes', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
+                         use_container_width=True, hide_index=True)
+            
         with t3:
             klient_v = gp.groupby(['Klienti', 'ForcaShitese'], observed=True).agg({'Plani_KG': 'sum', 'Vlera_Planifikuar': 'sum'}).reset_index()
-            st.dataframe(klient_v.sort_values('Plani_KG', ascending=False), use_container_width=True, hide_index=True)
+            klient_v = llogarit_cmimin_grup(klient_v)
+            st.dataframe(klient_v[['Klienti', 'ForcaShitese', 'Cmimi_Mes', 'Plani_KG', 'Vlera_Planifikuar']].sort_values('Plani_KG', ascending=False), 
+                         use_container_width=True, hide_index=True)
