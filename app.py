@@ -53,16 +53,16 @@ def load_data_combined():
         # Pastrojmë emrat e kolonave nga ndonjë hapësirë e padukshme
         df_mapping.columns = df_mapping.columns.str.strip()
         
-        df_mapping = df_mapping[['EMERTIMI', 'KATEG', 'KG/SKU']].copy()
+        df_mapping = df_mapping[['EMERTIMI', 'KATEG.', 'KG/SKU']].copy()
         df_mapping['EMERTIMI'] = df_mapping['EMERTIMI'].astype(str).str.strip()
-        df_mapping['KATEG'] = df_mapping['KATEG'].astype(str).str.strip()
+        df_mapping['KATEG.'] = df_mapping['KATEG.'].astype(str).str.strip()
         df_mapping['KG/SKU'] = pd.to_numeric(df_mapping['KG/SKU'], errors='coerce').fillna(0)
 
         # C. Bashkimi dhe Llogaritja e KG
         df = pd.merge(df_sql, df_mapping, left_on='Artikulli', right_on='EMERTIMI', how='left')
         df['kg'] = df['Sasia'] * df['KG/SKU']
         
-        df.rename(columns={'KATEG': 'kat'}, inplace=True)
+        df.rename(columns={'KATEG.': 'kat'}, inplace=True)
         df['kat'] = df['kat'].fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0).astype('float32')
 
