@@ -1,48 +1,60 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
+# 1. Konfigurimi
 st.set_page_config(page_title="Planifikimi Profesional", layout="wide")
 
 @st.cache_data
 def load_data():
     file_name = 'SAD-DATAbase1.xlsb'
-    # Shtojmë kolonën 'Vlera' ose 'Cmimi' nëse i ke në Excel për pikën 7
-    # Po supozoj që kolonat janë: Data, ForcaShitese, Klienti, Artikulli, kg, kat, VleraNeto
+    # Shto kolonën 'Vlera' ose 'Cmimi' nëse i ke në Excel për pikën 7
+    # Nëse emrat ndryshojnë, përshtati te lista më poshtë
     cols = ['Data', 'ForcaShitese', 'Klienti', 'Artikulli', 'kg', 'kat']
-    df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
-    df.columns = df.columns.str.strip().str.replace('"', '')
-    df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
-    return df
+    
+    try:
+        df = pd.read_excel(file_name, engine='pyxlsb', usecols=cols)
+        df.columns = df.columns.str.strip().str.replace('"', '')
+        df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30')
+        return df
+    except Exception as e:
+        st.error(f"Gabim në lexim: {e}")
+        return None
 
 df = load_data()
 
 if df is not None:
-    # --- SIDEBAR (Pika 4 dhe 8) ---
-    st.sidebar.header("Konfigurimi i Planit")
+    # --- SIDEBAR (Pika 4 & 8) ---
+    st.sidebar.header("⚙️ Parametrat e Planit")
     
-    # Pika 4: Zgjedhja e periudhës referente
+    # Pika 4: Periudha referente (Rregulluar)
     min_date = df['Data'].min().date()
     max_date = df['Data'].max().date()
-    start_date, end_date = st.sidebar.date_input(
-        "Periudha referente për llogaritje:",
-        [min_date, max_date],
+    
+    date_range = st.sidebar.date_input(
+        "Periudha referente:",
+        value=(min_date, max_date),
         min_value=min_date,
         max_value=max_date
     )
     
-    # Pika 8: Kuti për rritjen në %
-    rritja_perqindje = st.sidebar.number_input("Përcakto rritjen e planit (%)", min_value=-100, max_value=500, value=10)
+    # Sigurohemi që janë zgjedhur dy data
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        start_date, end_date = min_date, max_date
 
-    # --- FILTRAT (Pika 3 dhe 6) ---
+    # Pika 8: Rritja në %
+    rritja_perqindje = st.sidebar.number_input("Rritja e planit (%)", value=10)
+
+    # --- FILTRAT (Pika 3 & 6) ---
     agj_list = sorted([str(x) for x in df['ForcaShitese'].unique() if pd.notna(x)])
-    agjenti_select = st.sidebar.selectbox("Zgjidh Agjentin (Pika 3):", ["Të gjithë"] + agj_list)
+    agjenti_select = st.sidebar.selectbox("Agjenti (Pika 3):", ["Të gjithë"] + agj_list)
     
     search_klient = st.sidebar.text_input("Kërko Klientin (Pika 6):")
 
-    # --- PROCESIMI I TË DHËNAVE ---
-    # Filtrojmë sipas periudhës referente
-    mask = (df['Data'].date >= start_date) & (df['Data'].date <= end_date)
+    # --- FILTRIMI I TË DHËNAVE (Rregullimi i Maskës) ---
+    # Përdorim .dt.date për krahasimin e kolonës me start_date/end_date
+    mask = (df['Data'].dt.date >= start_date) & (df['Data'].dt.date <= end_date)
     dff = df.loc[mask].copy()
 
     if agjenti_select != "Të gjithë":
@@ -51,46 +63,51 @@ if df is not None:
     if search_klient:
         dff = dff[dff['Klienti'].str.contains(search_klient, case=False, na=False)]
 
-    # Llogarisim muajt e periudhës referente
-    n_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
-    if n_months <= 0: n_months = 1
+    # Llogaritja e muajve (Pika 4)
+    delta = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    n_months = max(1, delta)
 
-    # --- PIKA 5: Titulli me Muajin/Vitin e Planit ---
-    next_month_date = end_date + pd.DateOffset(months=1)
-    st.title(f"🎯 Plani i Shitjeve: {next_month_date.strftime('%B %Y')}")
-    st.caption(f"Bazuar në periudhën: {start_date} deri {end_date} ({n_months} muaj referencë)")
+    # --- DISPLAY ---
+    # Pika 5: Titulli dinamik
+    next_month = (pd.to_datetime(end_date) + pd.DateOffset(months=1))
+    st.title(f"🎯 Plani: {next_month.strftime('%B %Y')}")
+    st.caption(f"Bazuar në: {start_date} deri {end_date} ({n_months} muaj)")
 
-    # --- LLOGARITJET ---
-    # Grupimi bazë (Pika 2 dhe 6)
-    gp = dff.groupby(['ForcaShitese', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
+    # Agregimi (Pika 2, 3, 6)
+    # Këtu llogarisim totalet për çdo kombinim
+    gp = dff.groupby(['ForcaShitese', 'Klienti', 'kat', 'Artikulli']).agg({'kg': 'sum'}).reset_index()
     
-    # Kalkulimi i planit mujor me rritjen (Pika 8)
-    gp['Mesatarja_Referente'] = gp['kg'] / n_months
-    gp['Plani_i_Ri_KG'] = (gp['Mesatarja_Referente'] * (1 + rritja_perqindje/100)).round(1)
+    # Kalkulimi i Planit (Pika 8)
+    gp['Mesatarja_Mujore'] = (gp['kg'] / n_months)
+    gp['Plani_KG'] = (gp['Mesatarja_Mujore'] * (1 + rritja_perqindje/100)).round(1)
 
-    # --- PIKA 1: Totalet ---
-    total_kg_referent = gp['kg'].sum()
-    total_plani_kg = gp['Plani_i_Ri_KG'].sum()
+    # Pika 1: Totalet në KRYE
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total KG Referenca", f"{gp['kg'].sum():,.0f}")
+    c2.metric(f"Plani i Ri (+{rritja_perqindje}%)", f"{gp['Plani_KG'].sum():,.0f}")
+    c3.metric("Nr. Artikujve", f"{gp['Artikulli'].nunique()}")
+
+    # SHFAQJA E GRUPUAR
+    st.divider()
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total KG (Referenca)", f"{total_kg_referent:,.1f}")
-    col2.metric(f"Plani i ri (+{rritja_perqindje}%)", f"{total_plani_kg:,.1f} KG")
-    col3.metric("Nr. Artikujve", len(gp['Artikulli'].unique()))
-
-    # --- SHFAQJA E PLANIT (Pika 2, 3, 6) ---
     if search_klient:
-        st.subheader(f"Plani i detajuar për: {search_klient}")
-        # Grupimi sipas Kategorive dhe Artikujve (Pika 2 dhe 6)
-        st.dataframe(gp[['kat', 'Artikulli', 'Plani_i_Ri_KG']], use_container_width=True, hide_index=True)
+        # Pika 6: Plani i detajuar për klientin
+        st.subheader(f"📍 Detajet për: {search_klient}")
+        # Grupimi sipas Kategorisë dhe Artikullit
+        klient_view = gp.groupby(['kat', 'Artikulli'])['Plani_KG'].sum().reset_index()
+        st.dataframe(klient_view, use_container_width=True, hide_index=True)
     else:
-        # Shfaqja e përgjithshme e grupuar (Pika 2 dhe 3)
-        tab1, tab2 = st.tabs(["Sipas Kategorive", "Sipas Agjentëve"])
-        with tab1:
-            kat_summary = gp.groupby('kat')['Plani_i_Ri_KG'].sum().reset_index()
-            st.dataframe(kat_summary, use_container_width=True)
-        with tab2:
-            agj_summary = gp.groupby('ForcaShitese')['Plani_i_Ri_KG'].sum().reset_index()
-            st.dataframe(agj_summary, use_container_width=True)
+        # Pamja e përgjithshme me Tabs
+        t1, t2 = st.tabs(["Sipas Kategorive (Pika 2)", "Sipas Agjentëve (Pika 3)"])
+        
+        with t1:
+            kat_view = gp.groupby('kat')['Plani_KG'].sum().reset_index().sort_values('Plani_KG', ascending=False)
+            st.dataframe(kat_view, use_container_width=True, hide_index=True)
+            
+        with t2:
+            agj_view = gp.groupby('ForcaShitese')['Plani_KG'].sum().reset_index().sort_values('Plani_KG', ascending=False)
+            st.dataframe(agj_view, use_container_width=True, hide_index=True)
 
-    # Shënim për pikën 7: Çmimi mesatar kërkon kolonën 'Vlera' në Excel.
-    # Nëse e shton, mund të llogarisim: gp['Cmimi_Mesatar'] = gp['Vlera'] / gp['kg']
+    # Shënim për pikën 7 (Çmimi):
+    # Nëse dëshiron çmimin e fundit, do të duhej një kolonë 'Vlera' ose 'Cmimi' 
+    # dhe një renditje sipas datës për të marrë vlerën e rreshtit të fundit.
