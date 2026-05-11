@@ -61,21 +61,7 @@ def load_all_data():
         df.rename(columns={'KATEG.': 'kat'}, inplace=True)
         df['kat'] = df['kat'].fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
-        
-        # Klasifikimi i grupeve
-        def klasifiko_kategorine(k):
-            val = str(k).upper()
-            if val == "V" or "OLIM" in val: return "OLIM"
-            elif val == "ETJ": return "ETJ"
-            else: return "DEKA"
-        df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
-        
-        return df
-    except Exception as e:
-        st.error(f"Gabim teknik: {e}")
-        return None
-
-df_raw = load_all_data()
+       
 
 # 1. Leximi i emrave të kategorive nga sheet-i 'kat_prod'
 try:
@@ -96,6 +82,25 @@ if df_raw is not None and df_kat_names is not None:
     
     # Opsionale: Heqim kolonat e tepërta nëse nuk të duhen më
     # df_raw.drop(columns=['EMRI KAT'], inplace=True)
+
+
+ 
+        # Klasifikimi i grupeve
+        def klasifiko_kategorine(k):
+            val = str(k).upper()
+            if val == "V" or "OLIM" in val: return "OLIM"
+            elif val == "ETJ": return "ETJ"
+            else: return "DEKA"
+        df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
+        
+        return df
+    except Exception as e:
+        st.error(f"Gabim teknik: {e}")
+        return None
+
+df_raw = load_all_data()
+
+
 
 
 # --- KETU FILLON PJESA QE DUHET TE FUSH ---
