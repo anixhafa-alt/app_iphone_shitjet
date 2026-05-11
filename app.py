@@ -77,7 +77,25 @@ def load_all_data():
 
 df_raw = load_all_data()
 
+# 1. Leximi i emrave të kategorive nga sheet-i 'kat_prod'
+try:
+    # Lexojmë vetëm kolonat që na duhen për të kursyer memorie
+    df_kat_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")[['KOD KAT', 'EMRI KAT']]
+except Exception as e:
+    st.error(f"Gabim në leximin e 'kat_prod' te produkte+.xlsx: {e}")
+    df_kat_names = None
 
+# 2. Zëvendësimi i Kodeve me Emra te df_raw
+if df_raw is not None and df_kat_names is not None:
+    # Bashkojmë tabelat duke përdorur kolonën e përbashkët 'KOD KAT'
+    df_raw = pd.merge(df_raw, df_kat_names, on='KOD KAT', how='left')
+    
+    # Krijojmë një kolonë të re 'kat' që përmban Emrin, 
+    # por nëse emri mungon, mban Kodin (për siguri)
+    df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT'])
+    
+    # Opsionale: Heqim kolonat e tepërta nëse nuk të duhen më
+    # df_raw.drop(columns=['EMRI KAT'], inplace=True)
 
 
 # --- KETU FILLON PJESA QE DUHET TE FUSH ---
