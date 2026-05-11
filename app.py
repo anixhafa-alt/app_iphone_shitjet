@@ -351,15 +351,26 @@ elif page == "Realizimi":
             df_kl = pd.merge(gp_kl_t[['Klienti', 'ForcaShitese', 'Target']], gp_kl_l, on='Klienti', how='left').fillna(0)
             df_kl['%'] = (df_kl['Real'] / df_kl['Target'] * 100).clip(upper=100)
             st.dataframe(df_kl[df_kl['Target'] > 0].sort_values('%', ascending=False), hide_index=True, use_container_width=True)
+# --- MESAZHI I ANALIZËS SË TRENDIT (Në fund të faqes) ---
+        st.divider()
+        
+        # Llogaritja e trendit
+        ritmi_ditor = t_real / dita_sot if dita_sot > 0 else 0
+        parashikimi_mbylljes = ritmi_ditor * ditet_muajit
+        mungesa_kg = t_target - t_real
+        ditët_e_mbetura = ditet_muajit - dita_sot
+        ritmi_nevojshem = (mungesa_kg / ditët_e_mbetura) if ditët_e_mbetura > 0 else 0
 
-# Mesazh paralajmërues nëse jemi prapa
-            t_real_tot = df_comp['KG_Real'].sum()
-            t_target_tot = df_comp['KG_Target'].sum()
-            total_perc = (t_real_tot / t_target_tot * 100) if t_target_tot > 0 else 0
-            
-            if total_perc < koha_perq:
-                st.error(f"🔴 Jeni prapa! Realizimi: {total_perc:.1f}% | Koha e kaluar: {koha_perq:.1f}%")
-            else:
-                st.success(f"🟢 Shumë mirë! Realizimi: {total_perc:.1f}% | Koha e kaluar: {koha_perq:.1f}%")
+        if total_perc < koha_perq:
+            st.info(f"""
+            💡 **Analiza e Trendit:** Me ritmin aktual (mesatarisht **{ritmi_ditor:,.0f} kg** në ditë), muaji pritet të mbyllet me **{parashikimi_mbylljes:,.0f} kg**.  
+            ⚠️ Për të kapur objektivin prej **{t_target:,.0f} kg**, duhet të shisni mesatarisht **{ritmi_nevojshem:,.0f} kg** në ditët e mbetura.
+            """)
+        else:
+            st.success(f"""
+            🚀 **Analiza e Trendit:** Jeni në rrugë të mbarë! Me ritmin aktual, muaji pritet të mbyllet me **{parashikimi_mbylljes:,.0f} kg**, 
+            duke tejkaluar objektivin me **{parashikimi_mbylljes - t_target:,.0f} kg**.
+            """)
+
 
 elif page == "Mundësitë": st.title("🔍 Mundësitë & Risk Profile")
