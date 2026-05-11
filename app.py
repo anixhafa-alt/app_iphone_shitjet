@@ -265,11 +265,10 @@ elif page == "Realizimi":
     st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
 
     if df_raw is not None:
-        # --- 1. LLOGARITJA E TARGETIT (Bazuar te filtrat e menusë) ---
+        # 1. LLOGARITJA E TARGETIT (Nga filtrat e menusë)
         mask_ref = (df_raw['Data'].dt.date >= start_date) & (df_raw['Data'].dt.date <= end_date)
         dff_ref = df_raw.loc[mask_ref].copy()
         
-        # Aplikimi i filtrave të menusë te Targeti
         if grup_sel != "Të gjitha": dff_ref = dff_ref[dff_ref['Grup_Filtri'] == grup_sel]
         if agj_sel != "Të gjithë": dff_ref = dff_ref[dff_ref['ForcaShitese'] == agj_sel]
         if klientet_selected: dff_ref = dff_ref[dff_ref['Klienti'].isin(klientet_selected)]
@@ -277,117 +276,67 @@ elif page == "Realizimi":
         n_months_ref = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month))
         rritja_faktori = 1 + (rritja / 100)
 
-        # Agregimi i Targetit
         gp_target = dff_ref.groupby(['kat']).agg({'kg': 'sum', 'Vlera_Historike': 'sum'}).reset_index()
         gp_target['KG_Target'] = (gp_target['kg'] / n_months_ref) * rritja_faktori
-        gp_target['Vlera_Target'] = (gp_target['Vlera_Historike'] / n_months_ref) * rritja_faktori
 
-        # --- 2. SHITJET REALE (Muaji korrent + Filtrat e menusë) ---
+        # 2. SHITJET REALE (Muaji korrent)
         mask_live = (df_raw['Data'].dt.year == sot.year) & (df_raw['Data'].dt.month == sot.month)
         df_live = df_raw[mask_live].copy()
         
-        # Aplikimi i filtrave të menusë edhe te shitjet Live
         if grup_sel != "Të gjitha": df_live = df_live[df_live['Grup_Filtri'] == grup_sel]
         if agj_sel != "Të gjithë": df_live = df_live[df_live['ForcaShitese'] == agj_sel]
         if klientet_selected: df_live = df_live[df_live['Klienti'].isin(klientet_selected)]
 
-        gp_live = df_live.groupby(['kat']).agg({'kg': 'sum', 'Vlera_Historike': 'sum'}).reset_index()
-        gp_live.rename(columns={'kg': 'KG_Real', 'Vlera_Historike': 'Vlera_Real'}, inplace=True)
+        gp_live = df_live.groupby(['kat']).agg({'kg': 'sum'}).reset_index()
+        gp_live.rename(columns={'kg': 'KG_Real'}, inplace=True)
 
-        # --- 3. BASHKIMI DHE ANALIZA ---
-        df_comp = pd.merge(gp_target[['kat', 'KG_Target', 'Vlera_Target']], gp_live, on='kat', how='left').fillna(0)
+        # 3. BASHKIMI
+        df_comp = pd.merge(gp_target[['kat', 'KG_Target']], gp_live, on='kat', how='left').fillna(0)
         
-        # Metrikat e kohës
         dita_sot = sot.day
         ditet_muajit = pd.Period(sot.strftime("%Y-%m")).days_in_month
         koha_perq = (dita_sot / ditet_muajit) * 100
-
-        # Metrikat Totale
+        
         t_target = df_comp['KG_Target'].sum()
         t_real = df_comp['KG_Real'].sum()
-        perq_realizimit = (t_real / t_target * 100) if t_target > 0 else 0
+        perq_real = (t_real / t_target * 100) if t_target > 0 else 0
 
-        # --- 4. SHFAQJA VIZUALE ---
+        # 4. METRIKAT
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Target KG (Filtruar)", f"{t_target:,.0f}")
+        c1.metric("Target KG", f"{t_target:,.0f}")
         c2.metric("Realizuar KG", f"{t_real:,.0f}")
-        
-        status_ngjyra = "normal" if perq_realizimit >= koha_perq else "inverse"
-        c3.metric("Realizimi %", f"{perq_realizimit:.1f}%", 
-                  delta=f"{perq_realizimit - koha_perq:.1f}% vs Koha", delta_color=status_ngjyra)
-        
-        c4.metric("Koha e kaluar", f"{koha_perq:.1f}%", f"{dita_sot}/{ditet_muajit} Ditë")
+        st_color = "normal" if perq_real >= koha_perq else "inverse"
+        c3.metric("Realizimi %", f"{perq_real:.1f}%", delta=f"{perq_real - koha_perq:.1f}%", delta_color=st_color)
+        c4.metric("Koha", f"{koha_perq:.1f}%", f"{dita_sot}/{ditet_muajit} Ditë")
 
+        st.divider()
 
-
-	st.divider()
-
-        # --- TABET E REALIZIMIT ---
+        # 5. TABET (Kategoritë, Agjentët, Klientët)
         t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
 
         with t1:
-            st.subheader("Ecuria sipas Kategorive")
             df_comp['Progresi'] = (df_comp['KG_Real'] / df_comp['KG_Target'] * 100).clip(upper=100)
-            st.dataframe(
-                df_comp[['kat', 'KG_Target', 'KG_Real', 'Progresi']],
-                column_config={
-                    "kat": "Kategoria",
-                    "KG_Target": st.column_config.NumberColumn("Target (KG)", format="%d"),
-                    "KG_Real": st.column_config.NumberColumn("Realizuar (KG)", format="%d"),
-                    "Progresi": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%")
-                },
-                hide_index=True, use_container_width=True
-            )
+            st.dataframe(df_comp, hide_index=True, use_container_width=True)
 
         with t2:
-            st.subheader("Ecuria sipas Agjentëve")
-            # Agregimi live për agjentët
-            gp_agj_target = dff_ref.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
-            gp_agj_target['Target_AGJ'] = (gp_agj_target['kg'] / n_months_ref) * rritja_faktori
-            
-            gp_agj_live = df_live.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
-            gp_agj_live.rename(columns={'kg': 'Real_AGJ'}, inplace=True)
-            
-            df_agj = pd.merge(gp_agj_target[['ForcaShitese', 'Target_AGJ']], gp_agj_live, on='ForcaShitese', how='left').fillna(0)
-            df_agj['%'] = (df_agj['Real_AGJ'] / df_agj['Target_AGJ'] * 100).clip(upper=100)
-            
-            st.dataframe(
-                df_agj.sort_values('%', ascending=False),
-                column_config={
-                    "ForcaShitese": "Agjenti",
-                    "Target_AGJ": st.column_config.NumberColumn("Target", format="%d"),
-                    "Real_AGJ": st.column_config.NumberColumn("Realizuar", format="%d"),
-                    "%": st.column_config.ProgressColumn("Ecuria", min_value=0, max_value=100, format="%.1f%%")
-                },
-                hide_index=True, use_container_width=True
-            )
+            # Agjentët Live
+            gp_agj_t = dff_ref.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+            gp_agj_t['Target'] = (gp_agj_t['kg'] / n_months_ref) * rritja_faktori
+            gp_agj_l = df_live.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+            gp_agj_l.rename(columns={'kg': 'Real'}, inplace=True)
+            df_agj = pd.merge(gp_agj_t[['ForcaShitese', 'Target']], gp_agj_l, on='ForcaShitese', how='left').fillna(0)
+            df_agj['%'] = (df_agj['Real'] / df_agj['Target'] * 100).clip(upper=100)
+            st.dataframe(df_agj.sort_values('%', ascending=False), hide_index=True, use_container_width=True)
 
         with t3:
-            st.subheader("Ecuria sipas Klientëve")
-            # Agregimi live për klientët
-            gp_kl_target = dff_ref.groupby(['Klienti', 'ForcaShitese']).agg({'kg': 'sum'}).reset_index()
-            gp_kl_target['Target_KL'] = (gp_kl_target['kg'] / n_months_ref) * rritja_faktori
-            
-            gp_kl_live = df_live.groupby('Klienti').agg({'kg': 'sum'}).reset_index()
-            gp_kl_live.rename(columns={'kg': 'Real_KL'}, inplace=True)
-            
-            df_kl = pd.merge(gp_kl_target[['Klienti', 'ForcaShitese', 'Target_KL']], gp_kl_live, on='Klienti', how='left').fillna(0)
-            df_kl['%'] = (df_kl['Real_KL'] / df_kl['Target_KL'] * 100).clip(upper=100)
-            
-            # Shfaqim vetëm klientët që kanë një target (për të shmangur listat e pafundme)
-            df_kl = df_kl[df_kl['Target_KL'] > 0]
-            
-            st.dataframe(
-                df_kl.sort_values('%', ascending=False),
-                column_config={
-                    "Klienti": "Klienti",
-                    "ForcaShitese": "Agjenti",
-                    "Target_KL": st.column_config.NumberColumn("Target", format="%d"),
-                    "Real_KL": st.column_config.NumberColumn("Realizuar", format="%d"),
-                    "%": st.column_config.ProgressColumn("Ecuria", min_value=0, max_value=100, format="%.1f%%")
-                },
-                hide_index=True, use_container_width=True
-            )
+            # Klientët Live
+            gp_kl_t = dff_ref.groupby(['Klienti', 'ForcaShitese']).agg({'kg': 'sum'}).reset_index()
+            gp_kl_t['Target'] = (gp_kl_t['kg'] / n_months_ref) * rritja_faktori
+            gp_kl_l = df_live.groupby('Klienti').agg({'kg': 'sum'}).reset_index()
+            gp_kl_l.rename(columns={'kg': 'Real'}, inplace=True)
+            df_kl = pd.merge(gp_kl_t[['Klienti', 'ForcaShitese', 'Target']], gp_kl_l, on='Klienti', how='left').fillna(0)
+            df_kl['%'] = (df_kl['Real'] / df_kl['Target'] * 100).clip(upper=100)
+            st.dataframe(df_kl[df_kl['Target']>0].sort_values('%', ascending=False), hide_index=True, use_container_width=True)
 
 
 
