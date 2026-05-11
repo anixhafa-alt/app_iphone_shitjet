@@ -71,7 +71,7 @@ if df is not None:
     muajt_sq = {"January": "Janar", "February": "Shkurt", "March": "Mars", "April": "Prill", "May": "Maj", "June": "Qershor", "July": "Korrik", "August": "Gusht", "September": "Shtator", "October": "Tetor", "November": "Nëntor", "December": "Dhjetor"}
     next_month_dt = (pd.to_datetime(end_date) + pd.DateOffset(months=1))
     st.title(f"🎯 Plani: {muajt_sq.get(next_month_dt.strftime('%B'))} {next_month_dt.strftime('%Y')}")
-    st.caption("ℹ️ Të gjitha vlerat llogariten duke përdorur **çmimin e fundit** të shitjes për çdo artikull.")
+    st.caption("ℹ️ Llogaritjet janë bërë çmimet me**çmimet fundit**.")
 
     # Metrics
     t_kg, t_v = gp['Plani_KG'].sum(), gp['Vlera_Planifikuar'].sum()
