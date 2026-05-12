@@ -90,7 +90,7 @@ def load_all_data():
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
-            if val == "VAJ" or "OLIM" in val: return "OLIM"
+            if val == "V" or "OLIM" in val: return "OLIM"
             elif val == "ETJ": return "ETJ"
             else: return "DEKA"
         df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
