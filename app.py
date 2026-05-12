@@ -121,7 +121,7 @@ if df_raw is not None:
 try:
     df_lidhja_prod = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     # Sigurohu që këto janë emrat e kolonave te Excel-i yt
-    df_lidhja_prod = df_lidhja_prod[['KOD PRODUKTI', 'KOD KAT']] 
+    df_lidhja_prod = df_lidhja_prod[['KODI', 'KOD KAT']] 
 except Exception as e:
     st.error(f"Gabim: Nuk u gjet sheet-i 'produktet' te produkte+.xlsx")
     df_lidhja_prod = None
