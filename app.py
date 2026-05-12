@@ -3,18 +3,25 @@ import pandas as pd
 from datetime import datetime
 import base64
 
-st.set_page_config(page_title="Emri i Appit", layout="wide") # Nëse e ke tashmë, mos e shto dy herë
 
-# Kodi për të fshehur elementet e sistemit
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
-            .stAppDeployButton {display: none;}
-            [data-testid="stStatusWidget"] {display: none;}
-            [data-testid="manage-app-button"] {display: none;}
-            button[title="View source code"] {display: none;}
+            
+            /* Fsheh butonin Manage App dhe rrethimin e tij */
+            div[data-testid="stStatusWidget"] {display: none !important;}
+            .stAppViewBlockContainer {padding-bottom: 0px !important;}
+            iframe[title="manage-app"] {display: none !important;}
+            
+            /* Specifike për butonin e zi poshtë djathtas */
+            button[data-testid="manage-app-button"] {display: none !important;}
+            [data-testid="manage-app-button"] {display: none !important;}
+            
+            /* Heqja e butonit Share dhe Edit lart */
+            .stAppDeployButton {display: none !important;}
+            button[title="View source code"] {display: none !important;}
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
