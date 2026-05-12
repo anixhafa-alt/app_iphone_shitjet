@@ -139,7 +139,7 @@ if df_raw is not None and df_lidhja_prod is not None:
     # A. Së pari, shtojmë 'KOD KAT' te shitjet nga SQL
     # Supozojmë se në SQL kolona quhet 'KOD_PRODUKTI' ose 'Artikulli'
     # Ndrysho 'Artikulli' me emrin fiks që ka kolona e kodit të produktit në SQL-në tënde
-    df_raw = pd.merge(df_raw, df_lidhja_prod, left_on='Artikulli', right_on='KODI', how='left')
+    df_raw = pd.merge(df_raw, df_lidhja_prod, left_on='Artikulli', right_on='KodiArt', how='left')
 
     # B. Së dyti, shtojmë 'EMRI KAT' duke përdorur 'KOD KAT' që sapo morëm
     if df_emrat_kat is not None:
