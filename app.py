@@ -4,27 +4,30 @@ from datetime import datetime
 import base64
 
 
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            
-            /* Fsheh butonin Manage App dhe rrethimin e tij */
-            div[data-testid="stStatusWidget"] {display: none !important;}
-            .stAppViewBlockContainer {padding-bottom: 0px !important;}
-            iframe[title="manage-app"] {display: none !important;}
-            
-            /* Specifike për butonin e zi poshtë djathtas */
-            button[data-testid="manage-app-button"] {display: none !important;}
-            [data-testid="manage-app-button"] {display: none !important;}
-            
-            /* Heqja e butonit Share dhe Edit lart */
-            .stAppDeployButton {display: none !important;}
-            button[title="View source code"] {display: none !important;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+st.markdown("""
+    <style>
+    /* 1. Zhduk header-in që mbulon menunë në iPhone */
+    [data-testid="stHeader"] {display: none !important;}
+    
+    /* 2. Zhduk shiritin e zi 'Manage app' poshtë djathtas */
+    [data-testid="stStatusWidget"] {display: none !important;}
+    iframe[title="manage-app"] {display: none !important;}
+    .stAppDeployButton {display: none !important;}
+    
+    /* 3. Sigurohu që butoni i menysë (hamburger) të jetë i dukshëm dhe me ngjyrë */
+    [data-testid="stSidebarCollapseButton"] {
+        background-color: #1a237e !important;
+        color: white !important;
+        top: 10px !important;
+        left: 10px !important;
+        display: block !important;
+    }
+    
+    /* 4. Hiq padding-un e tepërt poshtë */
+    .main .block-container {padding-bottom: 0rem !important;}
+    footer {visibility: hidden !important;}
+    </style>
+    """, unsafe_allow_html=True)
 
 
 
