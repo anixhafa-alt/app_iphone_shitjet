@@ -4,50 +4,62 @@ from datetime import datetime
 import base64
 
 
+# Shto këtë fiks pas import streamlit as st
+st.set_page_config(page_title="App Shitjet", layout="wide", initial_sidebar_state="collapsed")
+
 st.markdown("""
     <style>
-    /* 1. Zhduk shiritin e bardhë lart (Header) por jo butonin e menysë */
-    header[data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
-        color: #1a237e !important;
-    }
+    /* 1. ZHDUKJE TOTALE E ELEMENTEVE TË SISTEMIT (Desktop & Mobile) */
+    header {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+    [data-testid="stHeader"] {display: none !important;}
     
-    /* 2. Zhduk butonat Share, Star dhe Lapsin e editimit */
+    /* Zhduk shiritin e zi 'Manage app' dhe çdo status widget poshtë */
+    [data-testid="stStatusWidget"], 
     .stAppDeployButton, 
-    button[title="View source code"], 
-    .stCustomComponentV1 {
+    iframe[title="manage-app"], 
+    button[title="View source code"] {
         display: none !important;
+        height: 0px !important;
+        width: 0px !important;
     }
 
-    /* 3. Zhduk shiritin e zi 'Manage app' poshtë djathtas */
-    /* Ky selektor targeton iframe-in që Streamlit injekton */
-    iframe[title="manage-app"], 
-    div[data-testid="stStatusWidget"],
+    /* 2. KRIJIMI I NJË BUTONI TË RI PËR MENUNË (Specifike për iPhone) */
+    /* Ky buton do të jetë gjithmonë lart majtas, i madh dhe i klikueshëm */
+    button[data-testid="stSidebarCollapseButton"] {
+        background-color: #1a237e !important;
+        color: white !important;
+        width: 50px !important;
+        height: 50px !important;
+        border-radius: 10px !important;
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 999999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.3) !important;
+    }
+    
+    /* E bëjmë ikonën e hamburgerit (shigjetat) të bardhë dhe të madhe */
+    button[data-testid="stSidebarCollapseButton"] svg {
+        fill: white !important;
+        width: 30px !important;
+        height: 30px !important;
+    }
+
+    /* 3. RREGULLIMI I PAMJES NË IPHONE */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-top: 70px !important; /* Lë vend për butonin e ri */
+        }
+    }
+    
+    /* 4. HIQ MENUNË E ZI POSHTË (Manage App) */
     #root > div:nth-child(1) > div > div > div > div > section > div > div:nth-child(1) > div > div.stStatusWidget {
         display: none !important;
     }
-
-    /* 4. Rregullimi i butonit të Menysë (Hamburgerit) */
-    /* E bëjmë të dukshëm, me ngjyrë dhe që mos humbasë në iPhone */
-    button[data-testid="stSidebarCollapseButton"] {
-        background-color: #1a237e !important; /* Ngjyrë blu që ta shohësh */
-        color: white !important;
-        border-radius: 5px !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        z-index: 999991 !important;
-        left: 10px !important;
-        top: 10px !important;
-    }
-    
-    /* 5. Heqim hapësirën boshe lart që krijohet nga fshehja e header */
-    .stAppViewBlockContainer {
-        padding-top: 2rem !important;
-    }
-
-    /* 6. Fsheh menunë e vjetër 'Settings, Help' (tre pikat lart djathtas) */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
