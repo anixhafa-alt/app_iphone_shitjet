@@ -117,36 +117,38 @@ if df_raw is not None:
 
 
 
-# 1. Lexojmë lidhjen Produkt -> Kategori (Sheet 'produktet')
+
+# 1. Lexojmë lidhjen Produkt -> Kod Kategori (Sheet 'produktet')
 try:
-    df_lidhja_prod = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
-    # Sigurohu që këto janë emrat e kolonave te Excel-i yt
-    df_lidhja_prod = df_lidhja_prod[['KODI', 'KATEG.']] 
+    df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+    # Përdorim emrat e saktë nga fotoja: KODI dhe KATEG.
+    df_link = df_link[['KODI', 'KATEG.']].rename(columns={'KODI': 'KodiArt', 'KATEG.': 'KOD KAT'})
 except Exception as e:
-    st.error(f"Gabim: Nuk u gjet sheet-i 'produktet' te produkte+.xlsx")
-    df_lidhja_prod = None
+    st.error(f"Gabim te sheet-i 'produktet': {e}")
+    df_link = None
 
-# 2. Lexojmë emrat e kategorive (Sheet 'kat_prod')
+# 2. Lexojmë emrin e plotë të Kategorisë (Sheet 'kat_prod')
 try:
-    df_emrat_kat = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
-    df_emrat_kat = df_emrat_kat[['KOD KAT', 'EMRI KAT']]
+    df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+    # Përdorim emrat e saktë nga fotoja: KOD KAT dhe EMRI KAT
+    df_names = df_names[['KOD KAT', 'EMRI KAT']]
 except Exception as e:
-    st.error(f"Gabim: Nuk u gjet sheet-i 'kat_prod' te produkte+.xlsx")
-    df_emrat_kat = None
+    st.error(f"Gabim te sheet-i 'kat_prod': {e}")
+    df_names = None
 
-# 3. BASHKIMI I MADH (Merge)
-if df_raw is not None and df_lidhja_prod is not None:
-    # A. Së pari, shtojmë 'KOD KAT' te shitjet nga SQL
-    # Supozojmë se në SQL kolona quhet 'KOD_PRODUKTI' ose 'Artikulli'
-    # Ndrysho 'Artikulli' me emrin fiks që ka kolona e kodit të produktit në SQL-në tënde
-    df_raw = pd.merge(df_raw, df_lidhja_prod, left_on='KodiArt', right_on='Artikulli', how='left')
+# 3. BASHKIMI I MADH (Triple Merge)
+if df_raw is not None and df_link is not None:
+    # A. Lidhim SQL (KodiArt) me Kategorinë (KOD KAT)
+    df_raw = pd.merge(df_raw, df_link, on='KodiArt', how='left')
 
-    # B. Së dyti, shtojmë 'EMRI KAT' duke përdorur 'KOD KAT' që sapo morëm
-    if df_emrat_kat is not None:
-        df_raw = pd.merge(df_raw, df_emrat_kat, on='KOD KAT', how='left')
+    # B. Lidhim Kodin e Kategorisë me Emrin e Plotë (EMRI KAT)
+    if df_names is not None:
+        df_raw = pd.merge(df_raw, df_names, on='KOD KAT', how='left')
         
-        # C. Krijojmë kolonën finale 'kat' që përdor aplikacioni
+        # C. Krijojmë kolonën finale 'kat' që përdor pjesa tjetër e kodit
+        # Nëse emri mungon, përdorim kodin, nëse edhe kodi mungon "Pa Kategori"
         df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT']).fillna("Pa Kategori")
+
 
 
 
