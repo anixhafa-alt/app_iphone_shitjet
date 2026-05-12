@@ -6,26 +6,48 @@ import base64
 
 st.markdown("""
     <style>
-    /* 1. Zhduk header-in që mbulon menunë në iPhone */
-    [data-testid="stHeader"] {display: none !important;}
-    
-    /* 2. Zhduk shiritin e zi 'Manage app' poshtë djathtas */
-    [data-testid="stStatusWidget"] {display: none !important;}
-    iframe[title="manage-app"] {display: none !important;}
-    .stAppDeployButton {display: none !important;}
-    
-    /* 3. Sigurohu që butoni i menysë (hamburger) të jetë i dukshëm dhe me ngjyrë */
-    [data-testid="stSidebarCollapseButton"] {
-        background-color: #1a237e !important;
-        color: white !important;
-        top: 10px !important;
-        left: 10px !important;
-        display: block !important;
+    /* 1. Zhduk shiritin e bardhë lart (Header) por jo butonin e menysë */
+    header[data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
+        color: #1a237e !important;
     }
     
-    /* 4. Hiq padding-un e tepërt poshtë */
-    .main .block-container {padding-bottom: 0rem !important;}
-    footer {visibility: hidden !important;}
+    /* 2. Zhduk butonat Share, Star dhe Lapsin e editimit */
+    .stAppDeployButton, 
+    button[title="View source code"], 
+    .stCustomComponentV1 {
+        display: none !important;
+    }
+
+    /* 3. Zhduk shiritin e zi 'Manage app' poshtë djathtas */
+    /* Ky selektor targeton iframe-in që Streamlit injekton */
+    iframe[title="manage-app"], 
+    div[data-testid="stStatusWidget"],
+    #root > div:nth-child(1) > div > div > div > div > section > div > div:nth-child(1) > div > div.stStatusWidget {
+        display: none !important;
+    }
+
+    /* 4. Rregullimi i butonit të Menysë (Hamburgerit) */
+    /* E bëjmë të dukshëm, me ngjyrë dhe që mos humbasë në iPhone */
+    button[data-testid="stSidebarCollapseButton"] {
+        background-color: #1a237e !important; /* Ngjyrë blu që ta shohësh */
+        color: white !important;
+        border-radius: 5px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        z-index: 999991 !important;
+        left: 10px !important;
+        top: 10px !important;
+    }
+    
+    /* 5. Heqim hapësirën boshe lart që krijohet nga fshehja e header */
+    .stAppViewBlockContainer {
+        padding-top: 2rem !important;
+    }
+
+    /* 6. Fsheh menunë e vjetër 'Settings, Help' (tre pikat lart djathtas) */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
