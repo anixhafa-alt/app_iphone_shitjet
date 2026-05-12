@@ -116,6 +116,40 @@ if df_raw is not None:
     end_date = st.session_state['end_d']
 
 
+
+# 1. Lexojmë lidhjen Produkt -> Kategori (Sheet 'produktet')
+try:
+    df_lidhja_prod = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+    # Sigurohu që këto janë emrat e kolonave te Excel-i yt
+    df_lidhja_prod = df_lidhja_prod[['KOD PRODUKTI', 'KOD KAT']] 
+except Exception as e:
+    st.error(f"Gabim: Nuk u gjet sheet-i 'produktet' te produkte+.xlsx")
+    df_lidhja_prod = None
+
+# 2. Lexojmë emrat e kategorive (Sheet 'kat_prod')
+try:
+    df_emrat_kat = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+    df_emrat_kat = df_emrat_kat[['KOD KAT', 'EMRI KAT']]
+except Exception as e:
+    st.error(f"Gabim: Nuk u gjet sheet-i 'kat_prod' te produkte+.xlsx")
+    df_emrat_kat = None
+
+# 3. BASHKIMI I MADH (Merge)
+if df_raw is not None and df_lidhja_prod is not None:
+    # A. Së pari, shtojmë 'KOD KAT' te shitjet nga SQL
+    # Supozojmë se në SQL kolona quhet 'KOD_PRODUKTI' ose 'Artikulli'
+    # Ndrysho 'Artikulli' me emrin fiks që ka kolona e kodit të produktit në SQL-në tënde
+    df_raw = pd.merge(df_raw, df_lidhja_prod, left_on='Artikulli', right_on='KOD PRODUKTI', how='left')
+
+    # B. Së dyti, shtojmë 'EMRI KAT' duke përdorur 'KOD KAT' që sapo morëm
+    if df_emrat_kat is not None:
+        df_raw = pd.merge(df_raw, df_emrat_kat, on='KOD KAT', how='left')
+        
+        # C. Krijojmë kolonën finale 'kat' që përdor aplikacioni
+        df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT']).fillna("Pa Kategori")
+
+
+
     # --- KETU FILLON LOGJIKA E FAQEVE ---
 
     #if page == "Planifikimi":
