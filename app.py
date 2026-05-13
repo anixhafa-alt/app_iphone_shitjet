@@ -57,9 +57,8 @@ def load_all_data():
         # B. Lidhja me Excel (Sheet: produktet, Kolona: KATEG.)
         #df_map = pd.read_excel('produkte+.xlsx', sheet_name='produktet')
         # Shto këtë rresht para se të zgjidhësh kolonat:
-	df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod')
-        
-	df_map.columns = df_map.columns.str.strip()
+    df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod')
+    df_map.columns = df_map.columns.str.strip()
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
         
