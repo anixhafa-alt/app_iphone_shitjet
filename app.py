@@ -116,27 +116,28 @@ def load_all_data():
         # Vazhdojme me Merge
         df_sql["KodiArt"] = df_sql["KodiArt"].astype(str).str.strip()
         df_link["KODI"] = df_link["KODI"].astype(str).str.strip()
-    # Kontrollojmë që kolonat ekzistojnë përpara se të bëjmë merge
-    if 'KATEG.' in df_raw.columns and 'KOD KAT' in df_names.columns:
-        df_raw = pd.merge(
-            df_raw, 
-            df_names, 
-            left_on="KATEG.",   # Emri i kolonës te df_raw
-            right_on="KOD KAT",  # Emri i kolonës te df_names
-            how="left"
-        )
-        # Opsionale: Mund të fshish kolonën e tepërt pas bashkimit
-        if "KOD KAT" in df_raw.columns:
-            df_raw = df_raw.drop(columns=["KOD KAT"])
-    else:
-        st.error("Gabim: Nuk u gjetën kolonat 'KATEG.' ose 'KOD KAT' për të realizuar lidhjen.")
-        df = pd.merge(
-            df_sql,
-            df_link[["KODI", "KATEG."]],
-            left_on="KodiArt",
-            right_on="KODI",
-            how="left",
-        )
+
+# --- PJESA E KORRIGJUAR ---
+    try:
+        # 1. Lidhim SQL (df_sql) me Kategorinë (df_link)
+        df_raw = pd.merge(df_sql, df_link, on='KodiArt', how='left')
+
+        # 2. Lidhim Kodin e Kategorisë me Emrin e Plotë (df_names)
+        if 'KATEG.' in df_raw.columns and 'KOD KAT' in df_names.columns:
+            df_raw = pd.merge(
+                df_raw, 
+                df_names, 
+                left_on="KATEG.", 
+                right_on="KOD KAT", 
+                how="left"
+            )
+        
+        return df_raw # Kthejmë të dhënat nëse gjithçka shkon mirë
+
+    except Exception as e:
+        # KJO ISHTE PJESA QE MUNGONTE DHE SHKAKTONTE GABIMIN
+        st.error(f"Gabim gjatë bashkimit të të dhënave: {e}")
+        return None
 
         df_map["KOD KAT"] = df_map["KOD KAT"].astype(str).str.strip()
         df = pd.merge(df, df_map, left_on="KATEG.", right_on="KOD KAT", how="left")
