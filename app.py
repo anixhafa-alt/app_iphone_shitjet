@@ -59,8 +59,7 @@ def load_all_data():
         # Shto këtë rresht para se të zgjidhësh kolonat:
 
         # Shto engine='openpyxl' brenda kllapave
-	df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
-
+	    df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
         df_map.columns = df_map.columns.str.strip()
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
