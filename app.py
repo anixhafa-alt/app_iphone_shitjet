@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-impor base64
+import base64
 
 
 # 1. Konfigurimi i faqes
@@ -26,7 +26,7 @@ def check_password():
         return True
 
 def password_entered():
-    if st.session_state["password"] == "admin123":
+    if st.session_state["password"] == "aaa":
         st.session_state["password_correct"] = True
         del st.session_state["password"]
     else:
