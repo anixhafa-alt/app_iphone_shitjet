@@ -12,7 +12,7 @@ st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide"
 # Fjalori për Muajt Shqip
 muajt_sq = {
     1: "Janar", 2: "Shkurt", 3: "Mars", 4: "Prill", 5: "Maj", 6: "Qershor",
-    7: "Korrik", 8: "Gusht", 9: "Shtator", 10: "Tetor", 11: "Nëntor", 12: "Dhjetor"
+    7: "Korrik", 8: "Gusht", 9: "Shtator", 10: "Tetor", 11: "Nentor", 12: "Dhjetor"
 }
 
 # --- SISTEMI I SIGURISE (LOGIN) ---
