@@ -81,19 +81,42 @@ def load_all_data():
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
         df_sql = df_sql.dropna(subset=["Data"])
 
-        # B. Leximi i Excel-it (Sheet: produktet)
+        # --- PJESA E KORRIGJUAR PER LEXIMIN E EXCEL ---
+
+        # 1. Lexojmë sheet-in 'produktet'
         df_link = pd.read_excel("prod.xlsx", sheet_name="produktet", engine="openpyxl")
         df_link.columns = df_link.columns.astype(str).str.strip().str.upper()
 
-        # C. Leximi i Excel-it (Sheet: kat_prod)
+        # 2. Lexojmë sheet-in 'kat_prod'
         df_map = pd.read_excel("prod.xlsx", sheet_name="kat_prod", engine="openpyxl")
         df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
 
-        # D. BASHKIMI (Merge)
+        # --- DEBUG: Kjo do te te tregoje ne ekran nese emrat jane gabim ---
+        # st.write("Kolonat e gjetura ne kat_prod:", df_map.columns.tolist())
+
+        # Kontrollojmë nëse kolonat ekzistojnë, nëse jo, përdorim emra alternativë
+        if "EMER KAT" not in df_map.columns:
+            if "EMRI KAT" in df_map.columns:
+                df_map = df_map.rename(columns={"EMRI KAT": "EMER KAT"})
+            elif "EMRI_KAT" in df_map.columns:
+                df_map = df_map.rename(columns={"EMRI_KAT": "EMER KAT"})
+
+        if "KG/SKU" not in df_map.columns:
+            if "KG" in df_map.columns:
+                df_map = df_map.rename(columns={"KG": "KG/SKU"})
+            else:
+                df_map["KG/SKU"] = 0  # Krijoje nese mungon fare qe mos te kete error
+
+        # Tani bejme perzgjedhjen e kolonave me siguri
+        cols_to_use = [
+            c for c in ["KOD KAT", "EMER KAT", "KG/SKU"] if c in df_map.columns
+        ]
+        df_map = df_map[cols_to_use]
+
+        # Vazhdojme me Merge
         df_sql["KodiArt"] = df_sql["KodiArt"].astype(str).str.strip()
         df_link["KODI"] = df_link["KODI"].astype(str).str.strip()
 
-        # Merge 1: Lidhja SQL me kodet e kategorive
         df = pd.merge(
             df_sql,
             df_link[["KODI", "KATEG."]],
@@ -102,19 +125,16 @@ def load_all_data():
             how="left",
         )
 
-        # Merge 2: Lidhja me emrat e kategorive dhe KG/SKU
         df_map["KOD KAT"] = df_map["KOD KAT"].astype(str).str.strip()
-        df = pd.merge(
-            df,
-            df_map[["KOD KAT", "EMER KAT", "KG/SKU"]],
-            left_on="KATEG.",
-            right_on="KOD KAT",
-            how="left",
-        )
+        df = pd.merge(df, df_map, left_on="KATEG.", right_on="KOD KAT", how="left")
 
-        # E. Kalkulimet (Këtu ku kishit error-in)
-        df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
-        df["kat"] = df["EMER KAT"].fillna(df["KOD KAT"]).fillna("ETJ")
+        # Kalkulimet me kontroll nese kolona ekziston
+        df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0) if "KG/SKU" in df.columns else 0
+        df["kat"] = (
+            df["EMER KAT"].fillna(df["KOD KAT"]).fillna("ETJ")
+            if "EMER KAT" in df.columns
+            else "ETJ"
+        )
         df["Vlera_Historike"] = pd.to_numeric(
             df["VleraRresht"], errors="coerce"
         ).fillna(0)
