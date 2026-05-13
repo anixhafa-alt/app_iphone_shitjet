@@ -48,7 +48,6 @@ def load_all_data():
         connection_string = "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
         conn = st.connection("sql", type="sql", url=connection_string)
 
-
         df_sql = conn.query("SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView")
         df_sql.columns = df_sql.columns.str.strip()
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
