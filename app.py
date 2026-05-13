@@ -51,40 +51,53 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-import pandas as pd
-import streamlit as st
+  # --- KORRIGJIMI I BLLOKUT TË LIDHJES SË DHËNAVE (Rreshtat 54-76) ---
 
-# 1. Leximi i saktë i dy fletëve të Excel
-try:
-    # Lexojmë artikujt
-    df_artikujt = pd.read_excel('prod.xlsx', sheet_name='produktet', engine='openpyxl')
-    # Lexojmë kategoritë (Kujdes: Sigurohu që emri i sheet është 'kat_prod')
-    df_kat = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+if df_raw is not None:
+    try:
+        # 1. Lexojmë lidhjen Produkt -> Kod Kategoria (Sheet 'produktet')
+        df_link = pd.read_excel('prod.xlsx', sheet_name='produktet', engine='openpyxl')
+        df_link.columns = df_link.columns.astype(str).str.strip().str.upper()
+        
+        # Marrim vetëm kolonat e nevojshme dhe i emërtojmë për merge
+        # KODI (Excel) lidhet me KodiArt (SQL)
+        df_link = df_link[['KODI', 'KATEG.']].copy()
+        df_link['KODI'] = df_link['KODI'].astype(str).str.strip()
+        
+        # 2. Lexojmë emrat e plotë të Kategorive (Sheet 'kat_prod')
+        df_names = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+        df_names.columns = df_names.columns.astype(str).str.strip().str.upper()
+        
+        # Sipas kërkesës tënde: 'KOD KAT' lidhet me 'KATEG.' dhe marrim 'EMER KAT'
+        # Kujdes: Kontrollo nëse në Excel është 'EMRI KAT' apo 'EMER KAT' (këtu përdora EMER KAT siç kërkove)
+        required_names = ['KOD KAT', 'EMER KAT']
+        if all(col in df_names.columns for col in required_names):
+            df_names = df_names[required_names].copy()
+            df_names['KOD KAT'] = df_names['KOD KAT'].astype(str).str.strip()
+        else:
+            st.error(f"Kolonat në 'kat_prod' nuk u gjetën! Gjetur: {df_names.columns.tolist()}")
 
-    # Pastrojmë emrat e kolonave nga hapësirat
-    df_artikujt.columns = df_artikujt.columns.astype(str).str.strip()
-    df_kat.columns = df_kat.columns.astype(str).str.strip()
+        # 3. BASHKIMI (Merge)
+        # Sigurohemi që KodiArt në SQL është string për match të saktë
+        df_raw['KodiArt'] = df_raw['KodiArt'].astype(str).str.strip()
+        
+        # A. Lidhja SQL me sheet 'produktet'
+        df_raw = pd.merge(df_raw, df_link, left_on='KodiArt', right_on='KODI', how='left')
+        
+        # B. Lidhja me sheet 'kat_prod' për të marrë Emrin e Plotë
+        # Lidhim 'KATEG.' (nga produktet) me 'KOD KAT' (nga kat_prod)
+        df_raw = pd.merge(df_raw, df_names, left_on='KATEG.', right_on='KOD KAT', how='left')
+        
+        # C. Krijimi i kolonës finale 'kat' dhe pastrimi
+        df_raw['kat'] = df_raw['EMER KAT'].fillna(df_raw['KATEG.']).fillna("Pa Kategori")
+        
+        # Fshijmë kolonat ndihmëse që mos të rëndojmë memorien
+        df_raw = df_raw.drop(columns=['KODI', 'KOD KAT', 'KATEG.'], errors='ignore')
 
-    # Bashkojmë llogjikën:
-    # Lidhim 'KATEG.' nga sheet-i 'produktet' me 'KOD KAT' nga sheet-i 'kat_prod'
-    df_combined = pd.merge(
-        df_artikujt, 
-        df_kat, 
-        left_on='KATEG.', 
-        right_on='KOD KAT', 
-        how='left'
-    )
+    except Exception as e:
+        st.error(f"Gabim gjatë procesimit të lidhjeve Excel: {e}")
 
-    # Tani krijojmë df_map që i duhet pjesës tjetër të kodit
-    # KODI -> do lidhet me KodiArt të SQL
-    # EMRI KAT -> do jetë emri që do shohim në tabelë
-    df_map = df_combined[['KODI', 'EMRI KAT']].copy()
-    df_map.columns = ['KODI', 'KATEG.'] # E riemërojmë për përputhshmëri me pjesën tjetër të kodit
-    df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
-
-except Exception as e:
-    st.error(f"Gabim teknik në strukturën e Excel: {e}")
-
+# --- FUNDI I BLLOKUT TË KORRIGJUAR ---
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
