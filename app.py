@@ -79,7 +79,6 @@ def load_all_data():
         # 2. Leximi i Excel - Sheet 'produktet'
         df_link = pd.read_excel("prod.xlsx", sheet_name="produktet", engine="openpyxl")
         df_link.columns = df_link.columns.astype(str).str.strip().str.upper()
-        # Sigurohemi që kolonat janë ato që na duhen
         df_link = df_link[["KODI", "KATEG."]].rename(columns={"KODI": "KodiArt"})
         df_link["KodiArt"] = df_link["KodiArt"].astype(str).str.strip()
 
@@ -87,17 +86,28 @@ def load_all_data():
         df_names = pd.read_excel("prod.xlsx", sheet_name="kat_prod", engine="openpyxl")
         df_names.columns = df_names.columns.astype(str).str.strip().str.upper()
 
-        # Korrigjim nese kolona eshte EMER KAT ne vend te EMRI KAT
+        # --- KORRIGJIMI AUTOMATIK I KOLONAVE ---
+        # Kontrolli për KG/SKU (provon variante të ndryshme)
+        variante_kg = ["KG/SKU", "KG / SKU", "KG_SKU", "KG SKU", "PESHA"]
+        for v in variante_kg:
+            if v in df_names.columns:
+                df_names = df_names.rename(columns={v: "KG/SKU"})
+                break
+
+        # Kontrolli për EMRI KAT
         if "EMER KAT" in df_names.columns:
             df_names = df_names.rename(columns={"EMER KAT": "EMRI KAT"})
+
+        # Sigurohemi që kolonat e nevojshme ekzistojnë, nëse jo i krijojmë bosh që mos të plasë kodi
+        if "KG/SKU" not in df_names.columns:
+            df_names["KG/SKU"] = 0
+        if "EMRI KAT" not in df_names.columns:
+            df_names["EMRI KAT"] = df_names["KOD KAT"]
 
         df_names["KOD KAT"] = df_names["KOD KAT"].astype(str).str.strip()
 
         # 4. BASHKIMI (Triple Merge)
-        # Bashkimi i parë: SQL + produktet
         df = pd.merge(df_sql, df_link, on="KodiArt", how="left")
-
-        # Bashkimi i dytë: Rezultati + kat_prod
         df["KATEG."] = df["KATEG."].astype(str).str.strip()
         df = pd.merge(
             df,
