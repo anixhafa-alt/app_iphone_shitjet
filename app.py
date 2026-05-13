@@ -43,7 +43,6 @@ page = st.sidebar.radio("Zgjidh Modulin:", ["Historiku", "Planifikimi", "Realizi
 def load_all_data():
     try:
         # A. Lidhja me SQL
-        #conn = st.connection("sql", type="sql")
         connection_string = "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
         conn = st.connection("sql", type="sql", url=connection_string)
 
@@ -51,30 +50,32 @@ def load_all_data():
         df_sql.columns = df_sql.columns.str.strip()
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
-        
-        # B. Lidhja me Excel (Sheet: produktet, Kolona: KATEG.)
-        #df_map = pd.read_excel('produkte+.xlsx', sheet_name='produktet')
-        # Shto këtë rresht para se të zgjidhësh kolonat:
+
+        # B. Lidhja me Excel
         df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
         df_map.columns = df_map.columns.str.strip()
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
-        
+
         # Merge
         df = pd.merge(df_sql, df_map, left_on='KodiArt', right_on='KODI', how='left')
         df['kg'] = df['Sasia'] * df['KG/SKU'].fillna(0)
         df.rename(columns={'KATEG.': 'kat'}, inplace=True)
         df['kat'] = df['kat'].fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
-        
+
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
-            if val == "V" or "OLIM" in val: return "OLIM"
-            elif val == "ETJ": return "ETJ"
-            else: return "DEKA"
-        df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
+            if val == "V" or "OLIM" in val: 
+                return "OLIM"
+            elif val == "ETJ": 
+                return "ETJ"
+            else: 
+                return "DEKA"
         
+        df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
+
         return df
     except Exception as e:
         st.error(f"Gabim teknik: {e}")
