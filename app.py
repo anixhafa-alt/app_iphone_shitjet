@@ -51,29 +51,36 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-        # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
-        try:
-            df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
-            
-            # KJO PJESË I RREGULLON KOLONAT AUTOMATIKISHT:
-            df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
-            
-            # Kontrollojmë nëse kolonat ekzistojnë pas pastrimit
-            required_cols = ['KODI', 'KATEG.', 'KG/SKU']
-            if all(col in df_map.columns for col in required_cols):
-                df_map = df_map[required_cols].copy()
-                df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
-            else:
-                st.error(f"Kolonat e gjetura janë: {df_map.columns.tolist()}")
-        except Exception as e:
-            st.error(f"Gabim gjatë leximit të Excel: {e}")
+# 1. Lexojmë lidhjen Produkt -> Kod Kategori (Sheet 'produktet')
+try:
+    df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+    # Përdorim emrat e saktë nga fotoja: KODI dhe KATEG.
+    df_link = df_link[['KODI', 'KATEG.']].rename(columns={'KODI': 'KodiArt', 'KATEG.': 'KOD KAT'})
+except Exception as e:
+    st.error(f"Gabim te sheet-i 'produktet': {e}")
+    df_link = None
 
-        # Merge
-        df = pd.merge(df_sql, df_map, left_on='KodiArt', right_on='KODI', how='left')
-        df['kg'] = df['Sasia'] * df['KG/SKU'].fillna(0)
-        df.rename(columns={'KATEG.': 'kat'}, inplace=True)
-        df['kat'] = df['kat'].fillna('ETJ')
-        df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
+# 2. Lexojmë emrin e plotë të Kategorisë (Sheet 'kat_prod')
+try:
+    df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+    # Përdorim emrat e saktë nga fotoja: KOD KAT dhe EMRI KAT
+    df_names = df_names[['KOD KAT', 'EMRI KAT']]
+except Exception as e:
+    st.error(f"Gabim te sheet-i 'kat_prod': {e}")
+    df_names = None
+
+# 3. BASHKIMI I MADH (Triple Merge)
+if df_raw is not None and df_link is not None:
+    # A. Lidhim SQL (KodiArt) me Kategorinë (KOD KAT)
+    df_raw = pd.merge(df_raw, df_link, on='KodiArt', how='left')
+
+    # B. Lidhim Kodin e Kategorisë me Emrin e Plotë (EMRI KAT)
+    if df_names is not None:
+        df_raw = pd.merge(df_raw, df_names, on='KOD KAT', how='left')
+        
+        # C. Krijojmë kolonën finale 'kat' që përdor pjesa tjetër e kodit
+        # Nëse emri mungon, përdorim kodin, nëse edhe kodi mungon "Pa Kategori"
+        df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT']).fillna("Pa Kategori")
 
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
