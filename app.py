@@ -35,7 +35,7 @@ if not check_password():
     st.stop()
 
 # --- NAVIGIMI ---
-# --- NGARKIMI I TE DHENAVE ---
+# --- NGARKIMI I TE DHENAVE (VERSIONI FINAL PA GABIME RRESHTIMI) ---
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
@@ -57,22 +57,22 @@ def load_all_data():
         df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
 
         # D. BASHKIMI (Merge)
-        # 1. Lidhim SQL me Produktet (KodiArt -> KODI)
         df_sql['KodiArt'] = df_sql['KodiArt'].astype(str).str.strip()
         df_link['KODI'] = df_link['KODI'].astype(str).str.strip()
         
+        # Lidhja e parë
         df = pd.merge(df_sql, df_link[['KODI', 'KATEG.']], left_on='KodiArt', right_on='KODI', how='left')
 
-        # 2. Lidhim me Kategoritë (KATEG. -> KOD KAT)
+        # Lidhja e dytë
         df_map['KOD KAT'] = df_map['KOD KAT'].astype(str).str.strip()
         df = pd.merge(df, df_map[['KOD KAT', 'EMER KAT', 'KG/SKU']], left_on='KATEG.', right_on='KOD KAT', how='left')
 
-        # E. Kalkulimet Finale
+        # E. Kalkulimet (Këtu ke pasur gabimin e hapësirave)
         df['kg'] = df['Sasia'] * df['KG/SKU'].fillna(0)
         df['kat'] = df['EMER KAT'].fillna(df['KOD KAT']).fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
 
-        # Klasifikimi i grupeve
+        # Klasifikimi
         def klasifiko_kategorine(k):
             val = str(k).upper()
             if "OLIM" in val or val == "V": return "OLIM"
@@ -81,14 +81,13 @@ def load_all_data():
         
         df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
 
-        # Kthimi i të dhënave (BRENDA funksionit)
         return df
 
     except Exception as e:
         st.error(f"Gabim teknik: {e}")
         return None
 
-# Thirrja e funksionit (JASHTË funksionit)
+# Kjo duhet të jetë fiks në fillim të rreshtit, pa asnjë hapësirë para
 df_raw = load_all_data()
 
         # 6. Kalkulimet dhe klasifikimi
