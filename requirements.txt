@@ -1,6 +1,7 @@
+pymssql
+plotly
 streamlit
 pandas
-pymssql
+pyodbc
 sqlalchemy
 openpyxl
-plotly
