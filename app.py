@@ -61,17 +61,11 @@ if not check_password():
     st.stop()
 
 
-# --- NAVIGIMI ---
-# --- NGARKIMI I TE DHENAVE (VERSIONI FINAL PA GABIME RRESHTIMI) ---
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
-        # A. Lidhja me SQL
-        connection_string = (
-            "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?"
-            "driver=ODBC+Driver+17+for+SQL+Server&"
-            "TrustServerCertificate=yes"
-        )
+        # 1. Lidhja me SQL
+        connection_string = "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
         conn = st.connection("sql", type="sql", url=connection_string)
 
         df_sql = conn.query(
@@ -80,33 +74,63 @@ def load_all_data():
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
         df_sql = df_sql.dropna(subset=["Data"])
+        df_sql["KodiArt"] = df_sql["KodiArt"].astype(str).str.strip()
 
-        # --- PJESA E KORRIGJUAR PER LEXIMIN E EXCEL ---
-
-        # 1. Lexojmë sheet-in 'produktet'
+        # 2. Leximi i Excel - Sheet 'produktet'
         df_link = pd.read_excel("prod.xlsx", sheet_name="produktet", engine="openpyxl")
         df_link.columns = df_link.columns.astype(str).str.strip().str.upper()
+        # Sigurohemi që kolonat janë ato që na duhen
+        df_link = df_link[["KODI", "KATEG."]].rename(columns={"KODI": "KodiArt"})
+        df_link["KodiArt"] = df_link["KodiArt"].astype(str).str.strip()
 
-        # 2. Lexojmë sheet-in 'kat_prod'
-        df_map = pd.read_excel("prod.xlsx", sheet_name="kat_prod", engine="openpyxl")
-        df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
+        # 3. Leximi i Excel - Sheet 'kat_prod'
+        df_names = pd.read_excel("prod.xlsx", sheet_name="kat_prod", engine="openpyxl")
+        df_names.columns = df_names.columns.astype(str).str.strip().str.upper()
 
-        # --- DEBUG: Kjo do te te tregoje ne ekran nese emrat jane gabim ---
-        # st.write("Kolonat e gjetura ne kat_prod:", df_map.columns.tolist())
+        # Korrigjim nese kolona eshte EMER KAT ne vend te EMRI KAT
+        if "EMER KAT" in df_names.columns:
+            df_names = df_names.rename(columns={"EMER KAT": "EMRI KAT"})
 
-        # Kontrollojmë nëse kolonat ekzistojnë, nëse jo, përdorim emra alternativë
-        if "EMER KAT" not in df_map.columns:
-            if "EMRI KAT" in df_map.columns:
-                df_map = df_map.rename(columns={"EMRI KAT": "EMER KAT"})
-            elif "EMRI_KAT" in df_map.columns:
-                df_map = df_map.rename(columns={"EMRI_KAT": "EMER KAT"})
+        df_names["KOD KAT"] = df_names["KOD KAT"].astype(str).str.strip()
 
-        if "KG/SKU" not in df_map.columns:
-            if "KG" in df_map.columns:
-                df_map = df_map.rename(columns={"KG": "KG/SKU"})
+        # 4. BASHKIMI (Triple Merge)
+        # Bashkimi i parë: SQL + produktet
+        df = pd.merge(df_sql, df_link, on="KodiArt", how="left")
+
+        # Bashkimi i dytë: Rezultati + kat_prod
+        df["KATEG."] = df["KATEG."].astype(str).str.strip()
+        df = pd.merge(
+            df,
+            df_names[["KOD KAT", "EMRI KAT", "KG/SKU"]],
+            left_on="KATEG.",
+            right_on="KOD KAT",
+            how="left",
+        )
+
+        # 5. Kalkulimet Finale
+        df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
+        df["kat"] = df["EMRI KAT"].fillna(df["KATEG."]).fillna("ETJ")
+        df["Vlera_Historike"] = pd.to_numeric(
+            df["VleraRresht"], errors="coerce"
+        ).fillna(0)
+
+        # Klasifikimi i grupeve
+        def klasifiko_kategorine(k):
+            val = str(k).upper()
+            if val == "V" or "OLIM" in val:
+                return "OLIM"
+            elif val == "ETJ":
+                return "ETJ"
             else:
-                df_map["KG/SKU"] = 0  # Krijoje nese mungon fare qe mos te kete error
+                return "DEKA"
 
+        df["Grup_Filtri"] = df["kat"].apply(klasifiko_kategorine)
+
+        return df
+
+    except Exception as e:
+        st.error(f"Gabim teknik gjatë ngarkimit: {e}")
+        return None
         # Tani bejme perzgjedhjen e kolonave me siguri
         cols_to_use = [
             c for c in ["KOD KAT", "EMER KAT", "KG/SKU"] if c in df_map.columns
@@ -117,22 +141,18 @@ def load_all_data():
         df_sql["KodiArt"] = df_sql["KodiArt"].astype(str).str.strip()
         df_link["KODI"] = df_link["KODI"].astype(str).str.strip()
 
-# --- PJESA E KORRIGJUAR ---
+    # --- PJESA E KORRIGJUAR ---
     try:
         # 1. Lidhim SQL (df_sql) me Kategorinë (df_link)
-        df_raw = pd.merge(df_sql, df_link, on='KodiArt', how='left')
+        df_raw = pd.merge(df_sql, df_link, on="KodiArt", how="left")
 
         # 2. Lidhim Kodin e Kategorisë me Emrin e Plotë (df_names)
-        if 'KATEG.' in df_raw.columns and 'KOD KAT' in df_names.columns:
+        if "KATEG." in df_raw.columns and "KOD KAT" in df_names.columns:
             df_raw = pd.merge(
-                df_raw, 
-                df_names, 
-                left_on="KATEG.", 
-                right_on="KOD KAT", 
-                how="left"
+                df_raw, df_names, left_on="KATEG.", right_on="KOD KAT", how="left"
             )
-        
-        return df_raw # Kthejmë të dhënat nëse gjithçka shkon mirë
+
+        return df_raw  # Kthejmë të dhënat nëse gjithçka shkon mirë
 
     except Exception as e:
         # KJO ISHTE PJESA QE MUNGONTE DHE SHKAKTONTE GABIMIN
