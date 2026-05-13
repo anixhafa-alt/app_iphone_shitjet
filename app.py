@@ -53,7 +53,7 @@ def load_all_data():
 
 # 1. Lexojmë lidhjen Produkt -> Kod Kategori (Sheet 'produktet')
 try:
-    df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+    df_link = pd.read_excel("prod.xlsx", sheet_name="produktet")
     # Përdorim emrat e saktë nga fotoja: KODI dhe KATEG.
     df_link = df_link[['KODI', 'KATEG.']].rename(columns={'KODI': 'KodiArt', 'KATEG.': 'KOD KAT'})
 except Exception as e:
@@ -62,7 +62,7 @@ except Exception as e:
 
 # 2. Lexojmë emrin e plotë të Kategorisë (Sheet 'kat_prod')
 try:
-    df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+    df_names = pd.read_excel("prod.xlsx", sheet_name="kat_prod")
     # Përdorim emrat e saktë nga fotoja: KOD KAT dhe EMRI KAT
     df_names = df_names[['KOD KAT', 'EMRI KAT']]
 except Exception as e:
