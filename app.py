@@ -67,7 +67,11 @@ if not check_password():
 def load_all_data():
     try:
         # A. Lidhja me SQL
-        connection_string = "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+        connection_string = (
+            "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?"
+            "driver=ODBC+Driver+17+for+SQL+Server&"
+            "TrustServerCertificate=yes"
+        )
         conn = st.connection("sql", type="sql", url=connection_string)
 
         df_sql = conn.query(
