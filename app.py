@@ -52,8 +52,15 @@ def load_all_data():
         df_sql = df_sql.dropna(subset=['Data'])
 
         # B. Lidhja me Excel
-        df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
-        df_map.columns = df_map.columns.str.strip()
+        df_map = pd.read_excel('produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
+
+        # Printo kolonat në terminal që t'i shohësh (për debug)
+        print("Kolonat që u gjetën në Excel:", df_map.columns.tolist())
+
+        # Pastro emrat e kolonave nga hapësirat e fshehura dhe ktheji në të mëdha
+        df_map.columns = df_map.columns.str.strip().str.upper()
+
+        # Tani provo t'i marrësh
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
 
