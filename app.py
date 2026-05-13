@@ -40,18 +40,25 @@ st.sidebar.title("🧭 Menuja Kryesore")
 page = st.sidebar.radio("Zgjidh Modulin:", ["Historiku", "Planifikimi", "Realizimi", "Mundësitë"])
 
 # --- NGARKIMI I TE DHENAVE ---
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=600)
 def load_all_data():
     try:
         # A. Lidhja me SQL
-        conn = st.connection("sql", type="sql")
+        #conn = st.connection("sql", type="sql")
+        connection_string = "mssql+pyodbc://DEKAReportsUser:DekaR3p0rt$V1ew!@Deka.ivaelektronik.com:4433/SADN?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+        conn = st.connection("sql", type="sql", url=connection_string)
+
+
         df_sql = conn.query("SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView")
         df_sql.columns = df_sql.columns.str.strip()
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
         
         # B. Lidhja me Excel (Sheet: produktet, Kolona: KATEG.)
-        df_map = pd.read_excel('produkte+.xlsx', sheet_name='produktet')
+        #df_map = pd.read_excel('produkte+.xlsx', sheet_name='produktet')
+        
+        df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod')
+
         df_map.columns = df_map.columns.str.strip()
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
