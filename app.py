@@ -51,14 +51,22 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-        # B. Lidhja me Excel
+    # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
+    try:
         df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
-
-        # Printo kolonat në terminal që t'i shohësh (për debug)
-        print("Kolonat që u gjetën në Excel:", df_map.columns.tolist())
-
-        # Pastro emrat e kolonave nga hapësirat e fshehura dhe ktheji në të mëdha
-        df_map.columns = df_map.columns.str.strip().str.upper()
+        
+        # KJO PJESË I RREGULLON KOLONAT AUTOMATIKISHT:
+        df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
+        
+        # Kontrollojmë nëse kolonat ekzistojnë pas pastrimit
+        required_cols = ['KODI', 'KATEG.', 'KG/SKU']
+        if all(col in df_map.columns for col in required_cols):
+            df_map = df_map[required_cols].copy()
+            df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
+        else:
+            st.error(f"Kolonat e gjetura janë: {df_map.columns.tolist()}")
+    except Exception as e:
+        st.error(f"Gabim gjatë leximit të Excel: {e}")
 
         # Tani provo t'i marrësh
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
