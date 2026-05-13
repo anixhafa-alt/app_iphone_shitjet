@@ -51,36 +51,39 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-# 1. Lexojmë lidhjen Produkt -> Kod Kategori (Sheet 'produktet')
+import pandas as pd
+import streamlit as st
+
+# 1. Leximi i saktë i dy fletëve të Excel
 try:
-    df_link = pd.read_excel("prod.xlsx", sheet_name="produktet")
-    # Përdorim emrat e saktë nga fotoja: KODI dhe KATEG.
-    df_link = df_link[['KODI', 'KATEG.']].rename(columns={'KODI': 'KodiArt', 'KATEG.': 'KOD KAT'})
+    # Lexojmë artikujt
+    df_artikujt = pd.read_excel('prod.xlsx', sheet_name='produktet', engine='openpyxl')
+    # Lexojmë kategoritë (Kujdes: Sigurohu që emri i sheet është 'kat_prod')
+    df_kat = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+
+    # Pastrojmë emrat e kolonave nga hapësirat
+    df_artikujt.columns = df_artikujt.columns.astype(str).str.strip()
+    df_kat.columns = df_kat.columns.astype(str).str.strip()
+
+    # Bashkojmë llogjikën:
+    # Lidhim 'KATEG.' nga sheet-i 'produktet' me 'KOD KAT' nga sheet-i 'kat_prod'
+    df_combined = pd.merge(
+        df_artikujt, 
+        df_kat, 
+        left_on='KATEG.', 
+        right_on='KOD KAT', 
+        how='left'
+    )
+
+    # Tani krijojmë df_map që i duhet pjesës tjetër të kodit
+    # KODI -> do lidhet me KodiArt të SQL
+    # EMRI KAT -> do jetë emri që do shohim në tabelë
+    df_map = df_combined[['KODI', 'EMRI KAT']].copy()
+    df_map.columns = ['KODI', 'KATEG.'] # E riemërojmë për përputhshmëri me pjesën tjetër të kodit
+    df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
+
 except Exception as e:
-    st.error(f"Gabim te sheet-i 'produktet': {e}")
-    df_link = None
-
-# 2. Lexojmë emrin e plotë të Kategorisë (Sheet 'kat_prod')
-try:
-    df_names = pd.read_excel("prod.xlsx", sheet_name="kat_prod")
-    # Përdorim emrat e saktë nga fotoja: KOD KAT dhe EMRI KAT
-    df_names = df_names[['KOD KAT', 'EMRI KAT']]
-except Exception as e:
-    st.error(f"Gabim te sheet-i 'kat_prod': {e}")
-    df_names = None
-
-# 3. BASHKIMI I MADH (Triple Merge)
-if df_raw is not None and df_link is not None:
-    # A. Lidhim SQL (KodiArt) me Kategorinë (KOD KAT)
-    df_raw = pd.merge(df_raw, df_link, on='KodiArt', how='left')
-
-    # B. Lidhim Kodin e Kategorisë me Emrin e Plotë (EMRI KAT)
-    if df_names is not None:
-        df_raw = pd.merge(df_raw, df_names, on='KOD KAT', how='left')
-        
-        # C. Krijojmë kolonën finale 'kat' që përdor pjesa tjetër e kodit
-        # Nëse emri mungon, përdorim kodin, nëse edhe kodi mungon "Pa Kategori"
-        df_raw['kat'] = df_raw['EMRI KAT'].fillna(df_raw['KOD KAT']).fillna("Pa Kategori")
+    st.error(f"Gabim teknik në strukturën e Excel: {e}")
 
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
