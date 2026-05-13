@@ -51,8 +51,8 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-    # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
-    try:
+      # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
+     try:
         df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
         
         # KJO PJESË I RREGULLON KOLONAT AUTOMATIKISHT:
@@ -65,7 +65,7 @@ def load_all_data():
             df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
         else:
             st.error(f"Kolonat e gjetura janë: {df_map.columns.tolist()}")
-    except Exception as e:
+        except Exception as e:
         st.error(f"Gabim gjatë leximit të Excel: {e}")
 
         # Tani provo t'i marrësh
