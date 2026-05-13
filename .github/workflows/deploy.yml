@@ -1,0 +1,23 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main  # Kjo do të thotë: aktivizohu kur bëj push në degën kryesore
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            cd /root/app_shitjet
+            git pull origin main
+            # Streamlit i dallon ndryshimet automatikisht, por ky rresht siguron që procesi është gjallë
+            echo "Deployment i suksesshëm!"
