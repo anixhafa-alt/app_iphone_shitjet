@@ -50,44 +50,55 @@ def load_all_data():
         df_sql.columns = df_sql.columns.str.strip()
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
+        
+# --- KODI I RREGULLUAR PËR NGARKIMIN DHE MERGE ---
+        return df_sql  # Kthejmë df_sql përkohësisht që të vazhdojmë përpunimin jashtë funksionit
+    except Exception as e:
+        st.error(f"Gabim teknik në SQL: {e}")
+        return None
 
-  # --- KORRIGJIMI I BLLOKUT TË LIDHJES SË DHËNAVE (Rreshtat 54-76) ---
+df_raw = load_all_data()
 
+# --- LIDHJA ME EXCEL DHE KATEGORIZIMI (Rreshtat 54-90) ---
 if df_raw is not None:
     try:
-        # 1. Lexojmë lidhjen Produkt -> Kod Kategoria (Sheet 'produktet')
+        # 1. Leximi i Excel-it për kategoritë dhe KG/SKU
+        df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+        df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
+        
+        # 2. Leximi i lidhjes Produkt -> Kod Kategoria
         df_link = pd.read_excel('prod.xlsx', sheet_name='produktet', engine='openpyxl')
         df_link.columns = df_link.columns.astype(str).str.strip().str.upper()
-        
-        # Marrim vetëm kolonat e nevojshme dhe i emërtojmë për merge
-        # KODI (Excel) lidhet me KodiArt (SQL)
-        df_link = df_link[['KODI', 'KATEG.']].copy()
-        df_link['KODI'] = df_link['KODI'].astype(str).str.strip()
-        
-        # 2. Lexojmë emrat e plotë të Kategorive (Sheet 'kat_prod')
-        df_names = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
-        df_names.columns = df_names.columns.astype(str).str.strip().str.upper()
-        
-        # Sipas kërkesës tënde: 'KOD KAT' lidhet me 'KATEG.' dhe marrim 'EMER KAT'
-        # Kujdes: Kontrollo nëse në Excel është 'EMRI KAT' apo 'EMER KAT' (këtu përdora EMER KAT siç kërkove)
-        required_names = ['KOD KAT', 'EMER KAT']
-        if all(col in df_names.columns for col in required_names):
-            df_names = df_names[required_names].copy()
-            df_names['KOD KAT'] = df_names['KOD KAT'].astype(str).str.strip()
-        else:
-            st.error(f"Kolonat në 'kat_prod' nuk u gjetën! Gjetur: {df_names.columns.tolist()}")
 
-        # 3. BASHKIMI (Merge)
-        # Sigurohemi që KodiArt në SQL është string për match të saktë
+        # 3. Pastrimi i kolonave për lidhje të saktë
         df_raw['KodiArt'] = df_raw['KodiArt'].astype(str).str.strip()
+        df_link = df_link[['KODI', 'KATEG.']].rename(columns={'KODI': 'KodiArt', 'KATEG.': 'KOD_KAT_ID'})
+        df_link['KodiArt'] = df_link['KodiArt'].astype(str).str.strip()
+
+        # 4. Merge i parë: SQL + Lidhja e artikujve
+        df_raw = pd.merge(df_raw, df_link, on='KodiArt', how='left')
+
+        # 5. Merge i dytë: Shto emrat e kategorive dhe KG/SKU
+        # Supozojmë se në sheet 'kat_prod' kolonat janë 'KOD KAT', 'EMER KAT', 'KG/SKU'
+        df_map = df_map.rename(columns={'KOD KAT': 'KOD_KAT_ID', 'EMER KAT': 'EMRI_PLOTE'})
+        df_raw = pd.merge(df_raw, df_map, on='KOD_KAT_ID', how='left')
+
+        # 6. Kalkulimet dhe klasifikimi
+        df_raw['kg'] = df_raw['Sasia'] * df_raw['KG/SKU'].fillna(0)
+        df_raw['kat'] = df_raw['EMRI_PLOTE'].fillna(df_raw['KOD_KAT_ID']).fillna("Pa Kategori")
+        df_raw['Vlera_Historike'] = pd.to_numeric(df_raw['VleraRresht'], errors='coerce').fillna(0)
+
+        def klasifiko_kategorine(k):
+            val = str(k).upper()
+            if "OLIM" in val or val == "V": return "OLIM"
+            elif "ETJ" in val: return "ETJ"
+            else: return "DEKA"
         
-        # A. Lidhja SQL me sheet 'produktet'
-        df_raw = pd.merge(df_raw, df_link, left_on='KodiArt', right_on='KODI', how='left')
-        
-        # B. Lidhja me sheet 'kat_prod' për të marrë Emrin e Plotë
-        # Lidhim 'KATEG.' (nga produktet) me 'KOD KAT' (nga kat_prod)
-        df_raw = pd.merge(df_raw, df_names, left_on='KATEG.', right_on='KOD KAT', how='left')
-        
+        df_raw['Grup_Filtri'] = df_raw['kat'].apply(klasifiko_kategorine)
+
+    except Exception as e:
+        st.error(f"Gabim gjatë lidhjes me skedarin Excel: {e}")
+
         # C. Krijimi i kolonës finale 'kat' dhe pastrimi
         df_raw['kat'] = df_raw['EMER KAT'].fillna(df_raw['KATEG.']).fillna("Pa Kategori")
         
