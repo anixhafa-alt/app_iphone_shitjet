@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 import base64
 
-
 # 1. Konfigurimi i faqes
 st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide")
 
