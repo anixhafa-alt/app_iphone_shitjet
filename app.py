@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -28,7 +26,7 @@ def check_password():
         return True
 
 def password_entered():
-    if st.session_state["password"] == "aabb":
+    if st.session_state["password"] == "abc":
         st.session_state["password_correct"] = True
         del st.session_state["password"]
     else:
@@ -61,8 +59,9 @@ def load_all_data():
         # Shto këtë rresht para se të zgjidhësh kolonat:
 
         # Shto engine='openpyxl' brenda kllapave
-	    df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
-        df_map.columns = df_map.columns.str.strip()
+	df_map = pd.read_excel('/root/app_shitjet/produkte+.xlsx', sheet_name='kat_prod', engine='openpyxl')
+        
+	df_map.columns = df_map.columns.str.strip()
         df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
         df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
         
