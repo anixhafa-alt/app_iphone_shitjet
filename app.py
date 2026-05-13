@@ -51,26 +51,22 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-      # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
-     try:
-        df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
-        
-        # KJO PJESË I RREGULLON KOLONAT AUTOMATIKISHT:
-        df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
-        
-        # Kontrollojmë nëse kolonat ekzistojnë pas pastrimit
-        required_cols = ['KODI', 'KATEG.', 'KG/SKU']
-        if all(col in df_map.columns for col in required_cols):
-            df_map = df_map[required_cols].copy()
-            df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
-        else:
-            st.error(f"Kolonat e gjetura janë: {df_map.columns.tolist()}")
+        # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
+        try:
+            df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+            
+            # KJO PJESË I RREGULLON KOLONAT AUTOMATIKISHT:
+            df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
+            
+            # Kontrollojmë nëse kolonat ekzistojnë pas pastrimit
+            required_cols = ['KODI', 'KATEG.', 'KG/SKU']
+            if all(col in df_map.columns for col in required_cols):
+                df_map = df_map[required_cols].copy()
+                df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
+            else:
+                st.error(f"Kolonat e gjetura janë: {df_map.columns.tolist()}")
         except Exception as e:
-        st.error(f"Gabim gjatë leximit të Excel: {e}")
-
-        # Tani provo t'i marrësh
-        df_map = df_map[['KODI', 'KATEG.', 'KG/SKU']].copy()
-        df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
+            st.error(f"Gabim gjatë leximit të Excel: {e}")
 
         # Merge
         df = pd.merge(df_sql, df_map, left_on='KodiArt', right_on='KODI', how='left')
