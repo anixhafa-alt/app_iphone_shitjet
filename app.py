@@ -51,33 +51,29 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
 
-    try:
-        # 1. Lexojmë fletën e artikujve (Lidhja me SQL)
-        df_artikujt = pd.read_excel('prod.xlsx', sheet_name='produktet', engine='openpyxl')
-        df_artikujt.columns = df_artikujt.columns.astype(str).str.strip()
+        # Leximi i Excel-it (përdor emrin e ri të skedarit që vendose, psh prod.xlsx)
+        try:
+            df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+            
+            # KJO PJESË I RREGULLON KOLONAT AUTOMATIKISHT:
+            df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
+            
+            # Kontrollojmë nëse kolonat ekzistojnë pas pastrimit
+            required_cols = ['KODI', 'KATEG.', 'KG/SKU']
+            if all(col in df_map.columns for col in required_cols):
+                df_map = df_map[required_cols].copy()
+                df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
+            else:
+                st.error(f"Kolonat e gjetura janë: {df_map.columns.tolist()}")
+        except Exception as e:
+            st.error(f"Gabim gjatë leximit të Excel: {e}")
 
-        # 2. Lexojmë fletën e kategorive (Emrat e gjatë)
-        df_kat = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
-        df_kat.columns = df_kat.columns.astype(str).str.strip()
-
-        # 3. I bashkojmë të dyja që çdo artikull të ketë emrin e kategorisë së tij
-        # Lidhim 'KATEG.' (nga fleta produktet) me 'KOD KAT' (nga fleta kat_prod)
-        df_map = pd.merge(
-            df_artikujt[['KODI', 'KATEG.']], 
-            df_kat[['KOD KAT', 'EMRI KAT']], 
-            left_on='KATEG.', 
-            right_on='KOD KAT', 
-            how='left'
-        )
-
-        # 4. Pastrojmë rezultatin final për t'ia kaluar kodit të SQL
-        # Ne na duhet Kodi i artikullit dhe Emri i Kategorisë për raportet
-        df_map = df_map[['KODI', 'EMRI KAT']].copy()
-        df_map.columns = ['KODI', 'KATEG.'] # E riemërojmë EMRI KAT -> KATEG. që të shfaqet në tabelë
-        df_map['KODI'] = df_map['KODI'].astype(str).str.strip()
-
-    except Exception as e:
-    st.error(f"Gabim gjatë lidhjes së Excel-it: {e}")
+        # Merge
+        df = pd.merge(df_sql, df_map, left_on='KodiArt', right_on='KODI', how='left')
+        df['kg'] = df['Sasia'] * df['KG/SKU'].fillna(0)
+        df.rename(columns={'KATEG.': 'kat'}, inplace=True)
+        df['kat'] = df['kat'].fillna('ETJ')
+        df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
 
         # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
