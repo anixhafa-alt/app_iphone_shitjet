@@ -60,24 +60,27 @@ def load_all_data():
         df_sql['KodiArt'] = df_sql['KodiArt'].astype(str).str.strip()
         df_link['KODI'] = df_link['KODI'].astype(str).str.strip()
         
-        # Lidhja e parë
+        # Merge 1: Lidhja SQL me kodet e kategorive
         df = pd.merge(df_sql, df_link[['KODI', 'KATEG.']], left_on='KodiArt', right_on='KODI', how='left')
 
-        # Lidhja e dytë
+        # Merge 2: Lidhja me emrat e kategorive dhe KG/SKU
         df_map['KOD KAT'] = df_map['KOD KAT'].astype(str).str.strip()
         df = pd.merge(df, df_map[['KOD KAT', 'EMER KAT', 'KG/SKU']], left_on='KATEG.', right_on='KOD KAT', how='left')
 
-        # E. Kalkulimet (Këtu ke pasur gabimin e hapësirave)
+        # E. Kalkulimet (Këtu ku kishit error-in)
         df['kg'] = df['Sasia'] * df['KG/SKU'].fillna(0)
         df['kat'] = df['EMER KAT'].fillna(df['KOD KAT']).fillna('ETJ')
         df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
 
-        # Klasifikimi
+        # Klasifikimi i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
-            if "OLIM" in val or val == "V": return "OLIM"
-            elif "ETJ" in val: return "ETJ"
-            else: return "DEKA"
+            if "OLIM" in val or val == "V": 
+                return "OLIM"
+            elif "ETJ" in val: 
+                return "ETJ"
+            else: 
+                return "DEKA"
         
         df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
 
@@ -87,7 +90,7 @@ def load_all_data():
         st.error(f"Gabim teknik: {e}")
         return None
 
-# Kjo duhet të jetë fiks në fillim të rreshtit, pa asnjë hapësirë para
+# Thirrja e funksionit (duhet të jetë pa asnjë hapësirë në fillim)
 df_raw = load_all_data()
 
         # 6. Kalkulimet dhe klasifikimi
