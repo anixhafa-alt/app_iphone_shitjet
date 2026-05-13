@@ -134,8 +134,15 @@ def load_all_data():
         return None
 
 
-# Thirrja e funksionit (duhet të jetë pa asnjë hapësirë në fillim)
+# Thirrja e funksionit
 df_raw = load_all_data()
+
+# Kontrolli që aplikacioni të mos vazhdojë nëse nuk ka të dhëna
+if df_raw is None:
+    st.error(
+        "Nuk u ngarkuan të dhënat. Kontrolloni lidhjen me SQL ose instalimin e pyodbc."
+    )
+    st.stop()  # Ky rresht ndalon ekzekutimin e mëtejshëm që të mos dalin NameErrors
 
 
 # --- KETU FILLON PJESA QE DUHET TE FUSH ---
