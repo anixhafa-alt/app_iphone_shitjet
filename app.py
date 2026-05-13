@@ -35,9 +35,6 @@ if not check_password():
     st.stop()
 
 # --- NAVIGIMI ---
-st.sidebar.title("🧭 Menuja Kryesore")
-page = st.sidebar.radio("Zgjidh Modulin:", ["Historiku", "Planifikimi", "Realizimi", "Mundësitë"])
-
 # --- NGARKIMI I TE DHENAVE ---
 @st.cache_data(ttl=600)
 def load_all_data():
@@ -51,37 +48,48 @@ def load_all_data():
         df_sql['Data'] = pd.to_datetime(df_sql['Data'], errors='coerce')
         df_sql = df_sql.dropna(subset=['Data'])
         
-# --- KODI I RREGULLUAR PËR NGARKIMIN DHE MERGE ---
-        return df_sql  # Kthejmë df_sql përkohësisht që të vazhdojmë përpunimin jashtë funksionit
-    except Exception as e:
-        st.error(f"Gabim teknik në SQL: {e}")
-        return None
-
-df_raw = load_all_data()
-
-# --- LIDHJA ME EXCEL DHE KATEGORIZIMI (Rreshtat 54-90) ---
-if df_raw is not None:
-    try:
-        # 1. Leximi i Excel-it për kategoritë dhe KG/SKU
-        df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
-        df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
-        
-        # 2. Leximi i lidhjes Produkt -> Kod Kategoria
+        # B. Leximi i Excel-it (Sheet: produktet)
         df_link = pd.read_excel('prod.xlsx', sheet_name='produktet', engine='openpyxl')
         df_link.columns = df_link.columns.astype(str).str.strip().str.upper()
+        
+        # C. Leximi i Excel-it (Sheet: kat_prod)
+        df_map = pd.read_excel('prod.xlsx', sheet_name='kat_prod', engine='openpyxl')
+        df_map.columns = df_map.columns.astype(str).str.strip().str.upper()
 
-        # 3. Pastrimi i kolonave për lidhje të saktë
-        df_raw['KodiArt'] = df_raw['KodiArt'].astype(str).str.strip()
-        df_link = df_link[['KODI', 'KATEG.']].rename(columns={'KODI': 'KodiArt', 'KATEG.': 'KOD_KAT_ID'})
-        df_link['KodiArt'] = df_link['KodiArt'].astype(str).str.strip()
+        # D. BASHKIMI (Merge)
+        # 1. Lidhim SQL me Produktet (KodiArt -> KODI)
+        df_sql['KodiArt'] = df_sql['KodiArt'].astype(str).str.strip()
+        df_link['KODI'] = df_link['KODI'].astype(str).str.strip()
+        
+        df = pd.merge(df_sql, df_link[['KODI', 'KATEG.']], left_on='KodiArt', right_on='KODI', how='left')
 
-        # 4. Merge i parë: SQL + Lidhja e artikujve
-        df_raw = pd.merge(df_raw, df_link, on='KodiArt', how='left')
+        # 2. Lidhim me Kategoritë (KATEG. -> KOD KAT)
+        df_map['KOD KAT'] = df_map['KOD KAT'].astype(str).str.strip()
+        df = pd.merge(df, df_map[['KOD KAT', 'EMER KAT', 'KG/SKU']], left_on='KATEG.', right_on='KOD KAT', how='left')
 
-        # 5. Merge i dytë: Shto emrat e kategorive dhe KG/SKU
-        # Supozojmë se në sheet 'kat_prod' kolonat janë 'KOD KAT', 'EMER KAT', 'KG/SKU'
-        df_map = df_map.rename(columns={'KOD KAT': 'KOD_KAT_ID', 'EMER KAT': 'EMRI_PLOTE'})
-        df_raw = pd.merge(df_raw, df_map, on='KOD_KAT_ID', how='left')
+        # E. Kalkulimet Finale
+        df['kg'] = df['Sasia'] * df['KG/SKU'].fillna(0)
+        df['kat'] = df['EMER KAT'].fillna(df['KOD KAT']).fillna('ETJ')
+        df['Vlera_Historike'] = pd.to_numeric(df['VleraRresht'], errors='coerce').fillna(0)
+
+        # Klasifikimi i grupeve
+        def klasifiko_kategorine(k):
+            val = str(k).upper()
+            if "OLIM" in val or val == "V": return "OLIM"
+            elif "ETJ" in val: return "ETJ"
+            else: return "DEKA"
+        
+        df['Grup_Filtri'] = df['kat'].apply(klasifiko_kategorine)
+
+        # Kthimi i të dhënave (BRENDA funksionit)
+        return df
+
+    except Exception as e:
+        st.error(f"Gabim teknik: {e}")
+        return None
+
+# Thirrja e funksionit (JASHTË funksionit)
+df_raw = load_all_data()
 
         # 6. Kalkulimet dhe klasifikimi
         df_raw['kg'] = df_raw['Sasia'] * df_raw['KG/SKU'].fillna(0)
