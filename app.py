@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import base64
+impor base64
 
 
 # 1. Konfigurimi i faqes
