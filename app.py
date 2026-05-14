@@ -644,50 +644,64 @@ elif page == "Realizimi":
 
         st.divider()
 
-# --- 4. ANALIZA E TRENDËVE (Me Filtra Dinamikë) ---
+        # --- 4. ANALIZA E TRENDËVE (Me Filtra Dinamikë) ---
 
-            st.subheader("🔍 Analiza e Trendeve (Krahasim me të njëjtën periudhë)")
-            tr1, tr2, tr3 = st.columns(3)
+        st.subheader("🔍 Analiza e Trendeve (Krahasim me të njëjtën periudhë)")
+        tr1, tr2, tr3 = st.columns(3)
 
-            # A. Trendi Linear
-            ritmi_punes = t_real / ditet_punes_deri_sot if ditet_punes_deri_sot > 0 else 0
-            projeksioni = ritmi_punes * ditet_punes_totale
-            tr1.metric("Trendi Linear", f"{projeksioni:,.0f} kg", delta=f"{projeksioni - t_target:,.0f} vs Plani")
+        # A. Trendi Linear
+        ritmi_punes = t_real / ditet_punes_deri_sot if ditet_punes_deri_sot > 0 else 0
+        projeksioni = ritmi_punes * ditet_punes_totale
+        tr1.metric(
+            "Trendi Linear",
+            f"{projeksioni:,.0f} kg",
+            delta=f"{projeksioni - t_target:,.0f} vs Plani",
+        )
 
-            # B. vs Muaji Kaluar (Prill deri në datën korrente)
-            m_kaluar_date = sot - pd.DateOffset(months=1)
-            mask_m = (df_raw['Data'].dt.year == m_kaluar_date.year) & \
-                     (df_raw['Data'].dt.month == m_kaluar_date.month) & \
-                     (df_raw['Data'].dt.day <= sot.day)
-            
-            df_m_kaluar = df_raw[mask_m].copy()
-            
-            # APLIKIMI I FILTRAVE (Kjo rregullon vlerat që nuk ndryshonin)
-            if grup_sel != "Të gjitha": df_m_kaluar = df_m_kaluar[df_m_kaluar['Grup_Filtri'] == grup_sel]
-            if agj_sel != "Të gjithë": df_m_kaluar = df_m_kaluar[df_m_kaluar['ForcaShitese'] == agj_sel]
-            if klientet_selected: df_m_kaluar = df_m_kaluar[df_m_kaluar['Klienti'].isin(klientet_selected)]
-            
-            t_m_kaluar = df_m_kaluar['kg'].sum()
-            rritja_m = ((t_real/t_m_kaluar)-1)*100 if t_m_kaluar > 0 else 0
-            tr2.metric("vs Muaji Kaluar", f"{t_m_kaluar:,.0f} kg", delta=f"{rritja_m:.1f}%")
+        # B. vs Muaji Kaluar (Prill deri në datën korrente)
+        m_kaluar_date = sot - pd.DateOffset(months=1)
+        mask_m = (
+            (df_raw["Data"].dt.year == m_kaluar_date.year)
+            & (df_raw["Data"].dt.month == m_kaluar_date.month)
+            & (df_raw["Data"].dt.day <= sot.day)
+        )
 
-            # C. vs Viti Kaluar (Maj 2025 deri në datën korrente)
-            v_kaluar_date = sot - pd.DateOffset(years=1)
-            mask_v = (df_raw['Data'].dt.year == v_kaluar_date.year) & \
-                     (df_raw['Data'].dt.month == v_kaluar_date.month) & \
-                     (df_raw['Data'].dt.day <= sot.day)
-            
-            df_v_kaluar = df_raw[mask_v].copy()
-            
-            # APLIKIMI I FILTRAVE (Edhe për vitin e kaluar)
-            if grup_sel != "Të gjitha": df_v_kaluar = df_v_kaluar[df_v_kaluar['Grup_Filtri'] == grup_sel]
-            if agj_sel != "Të gjithë": df_v_kaluar = df_v_kaluar[df_v_kaluar['ForcaShitese'] == agj_sel]
-            if klientet_selected: df_v_kaluar = df_v_kaluar[df_v_kaluar['Klienti'].isin(klientet_selected)]
-            
-            t_v_kaluar = df_v_kaluar['kg'].sum()
-            rritja_v = ((t_real/t_v_kaluar)-1)*100 if t_v_kaluar > 0 else 0
-            tr3.metric("vs Viti Kaluar", f"{t_v_kaluar:,.0f} kg", delta=f"{rritja_v:.1f}%")
-            
+        df_m_kaluar = df_raw[mask_m].copy()
+
+        # APLIKIMI I FILTRAVE (Kjo rregullon vlerat që nuk ndryshonin)
+        if grup_sel != "Të gjitha":
+            df_m_kaluar = df_m_kaluar[df_m_kaluar["Grup_Filtri"] == grup_sel]
+        if agj_sel != "Të gjithë":
+            df_m_kaluar = df_m_kaluar[df_m_kaluar["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            df_m_kaluar = df_m_kaluar[df_m_kaluar["Klienti"].isin(klientet_selected)]
+
+        t_m_kaluar = df_m_kaluar["kg"].sum()
+        rritja_m = ((t_real / t_m_kaluar) - 1) * 100 if t_m_kaluar > 0 else 0
+        tr2.metric("vs Muaji Kaluar", f"{t_m_kaluar:,.0f} kg", delta=f"{rritja_m:.1f}%")
+
+        # C. vs Viti Kaluar (Maj 2025 deri në datën korrente)
+        v_kaluar_date = sot - pd.DateOffset(years=1)
+        mask_v = (
+            (df_raw["Data"].dt.year == v_kaluar_date.year)
+            & (df_raw["Data"].dt.month == v_kaluar_date.month)
+            & (df_raw["Data"].dt.day <= sot.day)
+        )
+
+        df_v_kaluar = df_raw[mask_v].copy()
+
+        # APLIKIMI I FILTRAVE (Edhe për vitin e kaluar)
+        if grup_sel != "Të gjitha":
+            df_v_kaluar = df_v_kaluar[df_v_kaluar["Grup_Filtri"] == grup_sel]
+        if agj_sel != "Të gjithë":
+            df_v_kaluar = df_v_kaluar[df_v_kaluar["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            df_v_kaluar = df_v_kaluar[df_v_kaluar["Klienti"].isin(klientet_selected)]
+
+        t_v_kaluar = df_v_kaluar["kg"].sum()
+        rritja_v = ((t_real / t_v_kaluar) - 1) * 100 if t_v_kaluar > 0 else 0
+        tr3.metric("vs Viti Kaluar", f"{t_v_kaluar:,.0f} kg", delta=f"{rritja_v:.1f}%")
+
         st.divider()
 
         # --- 5. TABET ME BARET E PROGRESIT (Barat e kuqe) ---
