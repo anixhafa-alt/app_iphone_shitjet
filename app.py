@@ -167,6 +167,68 @@ def load_all_data():
 
 df_raw = load_all_data()
 
+# --- SIDEBAR (E përbashkët për të gjitha modulet) ---
+st.sidebar.header("⚙️ Kontrolli i Planit")
+
+# 1. Ruajtja dhe Ngarkimi i vlerave nga Session State
+if "start_d" not in st.session_state:
+    st.session_state["start_d"] = df_raw["Data"].min().date()
+if "end_d" not in st.session_state:
+    st.session_state["end_d"] = df_raw["Data"].max().date()
+if "rritja_val" not in st.session_state:
+    st.session_state["rritja_val"] = 10
+
+# 2. Ndërtimi i Menusë (Si në foto)
+date_range = st.sidebar.date_input(
+    "Periudha referente:",
+    value=(st.session_state["start_d"], st.session_state["end_d"]),
+    key="date_input_key",
+)
+
+# Përditësojmë session_state kur ndryshon data
+if isinstance(date_range, tuple) and len(date_range) == 2:
+    st.session_state["start_d"], st.session_state["end_d"] = date_range
+
+rritja = st.sidebar.number_input(
+    "Rritja e planit (%)", value=st.session_state["rritja_val"], key="rritja_input"
+)
+st.session_state["rritja_val"] = rritja
+
+grup_sel = st.sidebar.selectbox("Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"])
+
+agj_list = sorted(
+    [str(x) for x in df_raw["ForcaShitese"].unique() if x not in ["nan", "None"]]
+)
+agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
+
+k_list = (
+    df_raw[df_raw["ForcaShitese"] == agj_sel]["Klienti"].unique()
+    if agj_sel != "Të gjithë"
+    else df_raw["Klienti"].unique()
+)
+klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
+
+# Butoni i Logout në fund të Sidebar
+st.sidebar.divider()
+if st.sidebar.button("Log Out"):
+    st.session_state["password_correct"] = False
+    st.rerun()
+
+# --- FUNDI I SIDEBAR ---
+
+# Tani modulet përdorin të njëjtat variabla (start_date, rritja, grup_sel, etj.)
+start_date = st.session_state["start_d"]
+end_date = st.session_state["end_d"]
+
+if page == "Planifikimi":
+    # Këtu vendos kodin e Planifikimit që kemi bërë...
+    st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
+    # ... vazhdon gp, metrikat, etj.
+
+elif page == "Realizimi":
+    # Këtu vendos kodin e Realizimit...
+    st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
+    # Ai do të përdorë automatikisht start_date dhe rritja që janë zgjedhur në sidebar
 
 # ---------------------------------------------------------
 
