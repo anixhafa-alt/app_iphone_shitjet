@@ -976,3 +976,57 @@ elif page == "Mundësitë":
     # ---------------------------------------------------------
 elif page == "Historiku":
     st.title("📚 Historiku i Shitjeve")
+
+    if df_raw is not None:
+        # Përgatitja e të dhënave (Viti/Muaji)
+        df_hist = df_raw.copy()
+        df_hist["Viti"] = df_hist["Data"].dt.year
+
+        # Aplikimi i filtrave globale
+        if agj_sel != "Të gjithë":
+            df_hist = df_hist[df_hist["ForcaShitese"] == agj_sel]
+        if klient_sel != "Të gjithë":
+            df_hist = df_hist[df_hist["Klienti"] == klient_sel]
+
+        # Filtra specifikë për faqen e Historikut (Vitet dhe Kategoritë)
+        viti_sel = st.multiselect(
+            "Vitet:",
+            sorted(df_hist["Viti"].unique(), reverse=True),
+            default=df_hist["Viti"].unique()[:2],
+        )
+        df_hist = df_hist[df_hist["Viti"].isin(viti_sel)]
+
+        st.subheader("🏆 Lista e Plotë e Artikujve")
+
+        # Grupimi me numrin e klientëve unikë
+        top_products = (
+            df_hist.groupby(["Artikulli", "kat"])
+            .agg(
+                {
+                    "kg": "sum",
+                    "Vlera_Historike": "sum",
+                    "Klienti": "nunique",  # Sa klientë e kanë blerë këtë artikull
+                }
+            )
+            .rename(
+                columns={
+                    "kg": "Totale KG",
+                    "Vlera_Historike": "Vlera (L)",
+                    "Klienti": "Nr. Klientëve",
+                }
+            )
+            .sort_values("Totale KG", ascending=False)
+        )
+
+        # Shfaqja si tabelë interaktive me scroll
+        st.dataframe(
+            top_products.style.format(
+                {
+                    "Totale KG": "{:,.1f}",
+                    "Vlera (L)": "{:,.0f}",
+                    "Nr. Klientëve": "{:,.0f}",
+                }
+            ),
+            use_container_width=True,
+            height=800,  # E bëjmë më të gjatë që të shohësh edhe fundin e listës
+        )
