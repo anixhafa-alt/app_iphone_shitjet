@@ -96,23 +96,23 @@ page = st.sidebar.radio(
 # --- NGARKIMI I TE DHENAVE ---
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def load_all_data():
 
     try:
-        # Përdorimi i st.connection me parametrat nga secrets
+
+        # A. Lidhja me SQL
+
         conn = st.connection("sql", type="sql")
 
-        # Testo lidhjen me një query të thjeshtë para se të marrësh gjithë view-n
-        df_sql = conn.query("SELECT TOP 100 * FROM dbo.GetRaportiMadhView", ttl=600)
+        df_sql = conn.query(
+            "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
+        )
 
-        if df_sql is None or df_sql.empty:
-            st.warning("⚠️ Lidhja u krye, por nuk u gjetën të dhëna.")
-            return None
-
-        # Procesimi i kolonave
         df_sql.columns = df_sql.columns.str.strip()
+
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
+
         df_sql = df_sql.dropna(subset=["Data"])
 
         # B. Lidhja me Excel (Sheet: produktet, Kolona: KATEG.)
@@ -160,7 +160,7 @@ def load_all_data():
 
     except Exception as e:
 
-        st.error(f"❌ Gabim gjatë lidhjes me SQL: {e}")
+        st.error(f"Gabim teknik: {e}")
 
         return None
 
@@ -975,3 +975,4 @@ elif page == "Realizimi":
 
 elif page == "Mundësitë":
     st.title("🔍 Mundësitë & Risk Profile")
+# ani xhafa
