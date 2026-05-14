@@ -1067,6 +1067,17 @@ elif page == "Realizimi":
 elif page == "Mundësitë":
     st.title("🎯 Analiza e Mundësive (Gap Analysis)")
 
+    # --- SEKSIONI INFO MBI LLOGARITJEN ---
+    with st.expander("ℹ️ Si llogaritet ky vlerësim? (Metodologjia)"):
+        st.write("""
+            Ky modul përdor algoritmin **'Gap Analysis'** për të gjetur hapësirat bosh në shitje:
+            
+            1. **Periudha Historike:** Sistemi analizon të gjitha blerjet e klientit që nga fillimi deri 90 ditë para datës së sotme.
+            2. **Periudha Aktuale:** Sistemi kontrollon faturat e 90 ditëve të fundit (3 muajt e fundit).
+            3. **Identifikimi i Mundësisë:** Nëse një artikull është blerë në të shkuarën (Volum Historik > 0) por nuk figuron në asnjë faturë të 90 ditëve të fundit, ai listohet si **Mundësi**.
+            4. **Renditja:** Artikujt renditen sipas **KG Historike**, në mënyrë që agjenti të fokusojë forcën te produktet që kanë peshën më të madhe në xhiro.
+        """)
+
     if df_raw is not None:
         df_m = df_raw.copy()
 
