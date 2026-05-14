@@ -176,9 +176,13 @@ try:
         columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"}
     )
 
-    # FILTRIMI I ARTIKUJVE AKTIVË
-    # Marrim vetëm artikujt ku kolona 'NGA LISTA E CMIMEVE' është 'AKTIV'
-    df_map = df_map[df_map["NGA LISTA E CMIMEVE"] == "AKTIV"].copy()
+    # --- FILTRI I RI: Vetëm artikujt AKTIVË ---
+    # Përdorim str.upper() për të qenë të sigurt që kapim 'AKTIV', 'Aktiv' etj.
+    if "NGA LISTA E CMIMEVE" in df_prod.columns:
+        df_prod = df_prod[
+            df_prod["NGA LISTA E CMIMEVE"].astype(str).str.upper().str.strip()
+            == "AKTIV"
+        ].copy()
 
 except Exception as e:
     st.error(f"Gabim te sheet-i 'produktet': {e}")
