@@ -358,7 +358,6 @@ if page == "Historiku":
 # ---------------------------------------------------------
 # MODULI: PLANIFIKIMI
 # ---------------------------------------------------------
-
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
@@ -1061,10 +1060,109 @@ elif page == "Realizimi":
             mime="text/html",
             use_container_width=True,
         )
-
 # ---------------------------------------------------------
+
 # MODULI: MUNDESITE
 # ---------------------------------------------------------
-
 elif page == "Mundësitë":
-    st.title("🔍 Mundësitë & Risk Profile")
+    st.title("🎯 Analiza e Mundësive (Gap Analysis)")
+    st.info(
+        "Ky modul identifikon artikujt që klienti ka blerë më parë, por nuk i ka në faturat e periudhës aktuale."
+    )
+
+    if df_raw is not None:
+        # 1. Përcaktojmë periudhat
+        sot = datetime.now()
+        muaji_aktual = sot.month
+        viti_aktual = sot.year
+
+        # 2. Filtrojmë të dhënat sipas Sidebar (Agjenti/Klienti)
+        df_m = df_raw.copy()
+        if agj_sel != "Të gjithë":
+            df_m = df_m[df_m["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            df_m = df_m[df_m["Klienti"].isin(klientet_selected)]
+        if grup_sel != "Të gjitha":
+            df_m = df_m[df_m["Grup_Filtri"] == grup_sel]
+
+        # 3. Ndajmë Historikun nga Shitjet Aktuale (p.sh. 3 muajt e fundit)
+        kufiri_aktual = sot - pd.Timedelta(days=90)
+
+        shitjet_historike = df_m[df_m["Data"] < kufiri_aktual]
+        shitjet_aktuale = df_m[df_m["Data"] >= kufiri_aktual]
+
+        # Gjejmë çfarë ka blerë çdo klient historikisht (Unique pairs Klient-Artikull)
+        portfolio_hist = (
+            shitjet_historike.groupby(["Klienti", "Artikulli", "kat"])
+            .agg({"Data": "max", "kg": "sum"})
+            .reset_index()
+        )
+
+        # Gjejmë çfarë ka blerë aktualisht
+        portfolio_akt = shitjet_aktuale[["Klienti", "Artikulli"]].drop_duplicates()
+        portfolio_akt["Blerë_Aktualisht"] = True
+
+        # 4. BASHKIMI (Gjejmë Gap-in)
+        gap_analysis = pd.merge(
+            portfolio_hist, portfolio_akt, on=["Klienti", "Artikulli"], how="left"
+        )
+
+        # Filtrojmë vetëm ato që nuk janë blerë aktualisht
+        mundesite = gap_analysis[gap_analysis["Blerë_Aktualisht"].isna()].copy()
+
+        # 5. SHFAQJA E REZULTATEVE
+        if not mundesite.empty:
+            st.subheader(f"⚠️ Janë gjetur {len(mundesite)} raste të humbura")
+
+            # Formatimi i tabelës
+            mundesite = mundesite.rename(
+                columns={
+                    "Data": "Blerja e Fundit",
+                    "kg": "Totale Hist. (KG)",
+                    "kat": "Kategoria",
+                }
+            )
+
+            # Mundësi filtrimi brenda faqes
+            st.write("Renditur sipas rëndësisë (Volumit historik):")
+
+            st.dataframe(
+                mundesite[
+                    [
+                        "Klienti",
+                        "Artikulli",
+                        "Kategoria",
+                        "Blerja e Fundit",
+                        "Totale Hist. (KG)",
+                    ]
+                ]
+                .sort_values("Totale Hist. (KG)", ascending=False)
+                .style.format(
+                    {
+                        "Totale Hist. (KG)": "{:,.1f}",
+                        "Blerja e Fundit": lambda t: t.strftime("%d/%m/%Y"),
+                    }
+                ),
+                use_container_width=True,
+                height=500,
+            )
+
+            # Statistika të shpejta
+            col1, col2 = st.columns(2)
+            with col1:
+                top_klienti_humbur = (
+                    mundesite.groupby("Klienti")["Totale Hist. (KG)"].sum().idxmax()
+                )
+                st.metric("Klienti me më shumë humbje (KG)", top_klienti_humbur)
+            with col2:
+                top_artikulli_humbur = (
+                    mundesite.groupby("Artikulli")["Totale Hist. (KG)"].sum().idxmax()
+                )
+                st.metric("Artikulli më 'i harruar'", top_artikulli_humbur)
+        else:
+            st.success(
+                "✅ Shkëlqyeshëm! Të gjithë klientët po blejnë artikujt e tyre të zakonshëm."
+            )
+
+    else:
+        st.error("Nuk u ngarkuan dot të dhënat për analizë.")
