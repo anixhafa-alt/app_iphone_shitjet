@@ -521,8 +521,128 @@ if page == "Planifikimi" and df_raw is not None:
 elif page == "Historiku":
     st.title("📚 Historiku i Shitjeve")
 
+# ---------------------------------------------------------
+# MODULI: REALIZIMI (Zëvendëso bllokun tënd me këtë)
+# ---------------------------------------------------------
 elif page == "Realizimi":
-    st.title("📈 Realizimi i Planit")
+    sot = datetime.now()
+    st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
+
+    # 1. Kontrolli nëse është përcaktuar plani
+    if "start_d_plani" not in st.session_state:
+        st.warning(
+            "⚠️ Ju lutem vizitoni faqen 'Planifikimi' për të përcaktuar periudhën referente dhe rritjen!"
+        )
+    elif df_raw is not None:
+        # --- A. LLOGARITJA E TARGETIT (Nga Session State) ---
+        mask_ref = (df_raw["Data"].dt.date >= st.session_state["start_d_plani"]) & (
+            df_raw["Data"].dt.date <= st.session_state["end_d_plani"]
+        )
+
+        dff_ref = df_raw.loc[mask_ref].copy()
+
+        # Filtri i grupit si te faqja e planit
+        if st.session_state["grup_plani"] != "Të gjitha":
+            dff_ref = dff_ref[dff_ref["Grup_Filtri"] == st.session_state["grup_plani"]]
+
+        # Sa muaj ka periudha referente
+        n_muaj_ref = max(
+            1,
+            (
+                st.session_state["end_d_plani"].year
+                - st.session_state["start_d_plani"].year
+            )
+            * 12
+            + (
+                st.session_state["end_d_plani"].month
+                - st.session_state["start_d_plani"].month
+            ),
+        )
+
+        gp_target = (
+            dff_ref.groupby(["kat"])
+            .agg({"kg": "sum", "Vlera_Historike": "sum"})
+            .reset_index()
+        )
+        rritja_faktori = 1 + (st.session_state["rritja_plani"] / 100)
+
+        gp_target["KG_Target"] = (gp_target["kg"] / n_muaj_ref) * rritja_faktori
+        gp_target["Vlera_Target"] = (
+            gp_target["Vlera_Historike"] / n_muaj_ref
+        ) * rritja_faktori
+
+        # --- B. SHITJET REALE (Muaji Korrent) ---
+        mask_live = (df_raw["Data"].dt.year == sot.year) & (
+            df_raw["Data"].dt.month == sot.month
+        )
+        df_live = df_raw[mask_live].copy()
+
+        gp_live = (
+            df_live.groupby(["kat"])
+            .agg({"kg": "sum", "Vlera_Historike": "sum"})
+            .reset_index()
+        )
+        gp_live.rename(
+            columns={"kg": "KG_Real", "Vlera_Historike": "Vlera_Real"}, inplace=True
+        )
+
+        # --- C. BASHKIMI DHE ANALIZA ---
+        df_comp = pd.merge(
+            gp_target[["kat", "KG_Target", "Vlera_Target"]],
+            gp_live,
+            on="kat",
+            how="left",
+        ).fillna(0)
+
+        # Metrikat e Kohës
+        dita_sot = sot.day
+        ditet_muajit = pd.Period(sot.strftime("%Y-%m")).days_in_month
+        koha_perq = (dita_sot / ditet_muajit) * 100
+
+        # Metrikat Totale
+        t_target = df_comp["KG_Target"].sum()
+        t_real = df_comp["KG_Real"].sum()
+        perq_realizimit = (t_real / t_target * 100) if t_target > 0 else 0
+
+        # --- D. SHFAQJA VIZUALE ---
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Objektivi KG", f"{t_target:,.0f}")
+        c2.metric("Realizuar KG", f"{t_real:,.0f}")
+
+        # Delta tregon nëse jemi para apo prapa ritmit të kohës
+        status_ngjyra = "normal" if perq_realizimit >= koha_perq else "inverse"
+        c3.metric(
+            "Realizimi %",
+            f"{perq_realizimit:.1f}%",
+            delta=f"{perq_realizimit - koha_perq:.1f}% vs Koha",
+            delta_color=status_ngjyra,
+        )
+
+        c4.metric(
+            "Koha e kaluar", f"{koha_perq:.1f}%", f"{dita_sot}/{ditet_muajit} Ditë"
+        )
+
+        st.divider()
+
+        # Tabela me Progress Bar
+        df_comp["Progresi"] = (df_comp["KG_Real"] / df_comp["KG_Target"] * 100).clip(
+            upper=100
+        )
+
+        st.subheader("📊 Realizimi sipas Kategorive")
+        st.dataframe(
+            df_comp[["kat", "KG_Target", "KG_Real", "Progresi"]],
+            column_config={
+                "kat": "Kategoria",
+                "KG_Target": st.column_config.NumberColumn("Target (KG)", format="%d"),
+                "KG_Real": st.column_config.NumberColumn("Realizuar (KG)", format="%d"),
+                "Progresi": st.column_config.ProgressColumn(
+                    "Ecuria %", min_value=0, max_value=100, format="%.1f%%"
+                ),
+            },
+            hide_index=True,
+            use_container_width=True,
+        )
 
 elif page == "Mundësitë":
     st.title("🔍 Mundësitë & Risk Profile")
