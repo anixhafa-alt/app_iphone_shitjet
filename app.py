@@ -100,57 +100,45 @@ page = st.sidebar.radio(
 def load_all_data():
 
     try:
-
         # A. Lidhja me SQL
-
         conn = st.connection("sql", type="sql")
-
         df_sql = conn.query(
             "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
         )
-
         df_sql.columns = df_sql.columns.str.strip()
-
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
 
-        df_sql = df_sql.dropna(subset=["Data"])
-
-        # B. Lidhja me Excel (Sheet: produktet, Kolona: KATEG.)
-
+        # B. Lidhja me Excel (Marrim edhe kolonën e statusit)
         df_map = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
-
         df_map.columns = df_map.columns.str.strip()
 
-        df_map = df_map[["KODI", "KATEG.", "KG/SKU"]].copy()
-
+        # Ruajmë statusin por NUK e filtrojmë këtu
+        df_map = df_map[["KODI", "KATEG.", "KG/SKU", "NGA LISTA E CMIMEVE"]].copy()
         df_map["KODI"] = df_map["KODI"].astype(str).str.strip()
 
-        # Merge
-
+        # C. Merge me "left" (që të mos humbasim asnjë shitje nga SQL)
         df = pd.merge(df_sql, df_map, left_on="KodiArt", right_on="KODI", how="left")
 
+        # D. Kalkulimet
         df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
-
-        df.rename(columns={"KATEG.": "kat"}, inplace=True)
-
-        df["kat"] = df["kat"].fillna("ETJ")
-
+        df.rename(
+            columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
+        )
         df["Vlera_Historike"] = pd.to_numeric(
             df["VleraRresht"], errors="coerce"
         ).fillna(0)
+        df["kat"] = df["kat"].fillna("ETJ")
+        df["statusi"] = df["statusi"].fillna(
+            "inaktiv"
+        )  # Nëse nuk është në listë, e konsiderojmë inaktiv
 
         # Klasifikimi i grupeve
-
         def klasifiko_kategorine(k):
-
             val = str(k).upper()
-
             if val == "V" or "OLIM" in val:
                 return "OLIM"
-
             elif val == "ETJ":
                 return "ETJ"
-
             else:
                 return "DEKA"
 
@@ -159,9 +147,7 @@ def load_all_data():
         return df
 
     except Exception as e:
-
         st.error(f"Gabim teknik: {e}")
-
         return None
 
 
