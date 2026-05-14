@@ -258,10 +258,108 @@ start_date = st.session_state["start_d"]
 end_date = st.session_state["end_d"]
 
 # ---------------------------------------------------------
+# MODULI: HISTORIKU
+# ---------------------------------------------------------
+if page == "Historiku":
+    st.title("📚 Historiku i Shitjeve & Analiza e Artikujve")
+
+    if df_raw is not None:
+        # 1. Krijojmë kopjen për punë
+        df_hist = df_raw.copy()
+        df_hist["Viti"] = df_hist["Data"].dt.year
+        df_hist["Muaji"] = df_hist["Data"].dt.month
+
+        # 2. APLIKIMI I FILTRAVE TË SIDEBAR-IT (Lidhja që mungonte)
+        # Filtri i Agjentit
+        if agj_sel != "Të gjithë":
+            df_hist = df_hist[df_hist["ForcaShitese"] == agj_sel]
+
+        # Filtri i Klientëve (nga Multiselect)
+        if klientet_selected:
+            df_hist = df_hist[df_hist["Klienti"].isin(klientet_selected)]
+
+        # Filtri i Grupit (OLIM, DEKA, ETJ)
+        if grup_sel != "Të gjitha":
+            df_hist = df_hist[df_hist["Grup_Filtri"] == grup_sel]
+
+        # 3. FILTRAT SPECIFIKË TË FAQES (Vitet dhe Kategoritë)
+        st.subheader("🔍 Filtra shtesë për Historikun")
+        c1, c2 = st.columns(2)
+        with c1:
+            vitet_e_disponueshme = sorted(df_hist["Viti"].unique(), reverse=True)
+            viti_sel = st.multiselect(
+                "Krahaso Vitet:", vitet_e_disponueshme, default=vitet_e_disponueshme[:2]
+            )
+        with c2:
+            kat_list = sorted(df_hist["kat"].unique())
+            kat_sel = st.multiselect("Filtro Kategoritë:", kat_list, default=kat_list)
+
+        # Aplikojmë filtrat e faqes
+        df_final = df_hist[
+            df_hist["Viti"].isin(viti_sel) & df_hist["kat"].isin(kat_sel)
+        ]
+
+        # --- GRAFIKU I TRENDIT ---
+        st.subheader("📈 Trendi Mujor (KG)")
+        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
+        if not chart_data.empty:
+            chart_pivot = chart_data.pivot(
+                index="Muaji", columns="Viti", values="kg"
+            ).fillna(0)
+            chart_pivot.index = [muajt_sq.get(m, m) for m in chart_pivot.index]
+            st.line_chart(chart_pivot)
+
+        # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
+        st.divider()
+        st.subheader("🏆 Lista e Plotë e Artikujve dhe Shpërndarja")
+
+        # Grupimi i artikujve
+        tabela_artikujt = (
+            df_final.groupby(["Artikulli", "kat"])
+            .agg(
+                {
+                    "kg": "sum",
+                    "Vlera_Historike": "sum",
+                    "Klienti": "nunique",  # Kjo gjen numrin e klientëve unikë
+                }
+            )
+            .rename(
+                columns={
+                    "kg": "Totale KG",
+                    "Vlera_Historike": "Vlera (L)",
+                    "Klienti": "Nr. Klientëve",
+                }
+            )
+            .sort_values("Totale KG", ascending=False)
+        )
+
+        # Shfaqja e listës së plotë me scroll
+        st.dataframe(
+            tabela_artikujt.style.format(
+                {
+                    "Totale KG": "{:,.1f}",
+                    "Vlera (L)": "{:,.0f}",
+                    "Nr. Klientëve": "{:,.0f}",
+                }
+            ),
+            use_container_width=True,
+            height=600,  # Lartësia që lejon të shohësh shumë rreshta
+        )
+
+        # Mundësia për shkarkim në Excel
+        csv = tabela_artikujt.to_csv().encode("utf-8")
+        st.download_button(
+            label="📥 Shkarko Listën e Plotë (CSV)",
+            data=csv,
+            file_name="historiku_artikujve.csv",
+            mime="text/csv",
+        )
+
+# ---------------------------------------------------------
 # MODULI: PLANIFIKIMI
 # ---------------------------------------------------------
 
-if page == "Planifikimi" and df_raw is not None:
+elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
 
@@ -970,101 +1068,3 @@ elif page == "Realizimi":
 
 elif page == "Mundësitë":
     st.title("🔍 Mundësitë & Risk Profile")
-
-# ---------------------------------------------------------
-# MODULI: HISTORIKU
-# ---------------------------------------------------------
-if page == "Historiku":
-    st.title("📚 Historiku i Shitjeve & Analiza e Artikujve")
-
-    if df_raw is not None:
-        # 1. Krijojmë kopjen për punë
-        df_hist = df_raw.copy()
-        df_hist["Viti"] = df_hist["Data"].dt.year
-        df_hist["Muaji"] = df_hist["Data"].dt.month
-
-        # 2. APLIKIMI I FILTRAVE TË SIDEBAR-IT (Lidhja që mungonte)
-        # Filtri i Agjentit
-        if agj_sel != "Të gjithë":
-            df_hist = df_hist[df_hist["ForcaShitese"] == agj_sel]
-
-        # Filtri i Klientëve (nga Multiselect)
-        if klientet_selected:
-            df_hist = df_hist[df_hist["Klienti"].isin(klientet_selected)]
-
-        # Filtri i Grupit (OLIM, DEKA, ETJ)
-        if grup_sel != "Të gjitha":
-            df_hist = df_hist[df_hist["Grup_Filtri"] == grup_sel]
-
-        # 3. FILTRAT SPECIFIKË TË FAQES (Vitet dhe Kategoritë)
-        st.subheader("🔍 Filtra shtesë për Historikun")
-        c1, c2 = st.columns(2)
-        with c1:
-            vitet_e_disponueshme = sorted(df_hist["Viti"].unique(), reverse=True)
-            viti_sel = st.multiselect(
-                "Krahaso Vitet:", vitet_e_disponueshme, default=vitet_e_disponueshme[:2]
-            )
-        with c2:
-            kat_list = sorted(df_hist["kat"].unique())
-            kat_sel = st.multiselect("Filtro Kategoritë:", kat_list, default=kat_list)
-
-        # Aplikojmë filtrat e faqes
-        df_final = df_hist[
-            df_hist["Viti"].isin(viti_sel) & df_hist["kat"].isin(kat_sel)
-        ]
-
-        # --- GRAFIKU I TRENDIT ---
-        st.subheader("📈 Trendi Mujor (KG)")
-        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
-        if not chart_data.empty:
-            chart_pivot = chart_data.pivot(
-                index="Muaji", columns="Viti", values="kg"
-            ).fillna(0)
-            chart_pivot.index = [muajt_sq.get(m, m) for m in chart_pivot.index]
-            st.line_chart(chart_pivot)
-
-        # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
-        st.divider()
-        st.subheader("🏆 Lista e Plotë e Artikujve dhe Shpërndarja")
-
-        # Grupimi i artikujve
-        tabela_artikujt = (
-            df_final.groupby(["Artikulli", "kat"])
-            .agg(
-                {
-                    "kg": "sum",
-                    "Vlera_Historike": "sum",
-                    "Klienti": "nunique",  # Kjo gjen numrin e klientëve unikë
-                }
-            )
-            .rename(
-                columns={
-                    "kg": "Totale KG",
-                    "Vlera_Historike": "Vlera (L)",
-                    "Klienti": "Nr. Klientëve",
-                }
-            )
-            .sort_values("Totale KG", ascending=False)
-        )
-
-        # Shfaqja e listës së plotë me scroll
-        st.dataframe(
-            tabela_artikujt.style.format(
-                {
-                    "Totale KG": "{:,.1f}",
-                    "Vlera (L)": "{:,.0f}",
-                    "Nr. Klientëve": "{:,.0f}",
-                }
-            ),
-            use_container_width=True,
-            height=600,  # Lartësia që lejon të shohësh shumë rreshta
-        )
-
-        # Mundësia për shkarkim në Excel
-        csv = tabela_artikujt.to_csv().encode("utf-8")
-        st.download_button(
-            label="📥 Shkarko Listën e Plotë (CSV)",
-            data=csv,
-            file_name="historiku_artikujve.csv",
-            mime="text/csv",
-        )
