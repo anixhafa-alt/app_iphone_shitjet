@@ -688,32 +688,75 @@ elif page == "Realizimi":
         st.divider()
 
         # --- 5. TABET ME BARET E PROGRESIT (Barat e kuqe) ---
-        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
+st.divider()
 
-        with t1:
-            gp_live_cat = df_live.groupby(["kat"]).agg({"kg": "sum"}).reset_index()
-            gp_live_cat.rename(columns={"kg": "KG_Real"}, inplace=True)
-            df_cat = pd.merge(
-                gp_target_cat[["kat", "KG_Target"]], gp_live_cat, on="kat", how="left"
-            ).fillna(0)
-            df_cat["Progresi"] = (df_cat["KG_Real"] / df_cat["KG_Target"] * 100).clip(
-                upper=100
-            )
+        # --- TABET E REALIZIMIT ---
+t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
 
+with t1:
+            st.subheader("Ecuria sipas Kategorive")
+            df_comp['Progresi'] = (df_comp['KG_Real'] / df_comp['KG_Target'] * 100).clip(upper=100)
             st.dataframe(
-                df_cat.sort_values("KG_Target", ascending=False),
+                df_comp[['kat', 'KG_Target', 'KG_Real', 'Progresi']],
                 column_config={
                     "kat": "Kategoria",
-                    "KG_Target": st.column_config.NumberColumn("Target", format="%d"),
-                    "KG_Real": st.column_config.NumberColumn("Realizuar", format="%d"),
-                    "Progresi": st.column_config.ProgressColumn(
-                        "Ecuria %", min_value=0, max_value=100, format="%.1f%%"
-                    ),
+                    "KG_Target": st.column_config.NumberColumn("Target (KG)", format="%d"),
+                    "KG_Real": st.column_config.NumberColumn("Realizuar (KG)", format="%d"),
+                    "Progresi": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%")
                 },
-                hide_index=True,
-                use_container_width=True,
+                hide_index=True, use_container_width=True
             )
 
+with t2:
+            st.subheader("Ecuria sipas Agjentëve")
+            # Agregimi live për agjentët
+            gp_agj_target = dff_ref.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+            gp_agj_target['Target_AGJ'] = (gp_agj_target['kg'] / n_months_ref) * rritja_faktori
+            
+            gp_agj_live = df_live.groupby('ForcaShitese').agg({'kg': 'sum'}).reset_index()
+            gp_agj_live.rename(columns={'kg': 'Real_AGJ'}, inplace=True)
+            
+            df_agj = pd.merge(gp_agj_target[['ForcaShitese', 'Target_AGJ']], gp_agj_live, on='ForcaShitese', how='left').fillna(0)
+            df_agj['%'] = (df_agj['Real_AGJ'] / df_agj['Target_AGJ'] * 100).clip(upper=100)
+            
+            st.dataframe(
+                df_agj.sort_values('%', ascending=False),
+                column_config={
+                    "ForcaShitese": "Agjenti",
+                    "Target_AGJ": st.column_config.NumberColumn("Target", format="%d"),
+                    "Real_AGJ": st.column_config.NumberColumn("Realizuar", format="%d"),
+                    "%": st.column_config.ProgressColumn("Ecuria", min_value=0, max_value=100, format="%.1f%%")
+                },
+                hide_index=True, use_container_width=True
+            )
+
+with t3:
+            st.subheader("Ecuria sipas Klientëve")
+            # Agregimi live për klientët
+            gp_kl_target = dff_ref.groupby(['Klienti', 'ForcaShitese']).agg({'kg': 'sum'}).reset_index()
+            gp_kl_target['Target_KL'] = (gp_kl_target['kg'] / n_months_ref) * rritja_faktori
+            
+            gp_kl_live = df_live.groupby('Klienti').agg({'kg': 'sum'}).reset_index()
+            gp_kl_live.rename(columns={'kg': 'Real_KL'}, inplace=True)
+            
+            df_kl = pd.merge(gp_kl_target[['Klienti', 'ForcaShitese', 'Target_KL']], gp_kl_live, on='Klienti', how='left').fillna(0)
+            df_kl['%'] = (df_kl['Real_KL'] / df_kl['Target_KL'] * 100).clip(upper=100)
+            
+            # Shfaqim vetëm klientët që kanë një target (për të shmangur listat e pafundme)
+            df_kl = df_kl[df_kl['Target_KL'] > 0]
+            
+            st.dataframe(
+                df_kl.sort_values('%', ascending=False),
+                column_config={
+                    "Klienti": "Klienti",
+                    "ForcaShitese": "Agjenti",
+                    "Target_KL": st.column_config.NumberColumn("Target", format="%d"),
+                    "Real_KL": st.column_config.NumberColumn("Realizuar", format="%d"),
+                    "%": st.column_config.ProgressColumn("Ecuria", min_value=0, max_value=100, format="%.1f%%")
+                },
+                hide_index=True, use_container_width=True
+            )
+            
         # Përsërit të njëjtën logjikë me ProgressColumn edhe te Agjentët dhe Klientët...
 
 elif page == "Mundësitë":
