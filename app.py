@@ -1076,6 +1076,9 @@ elif page == "Mundësitë":
     if df_raw is not None:
         df_m = df_raw.copy()
 
+        # FILTRI SPECIFIK: Këtu i heqim inaktivët
+        df_m = df_m[df_m["statusi"].astype(str).str.upper() == "AKTIV"]
+
         # 1. Filtrat (Sigurohu që përdor variablat e saktë nga Sidebar)
         if agj_sel != "Të gjithë":
             df_m = df_m[df_m["ForcaShitese"] == agj_sel]
