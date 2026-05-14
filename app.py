@@ -175,6 +175,11 @@ try:
     df_link = df_link[["KODI", "KATEG."]].rename(
         columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"}
     )
+
+    # FILTRIMI I ARTIKUJVE AKTIVË
+    # Marrim vetëm artikujt ku kolona 'NGA LISTA E CMIMEVE' është 'AKTIV'
+    df_map = df_map[df_map["NGA LISTA E CMIMEVE"] == "AKTIV"].copy()
+
 except Exception as e:
     st.error(f"Gabim te sheet-i 'produktet': {e}")
     df_link = None
