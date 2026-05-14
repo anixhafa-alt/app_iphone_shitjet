@@ -141,6 +141,7 @@ def load_all_data():
     except Exception as e:
         st.error(f"Gabim teknik gjatë ngarkimit: {e}")
         return None
+
         # Tani bejme perzgjedhjen e kolonave me siguri
         cols_to_use = [
             c for c in ["KOD KAT", "EMER KAT", "KG/SKU"] if c in df_map.columns
