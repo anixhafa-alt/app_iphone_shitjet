@@ -96,7 +96,7 @@ page = st.sidebar.radio(
 # --- NGARKIMI I TE DHENAVE ---
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=600)
 def load_all_data():
 
     try:
@@ -240,6 +240,10 @@ k_list = (
 )
 klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
 
+# Ruajmë datat aktuale për përdorim në Sidebar
+start_date = st.session_state["start_d"]
+end_date = st.session_state["end_d"]
+
 # Butoni i Logout në fund të Sidebar
 st.sidebar.divider()
 if st.sidebar.button("Log Out"):
@@ -276,10 +280,6 @@ with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
         )
 
 # --- FUNDI I SIDEBAR ---
-
-# Tani modulet përdorin të njëjtat variabla (start_date, rritja, grup_sel, etj.)
-start_date = st.session_state["start_d"]
-end_date = st.session_state["end_d"]
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
