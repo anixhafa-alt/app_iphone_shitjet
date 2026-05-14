@@ -167,6 +167,43 @@ def load_all_data():
 
 df_raw = load_all_data()
 
+
+# 1. Lexojmë lidhjen Produkt -> Kod Kategori (Sheet 'produktet')
+try:
+    df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+    # Përdorim emrat e saktë nga fotoja: KODI dhe KATEG.
+    df_link = df_link[["KODI", "KATEG."]].rename(
+        columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"}
+    )
+except Exception as e:
+    st.error(f"Gabim te sheet-i 'produktet': {e}")
+    df_link = None
+
+# 2. Lexojmë emrin e plotë të Kategorisë (Sheet 'kat_prod')
+try:
+    df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+    # Përdorim emrat e saktë nga fotoja: KOD KAT dhe EMRI KAT
+    df_names = df_names[["KOD KAT", "EMRI KAT"]]
+except Exception as e:
+    st.error(f"Gabim te sheet-i 'kat_prod': {e}")
+    df_names = None
+
+# 3. BASHKIMI I MADH (Triple Merge)
+if df_raw is not None and df_link is not None:
+    # A. Lidhim SQL (KodiArt) me Kategorinë (KOD KAT)
+    df_raw = pd.merge(df_raw, df_link, on="KodiArt", how="left")
+
+    # B. Lidhim Kodin e Kategorisë me Emrin e Plotë (EMRI KAT)
+    if df_names is not None:
+        df_raw = pd.merge(df_raw, df_names, on="KOD KAT", how="left")
+
+        # C. Krijojmë kolonën finale 'kat' që përdor pjesa tjetër e kodit
+        # Nëse emri mungon, përdorim kodin, nëse edhe kodi mungon "Pa Kategori"
+        df_raw["kat"] = (
+            df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
+        )
+
+
 # --- SIDEBAR (E përbashkët për të gjitha modulet) ---
 st.sidebar.header("⚙️ Kontrolli i Planit")
 
