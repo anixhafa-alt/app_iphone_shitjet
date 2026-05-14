@@ -178,9 +178,9 @@ try:
 
     # --- FILTRI I RI: Vetëm artikujt AKTIVË ---
     # Përdorim str.upper() për të qenë të sigurt që kapim 'AKTIV', 'Aktiv' etj.
-    if "NGA LISTA E CMIMEVE" in df_prod.columns:
-        df_prod = df_prod[
-            df_prod["NGA LISTA E CMIMEVE"].astype(str).str.upper().str.strip()
+    if "NGA LISTA E CMIMEVE" in df_link.columns:
+        df_link = df_link[
+            df_link["NGA LISTA E CMIMEVE"].astype(str).str.upper().str.strip()
             == "AKTIV"
         ].copy()
 
