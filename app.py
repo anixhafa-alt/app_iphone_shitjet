@@ -246,6 +246,35 @@ if st.sidebar.button("Log Out"):
     st.session_state["password_correct"] = False
     st.rerun()
 
+# --- INFO MBI FILTRAT (Shtoje në Sidebar ose në krye të faqes) ---
+with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
+    # Llogarisim numrin e artikujve në bazë të statusit
+    nr_aktiv = df_raw[df_raw["statusi"].astype(str).str.upper() == "AKTIV"][
+        "Artikulli"
+    ].nunique()
+    nr_inaktiv = df_raw[df_raw["statusi"].astype(str).str.upper() != "AKTIV"][
+        "Artikulli"
+    ].nunique()
+
+    st.write(
+        f"📅 **Periudha:** {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+    )
+    st.write(f"👤 **Agjenti:** {agj_sel}")
+    st.write(
+        f"🏢 **Klientë të zgjedhur:** {len(klientet_selected) if klientet_selected else 'Të gjithë'}"
+    )
+    st.write(f"📦 **Artikuj Aktivë:** {nr_aktiv}")
+    st.write(f"🛑 **Artikuj Inaktivë:** {nr_inaktiv}")
+
+    if page == "Mundësitë":
+        st.caption(
+            "⚠️ Në këtë modul, artikujt inaktivë janë përjashtuar automatikisht."
+        )
+    elif page == "Planifikimi":
+        st.caption(
+            "✅ Në këtë modul, janë përfshirë të gjithë artikujt për të mbajtur volumin e kategorisë."
+        )
+
 # --- FUNDI I SIDEBAR ---
 
 # Tani modulet përdorin të njëjtat variabla (start_date, rritja, grup_sel, etj.)
