@@ -595,8 +595,6 @@ if page == "Planifikimi" and df_raw is not None:
 
 # MODALET TJERA (Placeholder)
 
-elif page == "Historiku":
-    st.title("📚 Historiku i Shitjeve")
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI (Zëvendëso bllokun tënd me këtë)
@@ -975,4 +973,98 @@ elif page == "Realizimi":
 
 elif page == "Mundësitë":
     st.title("🔍 Mundësitë & Risk Profile")
-# ani xhafa
+elif page == "Historiku":
+    st.title("📚 Historiku i Shitjeve & Analiza e Trendit")
+
+    if df_raw is not None:
+        # --- PREPARIMI I TË DHËNAVE ---
+        df_hist = df_raw.copy()
+        df_hist["Viti"] = df_hist["Data"].dt.year
+        df_hist["Muaji"] = df_hist["Data"].dt.month
+
+        # --- FILTRAT E HISTORIKUT ---
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            vitet_e_disponueshme = sorted(df_hist["Viti"].unique(), reverse=True)
+            viti_sel = st.multiselect(
+                "Zgjidh Vitet për krahasim:",
+                vitet_e_disponueshme,
+                default=vitet_e_disponueshme[:2],
+            )
+
+        with col_f2:
+            # Filtri i kategorive bazohet në kolonën 'kat' që krijuam me merge
+            kat_list = sorted(df_hist["kat"].unique())
+            kat_sel = st.multiselect("Filtro Kategoritë:", kat_list, default=kat_list)
+
+        # Aplikimi i filtrave
+        df_filtered = df_hist[
+            df_hist["Viti"].isin(viti_sel) & df_hist["kat"].isin(kat_sel)
+        ]
+
+        if agj_sel != "Të gjithë":
+            df_filtered = df_filtered[df_filtered["ForcaShitese"] == agj_sel]
+
+        # --- 1. GRAFIKU I SHITJEVE MUJORE (Trendi) ---
+        st.subheader("📈 Shitjet Mujore (KG)")
+
+        chart_data = df_filtered.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
+        # Pivotim për grafikun: Muajt si rreshta, Vitet si kolona
+        chart_pivot = chart_data.pivot(index="Muaji", columns="Viti", values="kg")
+
+        # Plotësojmë muajt që mungojnë me 0
+        chart_pivot = chart_pivot.reindex(range(1, 13)).fillna(0)
+        # Ndryshojmë emrat e muajve nga numra në tekst
+        chart_pivot.index = [muajt_sq[m] for m in chart_pivot.index]
+
+        st.line_chart(chart_pivot)
+
+        # --- 2. TABELA E KRAHASIMIT ---
+        st.divider()
+        st.subheader("📊 Krahasimi i Performance-s sipas Viteve")
+
+        summary_viti = (
+            df_filtered.groupby("Viti")
+            .agg({"kg": "sum", "Vlera_Historike": "sum", "Klienti": "nunique"})
+            .rename(
+                columns={
+                    "kg": "Totale KG",
+                    "Vlera_Historike": "Vlera Totale",
+                    "Klienti": "Nr. Klientëve",
+                }
+            )
+        )
+
+        # Llogarisim çmimin mesatar
+        summary_viti["Çmimi Mes."] = (
+            summary_viti["Vlera Totale"] / summary_viti["Totale KG"]
+        )
+
+        st.dataframe(
+            summary_viti.sort_index(ascending=False).style.format(
+                {
+                    "Totale KG": "{:,.0f} kg",
+                    "Vlera Totale": "{:,.0f} L",
+                    "Çmimi Mes.": "{:,.2f} L/kg",
+                }
+            ),
+            use_container_width=True,
+        )
+
+        # --- 3. ANALIZA E PRODUKTEVE (Top Artikujt) ---
+        st.divider()
+        st.subheader("🏆 Top Artikujt (sipas KG)")
+
+        top_products = (
+            df_filtered.groupby(["Artikulli", "kat"])
+            .agg({"kg": "sum", "Vlera_Historike": "sum"})
+            .sort_values("kg", ascending=False)
+            .head(15)
+        )
+
+        st.table(
+            top_products.style.format({"kg": "{:,.0f}", "Vlera_Historike": "{:,.0f} L"})
+        )
+
+    else:
+        st.warning("Nuk ka të dhëna të disponueshme për historikun.")
