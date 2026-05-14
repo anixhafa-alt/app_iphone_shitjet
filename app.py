@@ -976,88 +976,37 @@ elif page == "Mundësitë":
 
 
 elif page == "Historiku":
-    st.title("📚 Historiku i Shitjeve & Analiza e Trendit")
+    st.title("📚 Historiku i Shitjeve")
 
     if df_raw is not None:
-        # --- PREPARIMI I TË DHËNAVE ---
+        # Përgatitja e të dhënave (Viti/Muaji)
         df_hist = df_raw.copy()
         df_hist["Viti"] = df_hist["Data"].dt.year
-        df_hist["Muaji"] = df_hist["Data"].dt.month
 
-        # --- FILTRAT E HISTORIKUT (SHTESA PËR LIDHJEN E FILTRAVE) ---
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            vitet_e_disponueshme = sorted(df_hist["Viti"].unique(), reverse=True)
-            viti_sel = st.multiselect(
-                "Zgjidh Vitet për krahasim:",
-                vitet_e_disponueshme,
-                default=vitet_e_disponueshme[:2],
-            )
-
-        with col_f2:
-            kat_list = sorted(df_hist["kat"].unique())
-            kat_sel = st.multiselect("Filtro Kategoritë:", kat_list, default=kat_list)
-
-        # 1. Apliko filtrin e viteve dhe kategorive
-        df_filtered = df_hist[
-            df_hist["Viti"].isin(viti_sel) & df_hist["kat"].isin(kat_sel)
-        ]
-
-        # 2. LIDHJA ME FILTRIN E KLIENTËVE (Nga Sidebar)
-        if klient_sel != "Të gjithë":
-            df_filtered = df_filtered[df_filtered["Klienti"] == klient_sel]
-
-        # 3. LIDHJA ME FILTRIN E AGJENTËVE (Nga Sidebar)
+        # Aplikimi i filtrave globale
         if agj_sel != "Të gjithë":
-            df_filtered = df_filtered[df_filtered["ForcaShitese"] == agj_sel]
+            df_hist = df_hist[df_hist["ForcaShitese"] == agj_sel]
+        if klient_sel != "Të gjithë":
+            df_hist = df_hist[df_hist["Klienti"] == klient_sel]
 
-        # --- 1. GRAFIKU I SHITJEVE MUJORE ---
-        st.subheader("📈 Shitjet Mujore (KG)")
-        chart_data = df_filtered.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
-        if not chart_data.empty:
-            chart_pivot = (
-                chart_data.pivot(index="Muaji", columns="Viti", values="kg")
-                .reindex(range(1, 13))
-                .fillna(0)
-            )
-            chart_pivot.index = [muajt_sq[m] for m in chart_pivot.index]
-            st.line_chart(chart_pivot)
-        else:
-            st.info("Nuk ka të dhëna për këtë përzgjedhje.")
-
-        # --- 2. TABELA E KRAHASIMIT SIPAS VITEVE ---
-        st.divider()
-        summary_viti = (
-            df_filtered.groupby("Viti")
-            .agg({"kg": "sum", "Vlera_Historike": "sum", "Klienti": "nunique"})
-            .rename(
-                columns={
-                    "kg": "Totale KG",
-                    "Vlera_Historike": "Vlera Totale",
-                    "Klienti": "Nr. Klientëve Unikë",
-                }
-            )
+        # Filtra specifikë për faqen e Historikut (Vitet dhe Kategoritë)
+        viti_sel = st.multiselect(
+            "Vitet:",
+            sorted(df_hist["Viti"].unique(), reverse=True),
+            default=df_hist["Viti"].unique()[:2],
         )
+        df_hist = df_hist[df_hist["Viti"].isin(viti_sel)]
 
-        st.dataframe(
-            summary_viti.style.format(
-                {"Totale KG": "{:,.0f}", "Vlera Totale": "{:,.0f} L"}
-            ),
-            use_container_width=True,
-        )
+        st.subheader("🏆 Lista e Plotë e Artikujve")
 
-        # --- 3. TOP ARTIKUJT (ME KOLONËN E KLIENTËVE DHE LISTËN E PLOTË) ---
-        st.divider()
-        st.subheader("🏆 Lista e Plotë e Artikujve (sipas KG)")
-
-        # Grupimi i ri duke shtuar 'Klienti': 'nunique'
+        # Grupimi me numrin e klientëve unikë
         top_products = (
-            df_filtered.groupby(["Artikulli", "kat"])
+            df_hist.groupby(["Artikulli", "kat"])
             .agg(
                 {
                     "kg": "sum",
                     "Vlera_Historike": "sum",
-                    "Klienti": "nunique",  # Kjo gjen sa klientë unikë kanë blerë këtë artikull
+                    "Klienti": "nunique",  # Sa klientë e kanë blerë këtë artikull
                 }
             )
             .rename(
@@ -1070,7 +1019,7 @@ elif page == "Historiku":
             .sort_values("Totale KG", ascending=False)
         )
 
-        # Shfaqim listën e plotë (pa .head())
+        # Shfaqja si tabelë interaktive me scroll
         st.dataframe(
             top_products.style.format(
                 {
@@ -1080,8 +1029,5 @@ elif page == "Historiku":
                 }
             ),
             use_container_width=True,
-            height=600,  # Mundëson scroll-in për të parë deri në fund
+            height=800,  # E bëjmë më të gjatë që të shohësh edhe fundin e listës
         )
-
-    else:
-        st.warning("Pritni të ngarkohen të dhënat nga SQL...")
