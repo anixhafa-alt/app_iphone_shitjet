@@ -220,15 +220,6 @@ if st.sidebar.button("Log Out"):
 start_date = st.session_state["start_d"]
 end_date = st.session_state["end_d"]
 
-if page == "Planifikimi":
-    # Këtu vendos kodin e Planifikimit që kemi bërë...
-    st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
-    # ... vazhdon gp, metrikat, etj.
-
-elif page == "Realizimi":
-    # Këtu vendos kodin e Realizimit...
-    st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
-    # Ai do të përdorë automatikisht start_date dhe rritja që janë zgjedhur në sidebar
 
 # ---------------------------------------------------------
 
@@ -262,43 +253,31 @@ if page == "Planifikimi" and df_raw is not None:
 
     # --- SIDEBAR ---
 
-    st.sidebar.header("⚙️ Kontrolli")
+    # st.sidebar.header("⚙️ Kontrolli")
 
-    if st.sidebar.button("Log Out"):
+    # if st.sidebar.button("Log Out"):
 
-        st.session_state["password_correct"] = False
+    # st.session_state["password_correct"] = False
 
-        st.rerun()
+    #  st.rerun()
 
-    min_d, max_d = df_raw["Data"].min().date(), df_raw["Data"].max().date()
+    # min_d, max_d = df_raw['Data'].min().date(), df_raw['Data'].max().date()
 
-    date_range = st.sidebar.date_input("Periudha referente:", value=(min_d, max_d))
+    # date_range = st.sidebar.date_input("Periudha referente:", value=(min_d, max_d))
 
-    start_date, end_date = (
-        date_range
-        if isinstance(date_range, tuple) and len(date_range) == 2
-        else (min_d, max_d)
-    )
+    # start_date, end_date = date_range if isinstance(date_range, tuple) and len(date_range) == 2 else (min_d, max_d)
 
-    rritja = st.sidebar.number_input("Rritja e planit (%)", value=10)
+    # rritja = st.sidebar.number_input("Rritja e planit (%)", value=10)
 
-    grup_sel = st.sidebar.selectbox(
-        "Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"]
-    )
+    # grup_sel = st.sidebar.selectbox("Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"])
 
-    agj_list = sorted(
-        [str(x) for x in df_raw["ForcaShitese"].unique() if x not in ["nan", "None"]]
-    )
+    # agj_list = sorted([str(x) for x in df_raw['ForcaShitese'].unique() if x not in ['nan', 'None']])
 
-    agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
+    # agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
 
-    k_list = (
-        df_raw[df_raw["ForcaShitese"] == agj_sel]["Klienti"].unique()
-        if agj_sel != "Të gjithë"
-        else df_raw["Klienti"].unique()
-    )
+    # k_list = df_raw[df_raw['ForcaShitese'] == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else #df_raw['Klienti'].unique()
 
-    klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
+    # klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
 
     # --- FILTRIMI ---
 
@@ -348,7 +327,6 @@ if page == "Planifikimi" and df_raw is not None:
     )
 
     # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
-
     st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
 
     st.info(f"📅 Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
