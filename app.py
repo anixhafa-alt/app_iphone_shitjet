@@ -1324,11 +1324,22 @@ elif page == "Asistenti AI":
             rrezik["Vizito"] = False
             rrezik["Pezull"] = False
             ed_rrez = st.data_editor(
-                rrezik[["Vizito", "Pezull", "klienti", "Target_Muaj", "Ecuria"]],
+                rrezik[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
                 column_config={
-                    "Ecuria": st.column_config.NumberColumn(format="%.1f%%")
+                    "Vizito": st.column_config.CheckboxColumn(
+                        "Zgjidh",
+                        help="Shtoji këta klientë në raportin e vizitave të ditës.",
+                    ),
+                    "Pezull": st.column_config.CheckboxColumn(
+                        "Pezull",
+                        help="Lëri për një ditë tjetër, mos i përfshi në ngarkesë.",
+                    ),
+                    "Target_Muaj": st.column_config.NumberColumn(
+                        "Objektivi KG",
+                        help="Sasia mesatare historike + rritja e aplikuar.",
+                    ),
                 },
-                key="rrez_v3",
+                key="rrez_v4",
                 hide_index=True,
                 use_container_width=True,
             )
@@ -1344,7 +1355,21 @@ elif page == "Asistenti AI":
             jo_vizituar["Pezull"] = False
             ed_sugj = st.data_editor(
                 jo_vizituar[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
-                key="sugj_v3",
+                column_config={
+                    "Vizito": st.column_config.CheckboxColumn(
+                        "Zgjidh",
+                        help="Shtoji këta klientë në raportin e vizitave të ditës.",
+                    ),
+                    "Pezull": st.column_config.CheckboxColumn(
+                        "Pezull",
+                        help="Lëri për një ditë tjetër, mos i përfshi në ngarkesë.",
+                    ),
+                    "Target_Muaj": st.column_config.NumberColumn(
+                        "Objektivi KG",
+                        help="Sasia mesatare historike + rritja e aplikuar.",
+                    ),
+                },
+                key="sugj_v4",
                 hide_index=True,
                 use_container_width=True,
             )
