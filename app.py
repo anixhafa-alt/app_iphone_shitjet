@@ -1256,29 +1256,35 @@ elif page == "Asistenti AI":
         )
 
         with tab1:
-            # Klientë që po humbasin (Nuk kanë blerë në 60 ditët e fundit por kanë pasur histori)
-            kufiri_humbjes = sot - pd.Timedelta(days=60)
-            blerja_fundit = (
-                df_tmp[df_tmp["forcashitese"] == agj_sel]
-                .groupby("klienti")["data"]
-                .max()
-                .reset_index()
-            )
-            klientet_humbur = blerja_fundit[blerja_fundit["data"] < kufiri_humbjes]
+            st.error(f"⚠️ Klientë që nuk kanë blerë prej 60+ ditësh")
+            # Shtojmë një kolonë për përzgjedhje
+            klientet_humbur["Vizito"] = False
 
-            st.error(
-                f"Janë gjetur {len(klientet_humbur)} klientë që nuk kanë blerë prej 60+ ditësh!"
+            # Përdorim data_editor që lejon agjentin të bëjë "check"
+            edited_humbur = st.data_editor(
+                klientet_humbur[["Vizito", "klienti", "data"]],
+                column_config={
+                    "Vizito": st.column_config.CheckboxColumn("Zgjidh", default=False)
+                },
+                disabled=["klienti", "data"],
+                hide_index=True,
+                key="editor_humbur",
+                use_container_width=True,
             )
-            st.dataframe(klientet_humbur, use_container_width=True)
 
         with tab2:
-            # Klientë që janë aktivë por prapa me planin (nën 50% të targetit)
-            rrezik = full_map[
-                (full_map["Ecuria"] < 50) & (full_map["kg_y"] > 0)
-            ].sort_values("Target_Muaj", ascending=False)
-            st.warning(f"Këta {len(rrezik)} klientë rrezikojnë të mos mbyllin muajin.")
-            st.dataframe(
-                rrezik[["klienti", "Target_Muaj", "kg_y", "Ecuria"]],
+            st.warning(f"📉 Klientë në rrezik plani (nën 50%)")
+            rrezik["Vizito"] = False
+
+            edited_rrezik = st.data_editor(
+                rrezik[["Vizito", "klienti", "Target_Muaj", "kg_y", "Ecuria"]],
+                column_config={
+                    "Vizito": st.column_config.CheckboxColumn("Zgjidh", default=False),
+                    "Ecuria": st.column_config.NumberColumn(format="%.1f%%"),
+                },
+                disabled=["klienti", "Target_Muaj", "kg_y", "Ecuria"],
+                hide_index=True,
+                key="editor_rrezik",
                 use_container_width=True,
             )
 
@@ -1289,6 +1295,61 @@ elif page == "Asistenti AI":
 
         # --- AGJENDA E SUGJERUAR E DITËS ---
         st.divider()
+        # --- FILTRIMI I KLIENTËVE TË PËRZGJEDHUR ---
+        vizitat_e_zgjedhura_humbje = edited_humbur[edited_humbur["Vizito"] == True][
+            "klienti"
+        ].tolist()
+        vizitat_e_zgjedhura_rrezik = edited_rrezik[edited_rrezik["Vizito"] == True][
+            "klienti"
+        ].tolist()
+
+        lista_finale_vizita = vizitat_e_zgjedhura_humbje + vizitat_e_zgjedhura_rrezik
+
+        st.subheader("📅 Plani i Vizitave të Përzgjedhura")
+
+        if not lista_finale_vizita:
+            st.info(
+                "💡 Zgjidhni klientët te tabelat më lart (bëni 'check') për të krijuar agjendën tuaj të detajuar."
+            )
+        else:
+            for kl in lista_finale_vizita:
+                # Logjika e Gap-it (Çfarë t'i shesësh këtij klienti specifik)
+                kufiri_gap = sot - pd.Timedelta(days=90)
+                hist_kl = df_tmp[
+                    (df_tmp["klienti"] == kl) & (df_tmp["data"] < kufiri_gap)
+                ]
+                akt_kl = df_tmp[
+                    (df_tmp["klienti"] == kl) & (df_tmp["data"] >= kufiri_gap)
+                ]
+                mungojne = [
+                    a
+                    for a in hist_kl["artikulli"].unique()
+                    if a not in akt_kl["artikulli"].unique()
+                ][:4]
+
+                # Shfaqja me dizajn Card
+                with st.container(border=True):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"### 📍 {kl}")
+                        if kl in vizitat_e_zgjedhura_humbje:
+                            st.markdown("⚠️ **Statusi:** Klient në humbje (Churn)")
+                        else:
+                            st.markdown("📉 **Statusi:** Realizim i dobët i planit")
+
+                        if mungojne:
+                            st.markdown(
+                                f"**🛒 Oferta Specifike:** {', '.join(mungojne)}"
+                            )
+                        else:
+                            st.markdown(
+                                "**🛒 Oferta:** Fokus te artikujt TOP të kategorive"
+                            )
+
+                    with c2:
+                        st.button("✅ U vizitua", key=f"btn_{kl}")
+                        st.button("📞 Telefono", key=f"call_{kl}")
+
         st.subheader("📅 Agjenda e Sugjeruar e Vizitave (Sot)")
 
         # Logjika: Sugjero klientë që s'janë vizituar ende këtë muaj DHE kanë potencial të lartë
