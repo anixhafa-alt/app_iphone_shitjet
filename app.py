@@ -90,7 +90,14 @@ st.sidebar.title("🧭 Menuja Kryesore")
 
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
-    ["Planifikimi", "Realizimi", "Mundësitë", "Historiku", "Asistenti AI"],
+    [
+        "Planifikimi",
+        "Realizimi",
+        "Mundësitë",
+        "Historiku",
+        "Asistenti AI",
+        "Route Plan AI",
+    ],
 )
 st.sidebar.warning("Versioni: 1.0.8 - Live Update")
 
