@@ -1440,11 +1440,10 @@ elif page == "Asistenti AI":
             st.info("Zgjidhni klientët në tab-et e mësipërme për të gjeneruar planet.")
 
 # ---------------------------------------------------------
-# MODULI I RI: ROUTE PLAN AI (Me Tooltips dhe 3 Editorë)
+# MODULI I RI: ROUTE PLAN AI (Plani Strategjik Ditor)
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
     st.title("📅 Route Plan AI")
-
     st.markdown(
         """
         <style> .stTooltipIcon { display: inline-block; } </style>
@@ -1461,21 +1460,23 @@ elif page == "Route Plan AI":
         3. Gap Analysis tregon kodet që klienti s'i ka blerë në 90 ditët e fundit.
     """,
     )
-
     if agj_sel == "Të gjithë":
         st.warning(
             "⚠️ Ju lutem përzgjidhni një agjent specifik për të gjeneruar rrugëtimin ditor."
         )
     else:
-        # 1. Përgatitja e të dhënave bazë
+        # Përgatitja e të dhënave bazë
         df_tmp = df_raw.copy()
         df_tmp.columns = [c.lower() for c in df_tmp.columns]
 
+        # 1. Identifikimi i Klientëve sipas 3 Kategorive (Logjika e Modulit të parë)
+        # ---------------------------------------------------------------------
         mask_ref = (df_tmp["data"].dt.date >= start_date) & (
             df_tmp["data"].dt.date <= end_date
         )
         df_agj = df_tmp[mask_ref & (df_tmp["forcashitese"] == agj_sel)]
 
+        # Llogarisim Targetin
         n_months_ref = max(
             1,
             (end_date.year - start_date.year) * 12
@@ -1484,7 +1485,8 @@ elif page == "Route Plan AI":
         kl_target = df_agj.groupby("klienti")["kg"].sum().reset_index()
         kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (1 + rritja / 100)
 
-        # Kategorizimi për Tab-et
+        # Kategorizimi
+        # A: Kritikë (nuk kanë blerë > 60 ditë)
         kufiri_humbjes = datetime.now() - pd.Timedelta(days=60)
         blerja_fundit = (
             df_tmp[df_tmp["forcashitese"] == agj_sel]
@@ -1492,14 +1494,14 @@ elif page == "Route Plan AI":
             .max()
             .reset_index()
         )
-        kl_kritike_list = blerja_fundit[blerja_fundit["data"] < kufiri_humbjes][
+        kl_kritike = blerja_fundit[blerja_fundit["data"] < kufiri_humbjes][
             "klienti"
         ].tolist()
 
+        # B: Në Rrezik (Realizimi aktual < 50%) - Për këtë plan marrim gjithë listën e targetuar
         kl_target["kategoria"] = "Stabilë"
-        kl_target.loc[kl_target["klienti"].isin(kl_kritike_list), "kategoria"] = (
-            "Kritikë"
-        )
+        kl_target.loc[kl_target["klienti"].isin(kl_kritike), "kategoria"] = "Kritikë"
+        # Në rrezik i konsiderojmë ata me target të lartë (> mesatarja)
         limit_rrezik = kl_target["Target_Muaj"].median()
         kl_target.loc[
             (kl_target["Target_Muaj"] > limit_rrezik)
@@ -1507,136 +1509,95 @@ elif page == "Route Plan AI":
             "kategoria",
         ] = "Në Rrezik"
 
-        # 2. NDARJA NË 3 TAB-E ME DATA_EDITOR (Sipas kërkesës tënde)
-        # ---------------------------------------------------------
-        tab1, tab2, tab3 = st.tabs(["🔴 Kritikë", "🟡 Në Rrezik", "🔵 Sugjerime"])
-
-        with tab1:
-            kritiket = kl_target[kl_target["kategoria"] == "Kritikë"].copy()
-            kritiket["Vizito"] = False
-            kritiket["Pezull"] = False
-            ed_kritik = st.data_editor(
-                kritiket[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
-                column_config={
-                    "Vizito": st.column_config.CheckboxColumn(
-                        "Zgjidh", help="Shto në vizitat e sotme."
-                    ),
-                    "Pezull": st.column_config.CheckboxColumn(
-                        "Pezull", help="Shtyje për më vonë."
-                    ),
-                    "Target_Muaj": st.column_config.NumberColumn("Objektivi KG"),
-                },
-                key="kritik_v4",
-                hide_index=True,
-                use_container_width=True,
-            )
-
-        with tab2:
-            rreziku = kl_target[kl_target["kategoria"] == "Në Rrezik"].copy()
-            rreziku["Vizito"] = False
-            rreziku["Pezull"] = False
-            ed_rrez = st.data_editor(
-                rreziku[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
-                column_config={
-                    "Vizito": st.column_config.CheckboxColumn(
-                        "Zgjidh", help="Shto në vizitat e sotme."
-                    ),
-                    "Pezull": st.column_config.CheckboxColumn(
-                        "Pezull", help="Shtyje për më vonë."
-                    ),
-                    "Target_Muaj": st.column_config.NumberColumn("Objektivi KG"),
-                },
-                key="rrezik_v4",
-                hide_index=True,
-                use_container_width=True,
-            )
-
-        with tab3:
-            # Klientët pa blerje këtë muaj
-            mask_live = (df_tmp["data"].dt.year == datetime.now().year) & (
-                df_tmp["data"].dt.month == datetime.now().month
-            )
-            realizuar_sot = df_tmp[mask_live & (df_tmp["forcashitese"] == agj_sel)][
-                "klienti"
-            ].unique()
-            jo_vizituar = kl_target[~kl_target["klienti"].isin(realizuar_sot)].copy()
-
-            jo_vizituar["Vizito"] = False
-            jo_vizituar["Pezull"] = False
-
-            ed_sugj = st.data_editor(
-                jo_vizituar[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
-                column_config={
-                    "Vizito": st.column_config.CheckboxColumn(
-                        "Zgjidh",
-                        help="Shtoji këta klientë në raportin e vizitave të ditës.",
-                    ),
-                    "Pezull": st.column_config.CheckboxColumn(
-                        "Pezull",
-                        help="Lëri për një ditë tjetër, mos i përfshi në ngarkesë.",
-                    ),
-                    "Target_Muaj": st.column_config.NumberColumn(
-                        "Objektivi KG",
-                        help="Sasia mesatare historike + rritja e aplikuar.",
-                    ),
-                },
-                key="sugj_v4",
-                hide_index=True,
-                use_container_width=True,
-            )
-
-        # 3. KALENDARI 26 DITOR (Logjika jote origjinale)
-        # ---------------------------------------------------------
-        st.divider()
+        # 2. Krijimi i Kalendarit (26 Ditë Pune)
+        # ---------------------------------------------------------------------
         klientet_total = kl_target.sort_values(
             by=["kategoria", "Target_Muaj"], ascending=[True, False]
         )
         numri_klienteve = len(klientet_total)
-        kliente_per_dite = max(1, numri_klienteve // 26)
+        kliente_per_dite = max(1, numri_klienteve // 26)  # Supozojmë 26 ditë pune
 
-        st.subheader(f"📅 Kalendari i Automatizuar ({numri_klienteve} klientë)")
+        st.subheader(
+            f"📊 Strategjia për {agj_sel}: {numri_klienteve} klientë të shpërndarë në muaj"
+        )
+
         dita_zgjedhur = st.slider("Zgjidh ditën e punës (1-26):", 1, 26, 1)
 
+        # Ndarja e klientëve në grupe ditore
         start_idx = (dita_zgjedhur - 1) * kliente_per_dite
         end_idx = start_idx + kliente_per_dite
         if dita_zgjedhur == 26:
-            end_idx = numri_klienteve
+            end_idx = numri_klienteve  # Ditën e fundit marrim mbetjen
 
         klientet_e_dites = klientet_total.iloc[start_idx:end_idx]
 
-        # Shfaqja e detajeve "Çfarë t'i shesësh"
-        st.info(f"📍 Sugjerimi i AI për Ditën #{dita_zgjedhur}")
+        # 3. Shfaqja e Planit Ditor
+        # ---------------------------------------------------------------------
+        st.info(f"📍 Plani për Ditën e Punës #{dita_zgjedhur}")
+
         for _, row in klientet_e_dites.iterrows():
             kl = row["klienti"]
             kat = row["kategoria"]
             target = row["Target_Muaj"]
 
-            with st.expander(f"🏢 {kl} - ({kat})"):
-                # Logjika Gap Analysis 90 ditë
-                kufiri_gap = datetime.now() - pd.Timedelta(days=90)
-                hist = df_tmp[(df_tmp["klienti"] == kl) & (df_tmp["data"] < kufiri_gap)]
-                akt = df_tmp[(df_tmp["klienti"] == kl) & (df_tmp["data"] >= kufiri_gap)]
-                mungojne = [
-                    a
-                    for a in hist["artikulli"].unique()
-                    if a not in akt["artikulli"].unique()
-                ]
+            # Përcaktimi i ngjyrës sipas kategorisë
+            color = (
+                "red"
+                if kat == "Kritikë"
+                else "orange" if kat == "Në Rrezik" else "green"
+            )
 
-                st.write(f"**Objektivi:** {target:,.1f} KG")
-                if mungojne:
-                    st.error(f"🛒 **Mungesa (90 ditë):** {', '.join(mungojne[:3])}")
-                else:
-                    st.success("🛒 **Fokusi:** Rritje volumi në artikujt ekzistues.")
+            with st.expander(f"🏢 {kl} - Kategoria: {kat}"):
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    st.markdown(f"**Objektivi i Shitjes:** {target:,.1f} KG")
 
-        # 4. Eksporti
-        if st.button("📥 Shkarko Planin Mujor"):
+                    # Logjika "Çfarë t'i shesësh" (Gap Analysis 90 ditë)
+                    kufiri_gap = datetime.now() - pd.Timedelta(days=90)
+                    hist = df_tmp[
+                        (df_tmp["klienti"] == kl) & (df_tmp["data"] < kufiri_gap)
+                    ]
+                    akt = df_tmp[
+                        (df_tmp["klienti"] == kl) & (df_tmp["data"] >= kufiri_gap)
+                    ]
+                    mungojne = [
+                        a
+                        for a in hist["artikulli"].unique()
+                        if a not in akt["artikulli"].unique()
+                    ]
+
+                    if mungojne:
+                        st.write(f"🛒 **Artikujt Prioritarë:**")
+                        for art in mungojne[:3]:
+                            st.write(f"- {art}")
+                    else:
+                        st.write(
+                            "🛒 **Artikujt Prioritarë:** Fokus te rritja e volumit të artikujve bazë."
+                        )
+
+                with c2:
+                    st.write("**Udhëzim:**")
+                    if kat == "Kritikë":
+                        st.error("Rikuperim! Klienti rrezikon humbjen totale.")
+                    elif kat == "Në Rrezik":
+                        st.warning("Mbrojtje! Duhet mbuluar mbetja e planit.")
+                    else:
+                        st.success("Rritje! Sugjeroni artikuj të rinj.")
+
+        # 4. Eksporti i Planit të Plotë
+        st.divider()
+        if st.button("📥 Shkarko Planin e Plotë 26-Ditor (Excel)"):
+            # Krijojmë një kopje për eksport me kolonën e ditës
             export_df = klientet_total.copy()
-            export_df["Dita"] = [
+            export_df["Dita e Punes"] = [
                 (i // kliente_per_dite) + 1 for i in range(len(export_df))
             ]
+            export_df.loc[export_df["Dita e Punes"] > 26, "Dita e Punes"] = 26
+
+            csv = export_df.to_csv(index=False).encode("utf-8")
             st.download_button(
-                "Kliko për CSV",
-                export_df.to_csv(index=False).encode("utf-8"),
-                "plan.csv",
+                "Kliko këtu për të shkarkuar",
+                csv,
+                f"Route_Plan_{agj_sel}.csv",
                 "text/csv",
             )
