@@ -1190,97 +1190,107 @@ elif page == "Mundësitë":
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
 # ---------------------------------------------------------
-# MODULI: ASISTENTI AI
+# MODULI: ASISTENTI AI (Versioni i Korrigjuar)
 # ---------------------------------------------------------
 elif page == "Asistenti AI":
     st.title("🤖 Këshilltari AI - Agjenda e Ditës")
 
     if agj_sel == "Të gjithë":
-        st.warning(
-            "⚠️ Ju lutem zgjidhni një Agjent specifik në sidebar për të marrë rekomandimet e personalizuara."
-        )
+        st.warning("⚠️ Ju lutem zgjidhni një Agjent specifik në sidebar.")
     else:
-        # Përgatitja e të dhënave (Logjika e Realizimit)
         sot = datetime.now()
-        mask_ref = (df_raw["Data"].dt.date >= start_date) & (
-            df_raw["Data"].dt.date <= end_date
+        # Sigurohemi që kolonat janë me të vogla për konsistencë
+        df_tmp = df_raw.copy()
+        df_tmp.columns = [c.lower() for c in df_tmp.columns]
+
+        # Filtri i referencës (Plani)
+        mask_ref = (df_tmp["data"].dt.date >= start_date) & (
+            df_tmp["data"].dt.date <= end_date
         )
-        dff_ref = df_raw.loc[mask_ref].copy()
+        df_agj_ref = df_tmp[mask_ref & (df_tmp["forcashitese"] == agj_sel)]
 
-        # Filtrojmë për agjentin
-        df_agj_ref = dff_ref[dff_ref["ForcaShitese"] == agj_sel]
-        mask_live = (df_raw["Data"].dt.year == sot.year) & (
-            df_raw["Data"].dt.month == sot.month
+        # Filtri Live (Realizimi i muajit korrent)
+        mask_live = (df_tmp["data"].dt.year == sot.year) & (
+            df_tmp["data"].dt.month == sot.month
         )
-        df_live_agj = df_raw[mask_live & (df_raw["ForcaShitese"] == agj_sel)].copy()
+        df_live_agj = df_tmp[mask_live & (df_tmp["forcashitese"] == agj_sel)]
 
-        # 1. Llogarisim Performancën për çdo klient të agjentit
-        n_months_ref = max(
-            1,
-            (end_date.year - start_date.year) * 12
-            + (end_date.month - start_date.month),
-        )
+        if not df_agj_ref.empty:
+            # 1. Llogaritja e Targetit
+            n_months_ref = max(
+                1,
+                (end_date.year - start_date.year) * 12
+                + (end_date.month - start_date.month),
+            )
+            kl_target = df_agj_ref.groupby("klienti")["kg"].sum().reset_index()
+            kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (
+                1 + rritja / 100
+            )
 
-        kl_target = df_agj_ref.groupby("Klienti").agg({"kg": "sum"}).reset_index()
-        kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (1 + rritja / 100)
+            # 2. Llogaritja e Realizimit (Përdorim emra standarde)
+            if not df_live_agj.empty:
+                kl_real = df_live_agj.groupby("klienti")["kg"].sum().reset_index()
+                kl_real.columns = ["klienti", "kg_real"]
+            else:
+                kl_real = pd.DataFrame(columns=["klienti", "kg_real"])
 
-        kl_real = (
-            df_live_agj.groupby("Klienti").agg({"kg_real": ("kg", "sum")}).reset_index()
-        )
+            # Bashkimi
+            ai_data = pd.merge(kl_target, kl_real, on="klienti", how="left").fillna(0)
+            ai_data["Ecuria_%"] = (
+                ai_data["kg_real"] / ai_data["Target_Muaj"] * 100
+            ).replace([float("inf"), -float("inf")], 0)
 
-        # Bashkimi i të dhënave
-        ai_data = pd.merge(kl_target, kl_real, on="Klienti", how="left").fillna(0)
-        ai_data["Ecuria_%"] = ai_data["kg_real"] / ai_data["Target_Muaj"] * 100
+            # Prioritizimi
+            klientet_prioritare = (
+                ai_data[ai_data["Ecuria_%"] < 90]
+                .sort_values("Target_Muaj", ascending=False)
+                .head(10)
+            )
 
-        # 2. Identifikojmë Gap-et (Mundësitë) për këtë agjent
-        kufiri_gap = sot - pd.Timedelta(days=90)
-        df_gap = df_raw[
-            (df_raw["ForcaShitese"] == agj_sel)
-            & (df_raw["statusi"].astype(str).str.upper() == "AKTIV")
-        ].copy()
+            st.subheader(f"📍 Top Klientët për t'u vizituar nga {agj_sel}:")
 
-        # Renditja sipas Prioritetit (Klientët me realizim të ulët por potencial të lartë)
-        klientet_prioritarë = (
-            ai_data[ai_data["Ecuria_%"] < 70]
-            .sort_values("Target_Muaj", ascending=False)
-            .head(10)
-        )
+            if klientet_prioritare.empty:
+                st.success("Bravo! Të gjithë klientët janë mbi 90% të realizimit.")
+            else:
+                for _, row in klientet_prioritare.head(5).iterrows():
+                    kl = row["klienti"]
+                    # Logjika e Gap-it (Mundësitë)
+                    kufiri_gap = sot - pd.Timedelta(days=90)
+                    hist_kl = df_tmp[
+                        (df_tmp["klienti"] == kl)
+                        & (df_tmp["forcashitese"] == agj_sel)
+                        & (df_tmp["data"] < kufiri_gap)
+                    ]
+                    akt_kl = df_tmp[
+                        (df_tmp["klienti"] == kl)
+                        & (df_tmp["forcashitese"] == agj_sel)
+                        & (df_tmp["data"] >= kufiri_gap)
+                    ]
 
-        st.subheader(f"📍 Top 5 Klientët që {agj_sel} duhet të vizitojë sot:")
+                    mungojne = [
+                        a
+                        for a in hist_kl["artikulli"].unique()
+                        if a not in akt_kl["artikulli"].unique()
+                    ][:3]
 
-        for index, row in klientet_prioritarë.head(5).iterrows():
-            klienti_emri = row["Klienti"]
-
-            # Gjejmë artikujt specifikë që ky klient ka blerë historikisht por jo në 90 ditët e fundit
-            hist_kl = df_gap[
-                (df_gap["Klienti"] == klienti_emri) & (df_gap["Data"] < kufiri_gap)
-            ]
-            akt_kl = df_gap[
-                (df_gap["Klienti"] == klienti_emri) & (df_gap["Data"] >= kufiri_gap)
-            ]
-
-            mungojne = hist_kl[~hist_kl["Artikulli"].isin(akt_kl["Artikulli"])][
-                "Artikulli"
-            ].unique()[:3]
-
-            with st.expander(f"🏢 {klienti_emri} (Realizimi: {row['Ecuria_%']:.1f}%)"):
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    st.write(
-                        f"**Pse:** Ky klient është në prapambetje me planin ({row['kg_real']:.0f} / {row['Target_Muaj']:.0f} kg)."
-                    )
-                    if len(mungojne) > 0:
-                        st.error(f"**Çfarë t'i shisni:** {', '.join(mungojne)}")
-                    else:
-                        st.info(
-                            "**Çfarë t'i shisni:** Propozoni artikujt e rinj (fokus te volumi)."
-                        )
-                with col2:
-                    st.metric(
-                        "Mungesa (KG)", f"{row['Target_Muaj'] - row['kg_real']:.0f}"
-                    )
-
-        st.divider()
-        st.caption(
-            "💡 *Shënim: Ky AI prioritizon klientët me Target më të madh që kanë mbetur prapa me realizimin.*"
-        )
+                    with st.expander(f"🏢 {kl} ({row['Ecuria_%']:.1f}%)"):
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.write(
+                                f"**Target:** {row['Target_Muaj']:.1f} kg | **Realizuar:** {row['kg_real']:.1f} kg"
+                            )
+                            if mungojne:
+                                st.error(f"📍 Shitini: {', '.join(mungojne)}")
+                            else:
+                                st.info(
+                                    "📍 Fokusohuni në rritjen e volumit të artikujve ekzistues."
+                                )
+                        with col2:
+                            st.metric(
+                                "Mbetur (KG)",
+                                f"{max(0, row['Target_Muaj'] - row['kg_real']):.0f}",
+                            )
+        else:
+            st.info(
+                "Nuk ka të dhëna historike për këtë agjent në periudhën e përzgjedhur."
+            )
