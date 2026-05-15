@@ -1329,14 +1329,29 @@ elif page == "Asistenti AI":
 
         st.divider()
         if lista_finale:
+            st.success(
+                f"✅ Agjenda u krijua me {len(lista_finale)} klientë."
+            )  # 3. PROCESIMI I SELEKTIMEVE
+        s_h = ed_humb[(ed_humb["Vizito"] == True) & (ed_humb["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        s_r = ed_rrez[(ed_rrez["Vizito"] == True) & (ed_rrez["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        s_s = ed_sugj[(ed_sugj["Vizito"] == True) & (ed_sugj["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        lista_finale = list(set(s_h + s_r + s_s))
+
+        st.divider()
+        if lista_finale:
             st.success(f"✅ Agjenda u krijua me {len(lista_finale)} klientë.")
 
-            # BUTONAT E RAPORTEVE
             c_r1, c_r2 = st.columns(2)
 
             if c_r1.button("📊 Raporti i Klientëve (KG & Vlera)"):
-                df_prod = pd.read_csv("produkte+.xlsx - produktet.csv")
-                cmimi_ref = df_prod["KOSTO/KG+"].mean()
+                # Përdorim një çmim mesatar fiks që të mos varet nga skedari CSV nëse ai dështon
+                cmimi_ref = 125
 
                 rep_kl = full_map[full_map["klienti"].isin(lista_finale)].copy()
                 rep_kl["Vlera"] = rep_kl["Mbetja_KG"] * cmimi_ref
@@ -1352,8 +1367,14 @@ elif page == "Asistenti AI":
                 )
 
             if c_r2.button("📦 Raporti i Artikujve për Ngarkesë"):
-                art_list = []
+                art_data = []
                 for k in lista_finale:
+                    # Gjejmë mbetjen e KG për këtë klient nga plani
+                    mbetja_klientit = full_map[full_map["klienti"] == k][
+                        "Mbetja_KG"
+                    ].values[0]
+
+                    # Gjejmë çfarë i mungon (Gap Analysis)
                     kufiri_g = sot - pd.Timedelta(days=90)
                     hist = df_tmp[
                         (df_tmp["klienti"] == k) & (df_tmp["data"] < kufiri_g)
@@ -1366,19 +1387,39 @@ elif page == "Asistenti AI":
                         for a in hist["artikulli"].unique()
                         if a not in akt["artikulli"].unique()
                     ]
-                    for m in mungesa[:2]:
-                        art_list.append(m)
 
-                if art_list:
-                    df_art_f = (
-                        pd.DataFrame(art_list, columns=["Artikulli"])
-                        .value_counts()
-                        .reset_index()
+                    # Shpërndajmë mbetjen e KG në artikujt që mungojnë (nëse ka 2 artikuj, secili merr gjysmën)
+                    if mungesa:
+                        sasia_per_artikull = mbetja_klientit / len(
+                            mungesa[:3]
+                        )  # Limit dosti 3 artikuj
+                        for m in mungesa[:3]:
+                            art_data.append(
+                                {"Artikulli": m, "Sasia KG": sasia_per_artikull}
+                            )
+                    else:
+                        # Nëse s'ka gap, e llogarisim si sasi totale që duhet shitur nga portofoli ekzistues
+                        art_data.append(
+                            {
+                                "Artikulli": "PORTOFOL DIVERS",
+                                "Sasia KG": mbetja_klientit,
+                            }
+                        )
+
+                if art_data:
+                    df_art_f = pd.DataFrame(art_data)
+                    raport_artikujt = (
+                        df_art_f.groupby("Artikulli")["Sasia KG"].sum().reset_index()
                     )
-                    df_art_f.columns = ["Artikulli", "Nr. Klientëve"]
-                    st.table(df_art_f)
-                    st.write(
-                        f"**Total artikuj unikë për t'u përgatitur: {len(df_art_f)}**"
+
+                    st.dataframe(
+                        raport_artikujt.sort_values("Sasia KG", ascending=False),
+                        use_container_width=True,
                     )
+                    st.markdown(
+                        f"**TOTALI I SASISË PËR NGARKESË: {raport_artikujt['Sasia KG'].sum():,.1f} KG**"
+                    )
+                else:
+                    st.info("Nuk u gjetën artikuj specifikë.")
         else:
             st.info("Zgjidhni klientët në tab-et e mësipërme për të gjeneruar planet.")
