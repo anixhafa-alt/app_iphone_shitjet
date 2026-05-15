@@ -1190,28 +1190,24 @@ elif page == "Mundësitë":
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
 # ---------------------------------------------------------
-# MODULI: ASISTENTI AI (Versioni i Integruar Operacional)
+# MODULI: ASISTENTI AI (Versioni i Plotë me të gjitha Listat)
 # ---------------------------------------------------------
 elif page == "Asistenti AI":
     st.title("🛡️ Strategjia e Shitjeve & Agjenda Inteligjente")
 
     if agj_sel == "Të gjithë":
-        st.warning("⚠️ Zgjidhni një agjent për të parë planin e plotë të vizitave.")
+        st.warning("⚠️ Zgjidhni një agjent në sidebar për të parë planin e plotë.")
     else:
         sot = datetime.now()
         data_sot_str = sot.strftime("%d/%m/%Y")
         df_tmp = df_raw.copy()
         df_tmp.columns = [c.lower() for c in df_tmp.columns]
 
-        # 1. ANALIZA E KAPACITETIT
-        total_kliente = df_tmp[df_tmp["forcashitese"] == agj_sel]["klienti"].nunique()
-
-        # 2. KALKULIMI I REALIZIMIT DHE PLANIT (Logjika Origjinale)
+        # 1. KALKULIMI I REALIZIMIT DHE PLANIT (Logjika juaj origjinale)
         mask_ref = (df_tmp["data"].dt.date >= start_date) & (
             df_tmp["data"].dt.date <= end_date
         )
         df_agj_ref = df_tmp[mask_ref & (df_tmp["forcashitese"] == agj_sel)]
-
         n_months_ref = max(
             1,
             (end_date.year - start_date.year) * 12
@@ -1237,53 +1233,54 @@ elif page == "Asistenti AI":
             lower=0
         )
 
-        # Statistikat sipas kërkesës tënde
+        # 2. STATISTIKAT KRYESORE
+        total_kliente = df_tmp[df_tmp["forcashitese"] == agj_sel]["klienti"].nunique()
         vizitat_count = (
             kl_real_detajuar.groupby("klienti")["data"].nunique().reset_index()
         )
         double_visits = vizitat_count[vizitat_count["data"] > 1]["klienti"].tolist()
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Klientë", total_kliente)
-        col2.metric("Vizituar këtë muaj", len(statusi_real))
-        col3.metric("Pa vizituar", total_kliente - len(statusi_real))
-        col4.metric("Vizita të përsëritura", len(double_visits))
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Klientë", total_kliente)
+        c2.metric("Vizituar (Muaj)", len(statusi_real))
+        c3.metric("Pa vizituar", total_kliente - len(statusi_real))
+        c4.metric("Double Visits", len(double_visits))
 
-        # --- TABELAT E PËRZGJEDHJES ---
-        st.subheader("📋 Kategorizimi dhe Përzgjedhja e Vizitave")
+        st.subheader("📋 Përzgjedhja e Vizitave për Sot")
         tab1, tab2, tab3 = st.tabs(
-            ["🔴 Kritikë & Humbje", "🟡 Në Rrezik (Plani)", "🟢 Stabilë"]
+            [
+                "🔴 Kritikë (60+ ditë)",
+                "🟡 Prapa Planit",
+                "🔵 Të Sugjeruar (Pa vizitë këtë muaj)",
+            ]
         )
 
+        # FORMATIMI I DATEVE
+        def mark_sot_ai(x):
+            d = x.strftime("%d/%m/%Y")
+            return f"⭐ {d} (SOT)" if d == data_sot_str else d
+
+        # TAB 1: KLIENTET E HUMBUR
         with tab1:
             kufiri_humbjes = sot - pd.Timedelta(days=60)
-            blerja_fundit = (
+            blerja_f = (
                 df_tmp[df_tmp["forcashitese"] == agj_sel]
                 .groupby("klienti")["data"]
                 .max()
                 .reset_index()
             )
-            kl_humbur = blerja_fundit[blerja_fundit["data"] < kufiri_humbjes].copy()
-
-            def format_date_ai(x):
-                d = x.strftime("%d/%m/%Y")
-                return f"⭐ {d} (SOT)" if d == data_sot_str else d
-
-            kl_humbur["Blerja e Fundit"] = kl_humbur["data"].apply(format_date_ai)
+            kl_humbur = blerja_f[blerja_f["data"] < kufiri_humbjes].copy()
+            kl_humbur["Blerja e Fundit"] = kl_humbur["data"].apply(mark_sot_ai)
             kl_humbur["Vizito"] = False
             kl_humbur["Pezull"] = False
-
             ed_humb = st.data_editor(
                 kl_humbur[["Vizito", "Pezull", "klienti", "Blerja e Fundit"]],
-                column_config={
-                    "Vizito": st.column_config.CheckboxColumn("Zgjidh"),
-                    "Pezull": st.column_config.CheckboxColumn("Pezull"),
-                },
-                disabled=["klienti", "Blerja e Fundit"],
+                key="humb_v3",
                 hide_index=True,
-                key="ai_humb",
+                use_container_width=True,
             )
 
+        # TAB 2: RREZIK PLANI
         with tab2:
             rrezik = (
                 full_map[(full_map["Ecuria"] < 50) & (full_map["kg_y"] > 0)]
@@ -1293,91 +1290,95 @@ elif page == "Asistenti AI":
             rrezik["Vizito"] = False
             rrezik["Pezull"] = False
             ed_rrez = st.data_editor(
-                rrezik[
-                    ["Vizito", "Pezull", "klienti", "Target_Muaj", "kg_y", "Ecuria"]
-                ],
+                rrezik[["Vizito", "Pezull", "klienti", "Target_Muaj", "Ecuria"]],
                 column_config={
-                    "Vizito": st.column_config.CheckboxColumn("Zgjidh"),
-                    "Ecuria": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Ecuria": st.column_config.NumberColumn(format="%.1f%%")
                 },
-                disabled=["klienti", "Target_Muaj", "kg_y", "Ecuria"],
+                key="rrez_v3",
                 hide_index=True,
-                key="ai_rrez",
+                use_container_width=True,
             )
 
+        # TAB 3: SUGJERIMET (Klientët që s'janë vizituar ende këtë muaj)
         with tab3:
-            st.info(f"Klientë me mbi një vizitë: {len(double_visits)}")
-            if double_visits:
-                st.write(", ".join(double_visits))
+            jo_vizituar = (
+                full_map[full_map["kg_y"] == 0]
+                .sort_values("Target_Muaj", ascending=False)
+                .copy()
+            )
+            jo_vizituar["Vizito"] = False
+            jo_vizituar["Pezull"] = False
+            ed_sugj = st.data_editor(
+                jo_vizituar[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
+                key="sugj_v3",
+                hide_index=True,
+                use_container_width=True,
+            )
 
-        # --- PROCESIMI I PLANIT DHE RAPORTET ---
-        sel_humb = ed_humb[(ed_humb["Vizito"] == True) & (ed_humb["Pezull"] == False)][
+        # 3. PROCESIMI I SELEKTIMEVE
+        s_h = ed_humb[(ed_humb["Vizito"] == True) & (ed_humb["Pezull"] == False)][
             "klienti"
         ].tolist()
-        sel_rrez = ed_rrez[(ed_rrez["Vizito"] == True) & (ed_rrez["Pezull"] == False)][
+        s_r = ed_rrez[(ed_rrez["Vizito"] == True) & (ed_rrez["Pezull"] == False)][
             "klienti"
         ].tolist()
-        lista_finale_vizita = sel_humb + sel_rrez
+        s_s = ed_sugj[(ed_sugj["Vizito"] == True) & (ed_sugj["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        lista_finale = list(set(s_h + s_r + s_s))
 
         st.divider()
-        if lista_finale_vizita:
-            st.success(f"✅ Agjenda u krijua me {len(lista_finale_vizita)} klientë.")
+        if lista_finale:
+            st.success(f"✅ Agjenda u krijua me {len(lista_finale)} klientë.")
 
-            col_r1, col_r2 = st.columns(2)
+            # BUTONAT E RAPORTEVE
+            c_r1, c_r2 = st.columns(2)
 
-            if col_r1.button("📊 Raporti i Klientëve (Vlera & KG)"):
-                # Lexojmë çmimet nga produktet.csv për saktësi
+            if c_r1.button("📊 Raporti i Klientëve (KG & Vlera)"):
                 df_prod = pd.read_csv("produkte+.xlsx - produktet.csv")
-                cmimi_mesatar_general = df_prod[
-                    "KOSTO/KG+"
-                ].mean()  # Default nëse nuk gjejmë dot lidhje direkte
+                cmimi_ref = df_prod["KOSTO/KG+"].mean()
 
-                rep_kl = full_map[full_map["klienti"].isin(lista_finale_vizita)].copy()
-                rep_kl["Vlera Est."] = rep_kl["Mbetja_KG"] * cmimi_mesatar_general
-                rep_kl["Cmimi Mes."] = cmimi_mesatar_general
+                rep_kl = full_map[full_map["klienti"].isin(lista_finale)].copy()
+                rep_kl["Vlera"] = rep_kl["Mbetja_KG"] * cmimi_ref
 
                 st.dataframe(
-                    rep_kl[["klienti", "Mbetja_KG", "Vlera Est.", "Cmimi Mes."]],
-                    use_container_width=True,
+                    rep_kl[["klienti", "Mbetja_KG", "Vlera"]], use_container_width=True
                 )
 
-                total_kg = rep_kl["Mbetja_KG"].sum()
-                total_vl = rep_kl["Vlera Est."].sum()
+                t_kg = rep_kl["Mbetja_KG"].sum()
+                t_vl = rep_kl["Vlera"].sum()
                 st.markdown(
-                    f"**TOTALI: {total_kg:,.1f} KG | {total_vl:,.1f} Lekë | Çmimi Mes: {total_vl/total_kg if total_kg>0 else 0:,.1f} Lekë**"
+                    f"**TOTALI: {t_kg:,.1f} KG | {t_vl:,.1f} Lekë | Çmimi Mes: {t_vl/t_kg if t_kg>0 else 0:,.1f} Lekë**"
                 )
 
-            if col_r2.button("📦 Raporti i Artikujve (Përmbledhës)"):
-                # Sugjerimet e artikujve bazohen në logjikën tënde të Gap 90 ditë
-                artikujt_plan = []
-                for kl in lista_finale_vizita:
-                    kufiri_gap = sot - pd.Timedelta(days=90)
+            if c_r2.button("📦 Raporti i Artikujve për Ngarkesë"):
+                art_list = []
+                for k in lista_finale:
+                    kufiri_g = sot - pd.Timedelta(days=90)
                     hist = df_tmp[
-                        (df_tmp["klienti"] == kl) & (df_tmp["data"] < kufiri_gap)
+                        (df_tmp["klienti"] == k) & (df_tmp["data"] < kufiri_g)
                     ]
                     akt = df_tmp[
-                        (df_tmp["klienti"] == kl) & (df_tmp["data"] >= kufiri_gap)
+                        (df_tmp["klienti"] == k) & (df_tmp["data"] >= kufiri_g)
                     ]
-                    mungojne = [
+                    mungesa = [
                         a
                         for a in hist["artikulli"].unique()
                         if a not in akt["artikulli"].unique()
                     ]
-                    for m in mungojne[:3]:  # Marrim top 3 mungesat për klient
-                        artikujt_plan.append(m)
+                    for m in mungesa[:2]:
+                        art_list.append(m)
 
-                if artikujt_plan:
-                    df_art_final = (
-                        pd.DataFrame(artikujt_plan, columns=["Artikulli"])
+                if art_list:
+                    df_art_f = (
+                        pd.DataFrame(art_list, columns=["Artikulli"])
                         .value_counts()
                         .reset_index()
                     )
-                    df_art_final.columns = ["Artikulli", "Nr. Klientëve që u mungon"]
-                    st.table(df_art_final)
-                else:
-                    st.info("Nuk u gjetën artikuj specifikë nga analiza e Gap-it.")
-
+                    df_art_f.columns = ["Artikulli", "Nr. Klientëve"]
+                    st.table(df_art_f)
+                    st.write(
+                        f"**Total artikuj unikë për t'u përgatitur: {len(df_art_f)}**"
+                    )
         else:
-            st.info(
-                "Zgjidhni klientët në tabelat e mësipërme për të gjeneruar raportet."
-            )
+            st.info("Zgjidhni klientët në tab-et e mësipërme për të gjeneruar planet.")
