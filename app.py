@@ -202,13 +202,23 @@ if df_raw is not None and df_link is not None:
 # --- SIDEBAR (E përbashkët për të gjitha modulet) ---
 st.sidebar.header("⚙️ Kontrolli i Planit")
 
-# 1. Ruajtja dhe Ngarkimi i vlerave nga Session State
-if "start_d" not in st.session_state:
-    st.session_state["start_d"] = df_raw["Data"].min().date()
-if "end_d" not in st.session_state:
-    st.session_state["end_d"] = df_raw["Data"].max().date()
-if "rritja_val" not in st.session_state:
-    st.session_state["rritja_val"] = 10
+# 1. Kontrollojmë nëse df_raw ka të dhëna përpara se të vazhdojmë
+if df_raw is not None and not df_raw.empty:
+    # Ruajtja dhe Ngarkimi i vlerave nga Session State nëse të dhënat ekzistojnë
+    if "start_d" not in st.session_state:
+        st.session_state["start_d"] = df_raw["Data"].min().date()
+    if "end_d" not in st.session_state:
+        st.session_state["end_d"] = df_raw["Data"].max().date()
+    if "rritja_val" not in st.session_state:
+        st.session_state["rritja_val"] = 10
+else:
+    # Nëse nuk lidhet, shfaqim një mesazh miqësor dhe ndalojmë ekzekutimin e mëtutjeshëm
+    st.error(
+        "⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml."
+    )
+    st.info("Aplikacioni po punon, por nuk ka të dhëna për të shfaqur.")
+    st.stop()  # Ky rresht ndalon pjesën tjetër të kodit që të mos nxjerrë errore të tjera
+
 
 # 2. Ndërtimi i Menusë (Si në foto)
 date_range = st.sidebar.date_input(
