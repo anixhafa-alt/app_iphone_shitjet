@@ -19,8 +19,9 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
+          script_stop: true # Ndalohet nëse ka gabim
           script: |
-            cd /root/app_iphone_shitjet
+            cd /root/app_shitjet
             git pull origin main
             
             # Vrit proceset e vjetra
@@ -30,4 +31,4 @@ jobs:
             # Nise Streamlit pastër (përdorim rrugën që punoi më parë)
             nohup python3 -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true > streamlit.log 2>&1 &
             
-            echo "Deployment i suksesshëm!"
+            echo "Deployment i suksesshëm dhe Streamlit u rinis!"
