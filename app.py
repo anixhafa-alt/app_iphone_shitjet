@@ -89,7 +89,7 @@ if not check_password():
 st.sidebar.title("🧭 Menuja Kryesore")
 
 page = st.sidebar.radio(
-    "Zgjidh Modulin:", ["Planifikimi", "Realizimi", "Mundësitë", "Hhistoriku"]
+    "Zgjidh Modulin:", ["Planifikimi", "Realizimi", "Mundësitë", "Historiku"]
 )
 st.sidebar.warning("Versioni: 1.0.8 - Live Update")
 
