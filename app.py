@@ -1247,13 +1247,21 @@ elif page == "Asistenti AI":
         )
         double_visits = vizitat_count[vizitat_count["data"] > 1]["klienti"].tolist()
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Klientë", total_kliente)
-        c2.metric("Vizituar (Muaj)", len(statusi_real))
-        c3.metric("Pa vizituar", total_kliente - len(statusi_real))
-        c4.metric("Double Visits", len(double_visits))
+        # --- SHPALLJA E STATISTIKAVE ME (i) ---
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Klientë", total_kliente)
+        col2.metric("Vizituar (Muaj)", len(statusi_real))
+        col3.metric("Pa vizituar", total_kliente - len(statusi_real))
+        col4.metric(
+            "Double Visits",
+            len(double_visits),
+            help="Klientë që janë faturuar më shumë se një herë brenda muajit korrent.",
+        )
 
-        st.subheader("📋 Përzgjedhja e Vizitave për Sot")
+        st.info(
+            "ℹ️ **Mbetja në KG** llogaritet si: (Targeti i zgjedhur te Planifikimi) - (Shitjet reale të muajit korrent).",
+            icon="💡",
+        )
         tab1, tab2, tab3 = st.tabs(
             [
                 "🔴 Kritikë (60+ ditë)",
@@ -1435,8 +1443,23 @@ elif page == "Asistenti AI":
 # MODULI I RI: ROUTE PLAN AI (Plani Strategjik Ditor)
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
-    st.title("📅 Route Plan AI - Shpërndarja Mujore e Vizitave")
+    st.title("📅 Route Plan AI")
+    st.markdown(
+        """
+        <style> .stTooltipIcon { display: inline-block; } </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    st.subheader(
+        f"Strategjia e Shpërndarjes",
+        help="""
+        Ky plan ndan portofolin tuaj në 26 ditë pune:
+        1. Ditët e para (1-10) janë prioritare për klientët në 'Humbje' dhe 'Rrezik'.
+        2. Sasia KG bazohet në mbetjen tuaj të planit mujor.
+        3. Gap Analysis tregon kodet që klienti s'i ka blerë në 90 ditët e fundit.
+    """,
+    )
     if agj_sel == "Të gjithë":
         st.warning(
             "⚠️ Ju lutem përzgjidhni një agjent specifik për të gjeneruar rrugëtimin ditor."
