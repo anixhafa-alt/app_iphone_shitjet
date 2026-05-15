@@ -1189,7 +1189,6 @@ elif page == "Mundësitë":
                 st.metric("Artikulli më i harruar", top_a)
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
-
 # ---------------------------------------------------------
 
 # MODULI: MODULI: ASISTENTI AI
