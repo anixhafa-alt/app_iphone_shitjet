@@ -1190,7 +1190,6 @@ elif page == "Mundësitë":
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
 
-
 # ---------------------------------------------------------
 
 # MODULI: MODULI: ASISTENTI AI
