@@ -89,7 +89,8 @@ if not check_password():
 st.sidebar.title("🧭 Menuja Kryesore")
 
 page = st.sidebar.radio(
-    "Zgjidh Modulin:", ["Planifikimi", "Realizimi", "Mundësitë", "Historiku"]
+    "Zgjidh Modulin:",
+    ["Planifikimi", "Realizimi", "Mundësitë", "Historiku", "Asistenti AI"],
 )
 st.sidebar.warning("Versioni: 1.0.8 - Live Update")
 
@@ -1188,3 +1189,98 @@ elif page == "Mundësitë":
                 st.metric("Artikulli më i harruar", top_a)
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
+# ---------------------------------------------------------
+# MODULI: ASISTENTI AI
+# ---------------------------------------------------------
+elif page == "Asistenti AI":
+    st.title("🤖 Këshilltari AI - Agjenda e Ditës")
+
+    if agj_sel == "Të gjithë":
+        st.warning(
+            "⚠️ Ju lutem zgjidhni një Agjent specifik në sidebar për të marrë rekomandimet e personalizuara."
+        )
+    else:
+        # Përgatitja e të dhënave (Logjika e Realizimit)
+        sot = datetime.now()
+        mask_ref = (df_raw["Data"].dt.date >= start_date) & (
+            df_raw["Data"].dt.date <= end_date
+        )
+        dff_ref = df_raw.loc[mask_ref].copy()
+
+        # Filtrojmë për agjentin
+        df_agj_ref = dff_ref[dff_ref["ForcaShitese"] == agj_sel]
+        mask_live = (df_raw["Data"].dt.year == sot.year) & (
+            df_raw["Data"].dt.month == sot.month
+        )
+        df_live_agj = df_raw[mask_live & (df_raw["ForcaShitese"] == agj_sel)].copy()
+
+        # 1. Llogarisim Performancën për çdo klient të agjentit
+        n_months_ref = max(
+            1,
+            (end_date.year - start_date.year) * 12
+            + (end_date.month - start_date.month),
+        )
+
+        kl_target = df_agj_ref.groupby("Klienti").agg({"kg": "sum"}).reset_index()
+        kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (1 + rritja / 100)
+
+        kl_real = (
+            df_live_agj.groupby("Klienti").agg({"kg_real": ("kg", "sum")}).reset_index()
+        )
+
+        # Bashkimi i të dhënave
+        ai_data = pd.merge(kl_target, kl_real, on="Klienti", how="left").fillna(0)
+        ai_data["Ecuria_%"] = ai_data["kg_real"] / ai_data["Target_Muaj"] * 100
+
+        # 2. Identifikojmë Gap-et (Mundësitë) për këtë agjent
+        kufiri_gap = sot - pd.Timedelta(days=90)
+        df_gap = df_raw[
+            (df_raw["ForcaShitese"] == agj_sel)
+            & (df_raw["statusi"].astype(str).str.upper() == "AKTIV")
+        ].copy()
+
+        # Renditja sipas Prioritetit (Klientët me realizim të ulët por potencial të lartë)
+        klientet_prioritarë = (
+            ai_data[ai_data["Ecuria_%"] < 70]
+            .sort_values("Target_Muaj", ascending=False)
+            .head(10)
+        )
+
+        st.subheader(f"📍 Top 5 Klientët që {agj_sel} duhet të vizitojë sot:")
+
+        for index, row in klientet_prioritarë.head(5).iterrows():
+            klienti_emri = row["Klienti"]
+
+            # Gjejmë artikujt specifikë që ky klient ka blerë historikisht por jo në 90 ditët e fundit
+            hist_kl = df_gap[
+                (df_gap["Klienti"] == klienti_emri) & (df_gap["Data"] < kufiri_gap)
+            ]
+            akt_kl = df_gap[
+                (df_gap["Klienti"] == klienti_emri) & (df_gap["Data"] >= kufiri_gap)
+            ]
+
+            mungojne = hist_kl[~hist_kl["Artikulli"].isin(akt_kl["Artikulli"])][
+                "Artikulli"
+            ].unique()[:3]
+
+            with st.expander(f"🏢 {klienti_emri} (Realizimi: {row['Ecuria_%']:.1f}%)"):
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.write(
+                        f"**Pse:** Ky klient është në prapambetje me planin ({row['kg_real']:.0f} / {row['Target_Muaj']:.0f} kg)."
+                    )
+                    if len(mungojne) > 0:
+                        st.error(f"**Çfarë t'i shisni:** {', '.join(mungojne)}")
+                    else:
+                        st.info(
+                            "**Çfarë t'i shisni:** Propozoni artikujt e rinj (fokus te volumi)."
+                        )
+                with col2:
+                    st.metric(
+                        "Mungesa (KG)", f"{row['Target_Muaj'] - row['kg_real']:.0f}"
+                    )
+
+        st.divider()
+        st.caption(
+            "💡 *Shënim: Ky AI prioritizon klientët me Target më të madh që kanë mbetur prapa me realizimin.*"
+        )
