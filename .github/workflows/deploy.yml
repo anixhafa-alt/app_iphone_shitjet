@@ -1,15 +1,4 @@
-name: Deploy to DigitalOcean
-
-on:
-  push:
-    branches:
-      - main  # Kjo do të thotë: aktivizohu kur bëj push në degën kryesore
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy via SSH
+- name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
@@ -19,5 +8,15 @@ jobs:
           script: |
             cd /root/app_shitjet
             git pull origin main
-            # Streamlit i dallon ndryshimet automatikisht, por ky rresht siguron që procesi është gjallë
-            echo "Deployment i suksesshëm!"
+            
+            # 1. Vrit procesin e vjetër (nëse ekziston) për të pastruar memorien
+            sudo pkill -9 streamlit || true
+            
+            # 2. Instalo varësitë e reja (nëse ke shtuar ndonjë te requirements.txt)
+            pip install -r requirements.txt || echo "S'ka requirements"
+            
+            # 3. Nise Streamlit në background me nohup
+            # Përdorim portën 8501 siç e kemi pasur
+            nohup python3 -m streamlit run app.py --server.port 8501 --server.runOnSave true > streamlit.log 2>&1 &
+            
+            echo "Deployment i suksesshëm dhe Streamlit u rinis!"
