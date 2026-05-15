@@ -1285,31 +1285,12 @@ elif page == "Asistenti AI":
                 .reset_index()
             )
             kl_humbur = blerja_f[blerja_f["data"] < kufiri_humbjes].copy()
-            kl_humbur = kl_humbur.merge(
-                full_map[["klienti", "Target_Muaj"]],
-                on="klienti",
-                how="left",
-            )
             kl_humbur["Blerja e Fundit"] = kl_humbur["data"].apply(mark_sot_ai)
             kl_humbur["Vizito"] = False
             kl_humbur["Pezull"] = False
             ed_humb = st.data_editor(
-                kl_humbur[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
-                column_config={
-                    "Vizito": st.column_config.CheckboxColumn(
-                        "Zgjidh",
-                        help="Shtoji këta klientë në raportin e vizitave të ditës.",
-                    ),
-                    "Pezull": st.column_config.CheckboxColumn(
-                        "Pezull",
-                        help="Lëri për një ditë tjetër, mos i përfshi në ngarkesë.",
-                    ),
-                    "Target_Muaj": st.column_config.NumberColumn(
-                        "Objektivi KG",
-                        help="Sasia mesatare historike + rritja e aplikuar.",
-                    ),
-                },
-                key="humb_v4",
+                kl_humbur[["Vizito", "Pezull", "klienti", "Blerja e Fundit"]],
+                key="humb_v3",
                 hide_index=True,
                 use_container_width=True,
             )
@@ -1324,22 +1305,11 @@ elif page == "Asistenti AI":
             rrezik["Vizito"] = False
             rrezik["Pezull"] = False
             ed_rrez = st.data_editor(
-                rrezik[["Vizito", "Pezull", "klienti", "Target_Muaj"]],
+                rrezik[["Vizito", "Pezull", "klienti", "Target_Muaj", "Ecuria"]],
                 column_config={
-                    "Vizito": st.column_config.CheckboxColumn(
-                        "Zgjidh",
-                        help="Shtoji këta klientë në raportin e vizitave të ditës.",
-                    ),
-                    "Pezull": st.column_config.CheckboxColumn(
-                        "Pezull",
-                        help="Lëri për një ditë tjetër, mos i përfshi në ngarkesë.",
-                    ),
-                    "Target_Muaj": st.column_config.NumberColumn(
-                        "Objektivi KG",
-                        help="Sasia mesatare historike + rritja e aplikuar.",
-                    ),
+                    "Ecuria": st.column_config.NumberColumn(format="%.1f%%")
                 },
-                key="rrez_v4",
+                key="rrez_v3",
                 hide_index=True,
                 use_container_width=True,
             )
@@ -1375,6 +1345,22 @@ elif page == "Asistenti AI":
             )
 
         # 3. PROCESIMI I SELEKTIMEVE
+        s_h = ed_humb[(ed_humb["Vizito"] == True) & (ed_humb["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        s_r = ed_rrez[(ed_rrez["Vizito"] == True) & (ed_rrez["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        s_s = ed_sugj[(ed_sugj["Vizito"] == True) & (ed_sugj["Pezull"] == False)][
+            "klienti"
+        ].tolist()
+        lista_finale = list(set(s_h + s_r + s_s))
+
+        st.divider()
+        if lista_finale:
+            st.success(
+                f"✅ Agjenda u krijua me {len(lista_finale)} klientë."
+            )  # 3. PROCESIMI I SELEKTIMEVE
         s_h = ed_humb[(ed_humb["Vizito"] == True) & (ed_humb["Pezull"] == False)][
             "klienti"
         ].tolist()
