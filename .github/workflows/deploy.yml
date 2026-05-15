@@ -1,4 +1,18 @@
-- name: Deploy via SSH
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
@@ -6,17 +20,14 @@
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script: |
-            cd /root/app_shitjet
+            cd /root/app_iphone_shitjet
             git pull origin main
             
-            # 1. Vrit procesin e vjetër (nëse ekziston) për të pastruar memorien
+            # Vrit proceset e vjetra
             sudo pkill -9 streamlit || true
+            sudo pkill -9 python3 || true
             
-            # 2. Instalo varësitë e reja (nëse ke shtuar ndonjë te requirements.txt)
-            pip install -r requirements.txt || echo "S'ka requirements"
+            # Nise Streamlit pastër (përdorim rrugën që punoi më parë)
+            nohup python3 -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true > streamlit.log 2>&1 &
             
-            # 3. Nise Streamlit në background me nohup
-            # Përdorim portën 8501 siç e kemi pasur
-            nohup python3 -m streamlit run app.py --server.port 8501 --server.runOnSave true > streamlit.log 2>&1 &
-            
-            echo "Deployment i suksesshëm dhe Streamlit u rinis!"
+            echo "Deployment i suksesshëm!"
