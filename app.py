@@ -1190,107 +1190,133 @@ elif page == "Mundësitë":
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
 # ---------------------------------------------------------
-# MODULI: ASISTENTI AI (Versioni i Korrigjuar)
+
+# MODULI: MODULI: ASISTENTI AI
 # ---------------------------------------------------------
+
 elif page == "Asistenti AI":
-    st.title("🤖 Këshilltari AI - Agjenda e Ditës")
+    st.title("🛡️ Strategjia e Shitjeve & Agjenda e Plotë")
 
     if agj_sel == "Të gjithë":
-        st.warning("⚠️ Ju lutem zgjidhni një Agjent specifik në sidebar.")
+        st.warning("⚠️ Zgjidhni një agjent për të parë planin e plotë të vizitave.")
     else:
         sot = datetime.now()
-        # Sigurohemi që kolonat janë me të vogla për konsistencë
         df_tmp = df_raw.copy()
         df_tmp.columns = [c.lower() for c in df_tmp.columns]
 
-        # Filtri i referencës (Plani)
+        # 1. ANALIZA E KAPACITETIT (Sa klientë ka gjithsej)
+        total_kliente = df_tmp[df_tmp["forcashitese"] == agj_sel]["klienti"].nunique()
+
+        # 2. KALKULIMI I REALIZIMIT DHE PLANIT (si më parë por për të gjithë)
         mask_ref = (df_tmp["data"].dt.date >= start_date) & (
             df_tmp["data"].dt.date <= end_date
         )
         df_agj_ref = df_tmp[mask_ref & (df_tmp["forcashitese"] == agj_sel)]
 
-        # Filtri Live (Realizimi i muajit korrent)
+        n_months_ref = max(
+            1,
+            (end_date.year - start_date.year) * 12
+            + (end_date.month - start_date.month),
+        )
+        kl_target = df_agj_ref.groupby("klienti")["kg"].sum().reset_index()
+        kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (1 + rritja / 100)
+
         mask_live = (df_tmp["data"].dt.year == sot.year) & (
             df_tmp["data"].dt.month == sot.month
         )
         df_live_agj = df_tmp[mask_live & (df_tmp["forcashitese"] == agj_sel)]
+        kl_real = (
+            df_live_agj.groupby(["klienti", "data"]).agg({"kg": "sum"}).reset_index()
+        )
 
-        if not df_agj_ref.empty:
-            # 1. Llogaritja e Targetit
-            n_months_ref = max(
-                1,
-                (end_date.year - start_date.year) * 12
-                + (end_date.month - start_date.month),
+        # Klientët me më shumë se një vizitë (Double visits)
+        vizitat_count = kl_real.groupby("klienti")["data"].nunique().reset_index()
+        double_visits = vizitat_count[vizitat_count["data"] > 1]["klienti"].tolist()
+
+        # Bashkimi i të dhënave për Statusin e Plotë
+        statusi_real = kl_real.groupby("klienti")["kg"].sum().reset_index()
+        full_map = pd.merge(kl_target, statusi_real, on="klienti", how="left").fillna(0)
+        full_map["Ecuria"] = full_map["kg_y"] / full_map["Target_Muaj"] * 100
+
+        # --- SHPALLJA E STATISTIKAVE ---
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Klientë", total_kliente)
+        col2.metric("Vizituar këtë muaj", len(statusi_real))
+        col3.metric("Pa vizituar", total_kliente - len(statusi_real))
+        col4.metric("Vizita të përsëritura", len(double_visits))
+
+        # --- NDARJA SIPAS PRIORITETIT (Vizion Strategjik) ---
+        st.subheader("📋 Kategorizimi i Klientëve")
+        tab1, tab2, tab3 = st.tabs(
+            [
+                "🔴 Kritikë & Humbje",
+                "🟡 Në Rrezik (Plani)",
+                "🟢 Stabilë & Double Visits",
+            ]
+        )
+
+        with tab1:
+            # Klientë që po humbasin (Nuk kanë blerë në 60 ditët e fundit por kanë pasur histori)
+            kufiri_humbjes = sot - pd.Timedelta(days=60)
+            blerja_fundit = (
+                df_tmp[df_tmp["forcashitese"] == agj_sel]
+                .groupby("klienti")["data"]
+                .max()
+                .reset_index()
             )
-            kl_target = df_agj_ref.groupby("klienti")["kg"].sum().reset_index()
-            kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (
-                1 + rritja / 100
+            klientet_humbur = blerja_fundit[blerja_fundit["data"] < kufiri_humbjes]
+
+            st.error(
+                f"Janë gjetur {len(klientet_humbur)} klientë që nuk kanë blerë prej 60+ ditësh!"
+            )
+            st.dataframe(klientet_humbur, use_container_width=True)
+
+        with tab2:
+            # Klientë që janë aktivë por prapa me planin (nën 50% të targetit)
+            rrezik = full_map[
+                (full_map["Ecuria"] < 50) & (full_map["kg_y"] > 0)
+            ].sort_values("Target_Muaj", ascending=False)
+            st.warning(f"Këta {len(rrezik)} klientë rrezikojnë të mos mbyllin muajin.")
+            st.dataframe(
+                rrezik[["klienti", "Target_Muaj", "kg_y", "Ecuria"]],
+                use_container_width=True,
             )
 
-            # 2. Llogaritja e Realizimit (Përdorim emra standarde)
-            if not df_live_agj.empty:
-                kl_real = df_live_agj.groupby("klienti")["kg"].sum().reset_index()
-                kl_real.columns = ["klienti", "kg_real"]
-            else:
-                kl_real = pd.DataFrame(columns=["klienti", "kg_real"])
+        with tab3:
+            # Klientë që janë vizituar shpesh
+            st.info("Klientët e vizituar më shumë se 1 herë këtë muaj:")
+            st.write(", ".join(double_visits) if double_visits else "Asnjë")
 
-            # Bashkimi
-            ai_data = pd.merge(kl_target, kl_real, on="klienti", how="left").fillna(0)
-            ai_data["Ecuria_%"] = (
-                ai_data["kg_real"] / ai_data["Target_Muaj"] * 100
-            ).replace([float("inf"), -float("inf")], 0)
+        # --- AGJENDA E SUGJERUAR E DITËS ---
+        st.divider()
+        st.subheader("📅 Agjenda e Sugjeruar e Vizitave (Sot)")
 
-            # Prioritizimi
-            klientet_prioritare = (
-                ai_data[ai_data["Ecuria_%"] < 90]
-                .sort_values("Target_Muaj", ascending=False)
-                .head(10)
-            )
+        # Logjika: Sugjero klientë që s'janë vizituar ende këtë muaj DHE kanë potencial të lartë
+        jo_vizituar = (
+            full_map[full_map["kg_y"] == 0]
+            .sort_values("Target_Muaj", ascending=False)
+            .head(15)
+        )
 
-            st.subheader(f"📍 Top Klientët për t'u vizituar nga {agj_sel}:")
+        for _, row in jo_vizituar.iterrows():
+            kl = row["klienti"]
+            # Gjejmë kodet që i mungojnë (Gap Analysis)
+            kufiri_gap = sot - pd.Timedelta(days=90)
+            hist_kl = df_tmp[(df_tmp["klienti"] == kl) & (df_tmp["data"] < kufiri_gap)]
+            akt_kl = df_tmp[(df_tmp["klienti"] == kl) & (df_tmp["data"] >= kufiri_gap)]
+            mungojne = [
+                a
+                for a in hist_kl["artikulli"].unique()
+                if a not in akt_kl["artikulli"].unique()
+            ][:3]
 
-            if klientet_prioritare.empty:
-                st.success("Bravo! Të gjithë klientët janë mbi 90% të realizimit.")
-            else:
-                for _, row in klientet_prioritare.head(5).iterrows():
-                    kl = row["klienti"]
-                    # Logjika e Gap-it (Mundësitë)
-                    kufiri_gap = sot - pd.Timedelta(days=90)
-                    hist_kl = df_tmp[
-                        (df_tmp["klienti"] == kl)
-                        & (df_tmp["forcashitese"] == agj_sel)
-                        & (df_tmp["data"] < kufiri_gap)
-                    ]
-                    akt_kl = df_tmp[
-                        (df_tmp["klienti"] == kl)
-                        & (df_tmp["forcashitese"] == agj_sel)
-                        & (df_tmp["data"] >= kufiri_gap)
-                    ]
-
-                    mungojne = [
-                        a
-                        for a in hist_kl["artikulli"].unique()
-                        if a not in akt_kl["artikulli"].unique()
-                    ][:3]
-
-                    with st.expander(f"🏢 {kl} ({row['Ecuria_%']:.1f}%)"):
-                        col1, col2 = st.columns([2, 1])
-                        with col1:
-                            st.write(
-                                f"**Target:** {row['Target_Muaj']:.1f} kg | **Realizuar:** {row['kg_real']:.1f} kg"
-                            )
-                            if mungojne:
-                                st.error(f"📍 Shitini: {', '.join(mungojne)}")
-                            else:
-                                st.info(
-                                    "📍 Fokusohuni në rritjen e volumit të artikujve ekzistues."
-                                )
-                        with col2:
-                            st.metric(
-                                "Mbetur (KG)",
-                                f"{max(0, row['Target_Muaj'] - row['kg_real']):.0f}",
-                            )
-        else:
-            st.info(
-                "Nuk ka të dhëna historike për këtë agjent në periudhën e përzgjedhur."
-            )
+            with st.expander(f"📍 {kl} | Potenciali: {row['Target_Muaj']:.1f} kg"):
+                st.write(
+                    f"**Objektivi i vizitës:** Ky klient nuk ka blerë ende këtë muaj."
+                )
+                if mungojne:
+                    st.error(f"**Kodet për të shitur:** {', '.join(mungojne)}")
+                else:
+                    st.info(
+                        "**Fokusi:** Prezantimi i katalogut të plotë për të aktivizuar klientin."
+                    )
