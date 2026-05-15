@@ -91,7 +91,7 @@ st.sidebar.title("🧭 Menuja Kryesore")
 page = st.sidebar.radio(
     "Zgjidh Modulin:", ["Planifikimi", "Realizimi", "Mundësitë", "Hhistoriku"]
 )
-st.sidebar.warning("Versioni: 1.0.2 - Live Update")
+st.sidebar.warning("Versioni: 1.0.3 - Live Update")
 
 # --- NGARKIMI I TE DHENAVE ---
 
