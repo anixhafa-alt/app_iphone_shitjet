@@ -366,7 +366,7 @@ if page == "Historiku":
                     "Nr. Klientëve": "{:,.0f}",
                 }
             ),
-            use_container_width=True,
+            use_container_width="stretch",
             height=600,  # Lartësia që lejon të shohësh shumë rreshta
         )
 
@@ -886,7 +886,7 @@ elif page == "Realizimi":
                     ),
                 },
                 hide_index=True,
-                use_container_width=True,
+                use_container_width="stretch",
             )
 
         with t2:
@@ -927,7 +927,7 @@ elif page == "Realizimi":
                     ),
                 },
                 hide_index=True,
-                use_container_width=True,
+                use_container_width="stretch",
             )
 
         with t3:
@@ -972,7 +972,7 @@ elif page == "Realizimi":
                     ),
                 },
                 hide_index=True,
-                use_container_width=True,
+                use_container_width="stretch",
             )
 
         # --- 7. EKSPORTI NË HTML (Me Filtra dhe Emër Dinamik) ---
