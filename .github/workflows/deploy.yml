@@ -12,23 +12,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          script_stop: true # Ndalohet nëse ka gabim
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /root/app_shitjet
+            cd ~/app_iphone_shitjet
             git pull origin main
-            
-            # Vrit proceset e vjetra
-            sudo pkill -9 streamlit || true
             sudo pkill -9 python3 || true
-            
-            # Nise Streamlit pastër (përdorim rrugën që punoi më parë)
-            nohup python3 -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true > streamlit.log 2>&1 &
-            
-            echo "Deployment i suksesshëm dhe Streamlit u rinis!"
+            sudo pkill -9 streamlit || true
+            nohup python3 -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
