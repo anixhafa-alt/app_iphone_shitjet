@@ -5,7 +5,9 @@
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
+          script_stop: true # Ndalohet nëse ka gabim
           script: |
+    # komandat e tua këtu
             cd /root/app_shitjet
             git pull origin main
             
