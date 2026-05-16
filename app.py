@@ -291,9 +291,19 @@ def nderto_sidebar():
     if plani_zgjedhur != "Zgjedhje Manuale (Pa Ruajtje)":
         plani_ruajtur = st.session_state["libraria_dinamike"][plani_zgjedhur]
         if plani_ruajtur is not None:
-            st.session_state["start_d"] = plani_ruajtur["start"]
-            st.session_state["end_d"] = plani_ruajtur["end"]
-            st.session_state["rritja_val"] = plani_ruajtur["rritja"]
+            st.session_state["start_d"] = plani_ruajtur.get(
+                "start", df_raw["Data"].min().date()
+            )
+            st.session_state["end_d"] = plani_ruajtur.get(
+                "end", df_raw["Data"].max().date()
+            )
+            # .get("rritja", 10) thotë: nëse nuk ekziston "rritja", vendos vlerën 10 automatikisht, mos jep error
+            st.session_state["rritja_val"] = plani_ruajtur.get("rritja", 10)
+            st.session_state["date_input_key"] = (
+                st.session_state["start_d"],
+                st.session_state["end_d"],
+            )
+
             # Kjo linjë detyron kalendarin të marrë vlerat e reja live
             st.session_state["date_input_key"] = (
                 plani_ruajtur["start"],
