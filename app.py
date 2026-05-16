@@ -1782,7 +1782,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PËRFUNDUAR: SHITJET DITORE (Aks i Rreshtuar Milimetrikisht)
+# MODULI I PLOTË: SHITJET DITORE (Emra Realë Muajsh & Aks Perfekt)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1828,7 +1828,7 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSIONI PËR MARRJEN E DATA-S (I RREGULLUAR ME PARAMETËR) ---
+        # --- FUNKSIONI PËR MARRJEN E DATA-S ---
         def merr_asortimentin_ditore(df_filtri, vit, muaj):
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
@@ -1846,7 +1846,6 @@ elif page == "Shitjet Ditore":
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
         # --- PREGATITJA E BOSHTIT NUMERIK DHE KASKADËS ---
-        # Bosht numerik që kolona të qëndrojë fiks mbi numrin
         ditet_numerik = list(range(1, numri_diteve + 1))
         ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
 
@@ -1882,61 +1881,64 @@ elif page == "Shitjet Ditore":
             else 0
         )
 
+        # Dinamizimi i emrave të muajve për etiketat e metrikave
+        emri_muaj_aktual = f"{muajt_sq.get(muaj_aktual).upper()} {vit_aktual}"
+        emri_muaj_kaluar = f"{muajt_sq.get(para_muaj).upper()} {vit_para_muaj}"
+        emri_vit_kaluar = f"{muajt_sq.get(para_vit_muaj).upper()} {vit_para_vit}"
+
         c1.metric(
-            label=f"📦 Volumi {muajt_sq.get(muaj_aktual)} {vit_aktual}",
-            value=f"{totali_aktual:,.1f} kg",
+            label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.1f} kg"
         )
         c2.metric(
-            label=f"⏮️ vs Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
+            label=f"⏮️ vs {emri_muaj_kaluar}",
             value=f"{totali_para_muaj:,.1f} kg",
             delta=f"{ndryshimi_muaj:+.1f}%",
         )
         c3.metric(
-            label=f"⏳ vs Viti i Kaluar ({vit_para_vit})",
+            label=f"⏳ vs {emri_vit_kaluar}",
             value=f"{totali_para_vit:,.1f} kg",
             delta=f"{ndryshimi_vit:+.1f}%",
         )
         st.write("")
 
-        # --- NDËRTIMI I GRAFIKUT ME AKSE TË RRESHTUARA PERFEKT ---
+        # --- NDËRTIMI I GRAFIKUT ME EMRA REALË TE LEGJENDA ---
         fig = go.Figure()
 
-        # Vendosim gjerësinë e barabartë të kolonave
         gjeresia_kolones = 0.6
 
-        # 1. Viti i Kaluar (Teal i hapur / Mente - Gjysmë transparent)
+        # 1. Viti i Kaluar (Teal i hapur / Mente) - Emri real te "name"
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
                 y=y_para_vit,
                 base=base_para_vit,
-                name=f"Viti i Kaluar ({vit_para_vit})",
+                name=emri_vit_kaluar,
                 width=gjeresia_kolones,
                 marker_color="rgba(141, 211, 199, 0.55)",
                 textposition="none",
             )
         )
 
-        # 2. Muaji i Kaluar (Teal i Errët - Gjysmë transparent)
+        # 2. Muaji i Kaluar (Teal i Errët) - Emri real te "name"
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
                 y=y_para_muaj,
                 base=base_para_muaj,
-                name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
+                name=emri_muaj_kaluar,
                 width=gjeresia_kolones,
                 marker_color="rgba(0, 105, 92, 0.55)",
                 textposition="none",
             )
         )
 
-        # 3. Muaji Aktual (E Verdha Gold - Gjysmë transparent)
+        # 3. Muaji Aktual (E Verdha Gold) - Emri real te "name"
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
                 y=y_aktual,
                 base=base_aktual,
-                name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)})",
+                name=emri_muaj_aktual,
                 width=gjeresia_kolones,
                 marker_color="rgba(255, 193, 7, 0.65)",
                 text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
@@ -1944,23 +1946,20 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # RREGULLIMI FINAL I LAYOUT-IT (BOSHTI X)
+        # RREGULLIMI FINAL I LAYOUT-IT
         fig.update_layout(
-            title="Krahasimi Kumulativ i Mbivendosur (Aks i Rreshtuar Perfekt)",
+            title="Krahasimi Kumulativ i Mbivendosur (Periudhat me Emra Realë)",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
             xaxis=dict(
                 title="DITËT",
                 tickangle=-90,
-                type="linear",  # Konvertohet në linear numerik për të eliminuar distancat e grupuara
+                type="linear",
                 tickmode="array",
-                tickvals=ditet_numerik,  # Vendet ku do të vendosen ticks
-                ticktext=ditet_etiketa,  # Teksti që do të shfaqet fiks në qendër të kolonës (D 01, D 02)
-                range=[
-                    0.4,
-                    numri_diteve + 0.6,
-                ],  # Krijon pak hapësirë në anët e grafikut
+                tickvals=ditet_numerik,
+                ticktext=ditet_etiketa,
+                range=[0.4, numri_diteve + 0.6],
             ),
             yaxis=dict(title="SHITJET DITORE (KG)", gridcolor="#ffffff"),
             legend=dict(
@@ -1976,9 +1975,9 @@ elif page == "Shitjet Ditore":
             tabela_df = pd.DataFrame(
                 {
                     "Dita": ditet_etiketa,
-                    f"Muaji Aktual (kg)": y_aktual,
-                    f"Muaji i Kaluar (kg)": y_para_muaj,
-                    f"Viti i Kaluar (kg)": y_para_vit,
+                    f"{emri_muaj_aktual} (kg)": y_aktual,
+                    f"{emri_muaj_kaluar} (kg)": y_para_muaj,
+                    f"{emri_vit_kaluar} (kg)": y_para_vit,
                 }
             )
             st.dataframe(tabela_df, use_container_width=True, hide_index=True)
