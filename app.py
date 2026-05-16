@@ -1802,24 +1802,21 @@ elif page == "Shitjet Ditore":
         # Përcaktojmë kolonën e sasisë në KG
         kolona_kg = "Sasia" if "Sasia" in df_raw.columns else "Sasia_KG"
 
-        # --- KALKULIMI I PERIUDHAVE ---
-        vit_aktual, muaj_aktual = sot.year, sot.month
+        # --- KALKULIMI I PERIUDHAVE (I SIGURT NGA GABIMET) ---
+        vit_aktual = sot.year
+        muaj_aktual = sot.month
 
-        pare_muaj_date = sot.replace(day=1) - timedelta(days=1)
-        vit_para_muaj, para_muaj = pare_muaj_date.year, para_muaj_date.month
+        # Llogaritja e muajit të kaluar në mënyrë të thjeshtë
+        if muaj_aktual == 1:
+            para_muaj = 12
+            vit_para_muaj = vit_aktual - 1
+        else:
+            para_muaj = muaj_aktual - 1
+            vit_para_muaj = vit_aktual
 
-        vit_para_vit, para_vit_muaj = sot.year - 1, sot.month
-
-        # --- FILTRIMET E PËRGJITHSHËM ---
-        df_base = df_raw.copy()
-        if grup_sel != "Të gjitha":
-            df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
-
-        if agj_sel != "Të gjithë":
-            df_base = df_base[df_base["ForcaShitese"] == agj_sel]
-
-        if klientet_selected:
-            df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
+        # Llogaritja e vitit të kaluar
+        vit_para_vit = vit_aktual - 1
+        para_vit_muaj = muaj_aktual
 
         # --- FUNKSIONI PËR MARRJEN E DATA-S ---
         def merr_asortimentin_ditore(vit, muaj):
