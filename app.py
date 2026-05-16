@@ -225,7 +225,7 @@ if not df_raw.empty:
 
             if data_maksimale.date() == sot_data:
                 st.sidebar.success(
-                    f"🟢 Lidhja SQL: LIVE\n-Fat. e fundit: {koha_formatuar}"
+                    f"🟢 Lidhja SQL: LIVE\n- Fat. e fundit: {koha_formatuar}"
                 )
             else:
                 vonesa = (sot_data - data_maksimale.date()).days
