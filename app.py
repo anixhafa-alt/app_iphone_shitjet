@@ -1781,12 +1781,12 @@ elif page == "Route Plan AI":
                 "text/csv",
             )
 # ---------------------------------------------------------
-# MODULI I PËRFUNDUAR: SHITJET DITORE (Rreshtim Perfekt në Aks)
+# MODULI I PLOTË: SHITJET DITORE (Pa Gabime & Mbivendosje 100%)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
     import plotly.graph_objects as go
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     sot = datetime.now()
 
@@ -1806,7 +1806,6 @@ elif page == "Shitjet Ditore":
         vit_aktual = sot.year
         muaj_aktual = sot.month
 
-        # Llogaritja e muajit të kaluar në mënyrë të thjeshtë
         if muaj_aktual == 1:
             para_muaj = 12
             vit_para_muaj = vit_aktual - 1
@@ -1814,23 +1813,35 @@ elif page == "Shitjet Ditore":
             para_muaj = muaj_aktual - 1
             vit_para_muaj = vit_aktual
 
-        # Llogaritja e vitit të kaluar
         vit_para_vit = vit_aktual - 1
         para_vit_muaj = muaj_aktual
 
-        # --- FUNKSIONI PËR MARRJEN E DATA-S ---
-        def merr_asortimentin_ditore(vit, muaj):
-            df_p = df_base[
-                (df_base["Data"].dt.year == vit) & (df_base["Data"].dt.month == muaj)
+        # --- FILTRIMET E PËRGJITHSHËM ---
+        df_base = df_raw.copy()
+        if grup_sel != "Të gjitha":
+            df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
+
+        if agj_sel != "Të gjithë":
+            df_base = df_base[df_base["ForcaShitese"] == agj_sel]
+
+        if klientet_selected:
+            df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
+
+        # --- FUNKSIONI PËR MARRJEN E DATA-S (I RREGULLUAR ME PARAMETËR) ---
+        def merr_asortimentin_ditore(df_filtri, vit, muaj):
+            df_p = df_filtri[
+                (df_filtri["Data"].dt.year == vit)
+                & (df_filtri["Data"].dt.month == muaj)
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
                 return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
             return {}
 
-        data_aktual = merr_asortimentin_ditore(vit_aktual, muaj_aktual)
-        data_para_muaj = merr_asortimentin_ditore(vit_para_muaj, para_muaj)
-        data_para_vit = merr_asortimentin_ditore(vit_para_vit, para_vit_muaj)
+        # Kalojmë df_base si parametër që të eliminohet NameError
+        data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
+        data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
+        data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
 
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
@@ -1895,7 +1906,7 @@ elif page == "Shitjet Ditore":
                 y=y_para_vit,
                 base=base_para_vit,
                 name=f"Viti i Kaluar ({vit_para_vit})",
-                offsetgroup="kaskada",  # Grupi i përbashkët që i mban në të njëjtin aks qendror
+                offsetgroup="kaskada",
                 offset=0,
                 marker_color="rgba(141, 211, 199, 0.55)",
                 textposition="none",
@@ -1909,7 +1920,7 @@ elif page == "Shitjet Ditore":
                 y=y_para_muaj,
                 base=base_para_muaj,
                 name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
-                offsetgroup="kaskada",  # Grupi i përbashkët
+                offsetgroup="kaskada",
                 offset=0,
                 marker_color="rgba(0, 105, 92, 0.55)",
                 textposition="none",
@@ -1923,7 +1934,7 @@ elif page == "Shitjet Ditore":
                 y=y_aktual,
                 base=base_aktual,
                 name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)})",
-                offsetgroup="kaskada",  # Grupi i përbashkët
+                offsetgroup="kaskada",
                 offset=0,
                 marker_color="rgba(255, 193, 7, 0.65)",
                 text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
