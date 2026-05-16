@@ -660,23 +660,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
     # st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
-    st.markdown(
-        f"""
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1a237e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="12" cy="12" r="6"></circle>
-                <circle cx="12" cy="12" r="2"></circle>
-            </svg>
-            
-            <h1 style="font-size: 2.3rem; font-weight: 700; color: #1a237e;">
-                Plani: {muajt_sq.get(sot.month)} {sot.year}
-            </h1>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.divider()
+    st.title(f"Plani: {muajt_sq.get(sot.month)} {sot.year}")
 
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
