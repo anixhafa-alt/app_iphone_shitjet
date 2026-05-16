@@ -235,6 +235,36 @@ date_range = st.sidebar.date_input(
     key="date_input_key",
 )
 
+# Kontrolli i Datës së Fundit të Përditësimit (Versioni i Korrigjuar)
+if not df_raw.empty:
+    # Gjejmë emrin e saktë të kolonës së datës (qoftë 'data', 'DATA' apo 'Data')
+    kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
+
+    if kolona_date:
+        emer_kolone = kolona_date[0]
+        # Sigurohemi që të jetë format datetime
+        datet_konvertuara = pd.to_datetime(df_raw[emer_kolone], errors="coerce")
+        data_maksimale = datet_konvertuara.max()
+
+        sot_data = datetime.now().date()
+
+        st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
+
+        if pd.notnull(data_maksimale):
+            if data_maksimale.date() == sot_data:
+                st.sidebar.success(
+                    f"🟢 Lidhja SQL: LIVE\nTë dhënat: {data_maksimale.strftime('%d/%m/%Y')}"
+                )
+            else:
+                vonesa = (sot_data - data_maksimale.date()).days
+                st.sidebar.warning(
+                    f"🟡 Lidhja SQL: OK\n"
+                    f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
+                    f"Vonesa: {vonesa} ditë pa faturime."
+                )
+    else:
+        st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
+
 # Përditësojmë session_state kur ndryshon data
 if isinstance(date_range, tuple) and len(date_range) == 2:
     st.session_state["start_d"], st.session_state["end_d"] = date_range
@@ -297,35 +327,6 @@ with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
             "✅ Në këtë modul, janë përfshirë të gjithë artikujt për të mbajtur volumin e kategorisë."
         )
 
-# Kontrolli i Datës së Fundit të Përditësimit (Versioni i Korrigjuar)
-if not df_raw.empty:
-    # Gjejmë emrin e saktë të kolonës së datës (qoftë 'data', 'DATA' apo 'Data')
-    kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
-
-    if kolona_date:
-        emer_kolone = kolona_date[0]
-        # Sigurohemi që të jetë format datetime
-        datet_konvertuara = pd.to_datetime(df_raw[emer_kolone], errors="coerce")
-        data_maksimale = datet_konvertuara.max()
-
-        sot_data = datetime.now().date()
-
-        st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
-
-        if pd.notnull(data_maksimale):
-            if data_maksimale.date() == sot_data:
-                st.sidebar.success(
-                    f"🟢 Lidhja SQL: LIVE\nTë dhënat: {data_maksimale.strftime('%d/%m/%Y')}"
-                )
-            else:
-                vonesa = (sot_data - data_maksimale.date()).days
-                st.sidebar.warning(
-                    f"🟡 Lidhja SQL: OK\n"
-                    f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
-                    f"Vonesa: {vonesa} ditë pa faturime."
-                )
-    else:
-        st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
 
 # --- FUNDI I SIDEBAR ---
 
