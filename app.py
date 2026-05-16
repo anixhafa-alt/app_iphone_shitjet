@@ -224,7 +224,7 @@ if not df_raw.empty:
             koha_formatuar = data_maksimale.strftime("%d/%m/%Y %H:%M:%S")
 
             if data_maksimale.date() == sot_data:
-                st.sidebar.success(f"🟢 Lidhja SQL: LIVE\n{koha_formatuar}")
+                st.sidebar.success(f"🟢 Lidhja SQL: LIVE\n\n{koha_formatuar}")
             else:
                 vonesa = (sot_data - data_maksimale.date()).days
                 st.sidebar.warning(
