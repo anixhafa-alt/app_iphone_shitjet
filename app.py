@@ -221,10 +221,12 @@ if not df_raw.empty:
 
         if pd.notnull(data_maksimale):
             # Formati i ri përfshin Datën dhe Orën (%d/%m/%Y %H:%M)
-            koha_formatuar = data_maksimale.strftime("%d/%m/%Y veshur në %H:%M")
+            koha_formatuar = data_maksimale.strftime("%d/%m/%Y %H:%M:%S")
 
             if data_maksimale.date() == sot_data:
-                st.sidebar.success(f"🟢 Lidhja SQL: LIVE\n\nFundit: {koha_formatuar}")
+                st.sidebar.success(
+                    f"🟢 Lidhja SQL: LIVE\n\nFatura e fundit: {koha_formatuar}"
+                )
             else:
                 vonesa = (sot_data - data_maksimale.date()).days
                 st.sidebar.warning(
