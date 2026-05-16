@@ -206,7 +206,7 @@ if df_raw is not None and df_link is not None:
             df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
         )
 
-# Kontrolli i Datës së Fundit të Përditësimit dhe Butoni i Rifreskimit
+# Kontrolli i Datës dhe Orës së Fundit të Përditësimit
 if not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
 
@@ -220,28 +220,27 @@ if not df_raw.empty:
         st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
 
         if pd.notnull(data_maksimale):
+            # Formati i ri përfshin Datën dhe Orën (%d/%m/%Y %H:%M)
+            koha_formatuar = data_maksimale.strftime("%d/%m/%Y veshur në %H:%M")
+
             if data_maksimale.date() == sot_data:
-                st.sidebar.success(
-                    f"🟢 Lidhja SQL: LIVE\nTë dhënat: {data_maksimale.strftime('%d/%m/%Y')}"
-                )
+                st.sidebar.success(f"🟢 Lidhja SQL: LIVE\n\nFundit: {koha_formatuar}")
             else:
                 vonesa = (sot_data - data_maksimale.date()).days
                 st.sidebar.warning(
-                    f"🟡 Lidhja SQL: OK\n"
-                    f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
+                    f"🟡 Lidhja SQL: OK\n\n"
+                    f"Përditësimi i fundit:\n{koha_formatuar}\n\n"
                     f"Vonesa: {vonesa} ditë pa faturime."
                 )
 
-        # --- BUTONI I RI PËR REFRESH TË PLOTË ---
+        # --- BUTONI PËR REFRESH TË PLOTË ---
         st.sidebar.markdown("---")
         if st.sidebar.button(
             "🔄 Rifresko nga SQL Server",
             use_container_width=True,
             help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore.",
         ):
-            # Pastron të gjithë cache-in e leximit të të dhënave
             st.cache_data.clear()
-            # Riberbën rregullimin e faqes (Reruns the app) për të bërë query-n e ri
             st.rerun()
 
     else:
