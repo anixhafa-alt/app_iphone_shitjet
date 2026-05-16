@@ -660,6 +660,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
     # st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
+    # Zëvendëso st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}") me këtë:
     st.markdown(
         f"""
         <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px; margin-bottom: 10px;">
