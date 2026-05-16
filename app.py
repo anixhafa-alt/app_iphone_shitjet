@@ -1782,7 +1782,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (100% i Mbrojtur nga TypeError)
+# MODULI I PËRFUNDUAR: SHITJET DITORE (Llogaritja 100% në KG)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1790,6 +1790,7 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
+    # Data fiks e aplikacionit
     sot = datetime(2026, 5, 16)
 
     st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
@@ -1801,27 +1802,21 @@ elif page == "Shitjet Ditore":
 
     if df_raw is not None and not df_raw.empty:
 
-        # 🔍 FILTRIMI I KOLONAVE NUMERIKE QË TË ELIMINOHET TYPEERROR
-        # Marrim vetëm kolonat që janë numra (p.sh. Sasia, Sasia_KG, Vlera, etj.)
-        kolonat_numerike = df_raw.select_dtypes(include=["number"]).columns.tolist()
-
-        with st.expander("🔍 KONTROLLI I EMRAVE TË KOLONAVE (Zgjedhja e KG vs Copë)"):
-            st.info(
-                "Këtu shfaqen vetëm kolonat me numra për të shmangur bllokimin e aplikacionit."
-            )
-
-            # Gjejmë një indeks të përshtatshëm fillestar
-            if "Sasia_KG" in kolonat_numerike:
-                default_idx = kolonat_numerike.index("Sasia_KG")
-            elif "Sasia" in kolonat_numerike:
-                default_idx = kolonat_numerike.index("Sasia")
-            else:
-                default_idx = 0
-
-            kolona_kg = st.selectbox(
-                "Zgjidh kolonën e saktë të Kilogrameve (KG):",
-                options=kolonat_numerike,
-                index=default_idx,
+        # --- DETEKTIMI AUTOMATIK I KOLONËS SË KG (JO COPË) ---
+        # Nëse kolona e kilogramëve në databazë ka një emër tjetër (p.sh. 'Pesha_Neto'), ndryshoje këtu poshtë:
+        if "Sasia_KG" in df_raw.columns:
+            kolona_kg = "Sasia_KG"
+        elif "SasiaKG" in df_raw.columns:
+            kolona_kg = "SasiaKG"
+        elif "Pesha" in df_raw.columns:
+            kolona_kg = "Pesha"
+        else:
+            # Nëse nuk gjen asnjë nga të lartpërmendurat, merr kolonën e dytë numerike ose 'Sasia'
+            kolonat_num = df_raw.select_dtypes(include=["number"]).columns.tolist()
+            kolona_kg = (
+                "Sasia_KG"
+                if "Sasia_KG" in kolonat_num
+                else (kolonat_num[1] if len(kolonat_num) > 1 else "Sasia")
             )
 
         # --- PERIUDHAT FIKS SI NË EXCEL ---
@@ -1842,7 +1837,7 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSIONI I SIGURUAR NGA GABIMET ---
+        # --- FUNKSIONI I MARRJES SË TË DHËNAVE NË KG ---
         def merr_asortimentin_ditore(df_filtri, vit, muaj):
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
@@ -1850,7 +1845,7 @@ elif page == "Shitjet Ditore":
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
-                # Sigurohemi që kolona po mblidhet si numër float, duke evituar çdo gabim tipi
+                # Detyrojmë konvertimin në numër që të mos kemi asnjë gabim tipi
                 df_p[kolona_kg] = pd.to_numeric(
                     df_p[kolona_kg], errors="coerce"
                 ).fillna(0)
@@ -1882,7 +1877,7 @@ elif page == "Shitjet Ditore":
         base_para_muaj, y_para_muaj = llogarit_kaskaden(data_para_muaj)
         base_para_vit, y_para_vit = llogarit_kaskaden(data_para_vit)
 
-        # --- LLOGARITJA E METRIKAVE ---
+        # --- LLOGARITJA E METRIKAVE TOTALE ---
         totali_aktual = sum(y_aktual)
         totali_para_muaj = sum(y_para_muaj)
         totali_para_vit = sum(y_para_vit)
@@ -1918,10 +1913,11 @@ elif page == "Shitjet Ditore":
         )
         st.write("")
 
-        # --- GRAFIKU ---
+        # --- NDËRTIMI I GRAFIKUT FINAL ---
         fig = go.Figure()
         gjeresia_kolones = 0.6
 
+        # 1. PRILL 2025 (Teal i hapur - Gjysmë transparent)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1934,6 +1930,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
+        # 2. MARS 2026 (Teal i Errët - Gjysmë transparent)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1946,6 +1943,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
+        # 3. MAJ 2026 (E Verdha Gold - Gjysmë transparent)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1959,8 +1957,9 @@ elif page == "Shitjet Ditore":
             )
         )
 
+        # Layout me rreshtim milimetrik në aks
         fig.update_layout(
-            title="Krahasimi Kumulativ i Mbivendosur",
+            title="Krahasimi Kumulativ i Mbivendosur (Volumi në KG)",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
