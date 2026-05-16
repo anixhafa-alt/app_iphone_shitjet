@@ -282,36 +282,51 @@ def nderto_sidebar():
 
     # Thirrja e librarisë që reziston refresh-in
     libraria_p = merr_librarine_permanente()
-
-    # --- LIBRARIA DINAMIKE ---
-    st.sidebar.subheader("📂 Libraria e Planeve")
-
     opsionet_lib = list(libraria_p.keys())
 
-    # Zgjedhja e një plani të ruajtur më parë
-    plani_zgjedhur = st.sidebar.selectbox(
-        "Thirr një plan të ruajtur:", options=opsionet_lib, key="selectbox_libraria_key"
-    )
+    # --- ZGJIDHJA E ERRORIT ---
+    # Kontrollojmë nëse përdoruesi sapo ka thirrur një plan që duhet ngarkuar
+    if (
+        "plan_per_te_ngarkuar" in st.session_state
+        and st.session_state["plan_per_te_ngarkuar"] is not None
+    ):
+        emri_planit = st.session_state["plan_per_te_ngarkuar"]
+        plani_ruajtur = libraria_p.get(emri_planit)
 
-    # NËSE THIRRET NJË PLAN: Ndryshojmë vlerat dhe çlirojmë menjëherë kontrollin e metrikave
-    if plani_zgjedhur != "Zgjedhje Manuale (Pa Ruajtje)":
-        plani_ruajtur = libraria_p[plani_zgjedhur]
         if plani_ruajtur is not None:
             # 1. Përditësojmë vlerat e brendshme të sesionit
             st.session_state["start_d"] = plani_ruajtur["start"]
             st.session_state["end_d"] = plani_ruajtur["end"]
             st.session_state["rritja_val"] = plani_ruajtur["rritja"]
 
-            # 2. Detyrojmë widget-et vizuale të marrin vlerat e planit të ruajtur
+            # 2. Detyrojmë widget-et e tjera të marrin këto vlerat
             st.session_state["date_input_key"] = (
                 plani_ruajtur["start"],
                 plani_ruajtur["end"],
             )
             st.session_state["rritja_input"] = plani_ruajtur["rritja"]
 
-            # 3. HIJA INTELEGJENTE: E kthejmë selectbox-in te manual që metrikat dhe % të mbeten të lidhura live!
-            st.session_state["selectbox_libraria_key"] = "Zgjedhje Manuale (Pa Ruajtje)"
-            st.rerun()
+        # Pasi u krye ngarkimi, e pastrojmë sinjalizuesin që mos të futemi në loop vlerash
+        st.session_state["plan_per_te_ngarkuar"] = None
+
+    # --- LIBRARIA DINAMIKE ---
+    st.sidebar.subheader("📂 Libraria e Planeve")
+
+    # Funksioni i ri i dëgjimit (Callback) kur përdoruesi ndryshon selectbox-in
+    def on_change_libraria():
+        zgjedhja = st.session_state["temp_selectbox_key"]
+        if zgjedhja != "Zgjedhje Manuale (Pa Ruajtje)":
+            # Ndizet sinjalizuesi që rreshtat më lart të ngarkojnë datat dhe përqindjen
+            st.session_state["plan_per_te_ngarkuar"] = zgjedhja
+
+    # Ndërtojmë selectbox-in që qëndron gjithmonë te "Zgjedhje Manuale (Pa Ruajtje)" (Index=0)
+    st.sidebar.selectbox(
+        "Thirr një plan të ruajtur:",
+        options=opsionet_lib,
+        index=0,
+        key="temp_selectbox_key",
+        on_change=on_change_libraria,
+    )
 
     # 2. Ndërtimi i Kalendarit (Gjithmonë aktiv dhe i lidhur live me metrikat)
     date_range = st.sidebar.date_input(
