@@ -18,7 +18,7 @@ muajt_sq = {
     2: "Shkurt",
     3: "Mars",
     4: "Prill",
-    5: "Majii",
+    5: "Maj",
     6: "Qershor",
     7: "Korrik",
     8: "Gusht",
