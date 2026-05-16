@@ -297,26 +297,35 @@ with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
             "✅ Në këtë modul, janë përfshirë të gjithë artikujt për të mbajtur volumin e kategorisë."
         )
 
-# Kontrolli i Datës së Fundit të Përditësimit
+# Kontrolli i Datës së Fundit të Përditësimit (Versioni i Korrigjuar)
 if not df_raw.empty:
-    data_maksimale = df_raw["data"].max()
-    sot_data = datetime.now().date()
+    # Gjejmë emrin e saktë të kolonës së datës (qoftë 'data', 'DATA' apo 'Data')
+    kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
 
-    # Krijojmë një tregues në Sidebar ose në krye të faqes
-    st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
+    if kolona_date:
+        emer_kolone = kolona_date[0]
+        # Sigurohemi që të jetë format datetime
+        datet_konvertuara = pd.to_datetime(df_raw[emer_kolone], errors="coerce")
+        data_maksimale = datet_konvertuara.max()
 
-    if data_maksimale.date() == sot_data:
-        st.sidebar.success(
-            f"Lidhja SQL: LIVE \nTë dhënat janë të sotme: {data_maksimale.strftime('%d/%m/%Y')}"
-        )
+        sot_data = datetime.now().date()
+
+        st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
+
+        if pd.notnull(data_maksimale):
+            if data_maksimale.date() == sot_data:
+                st.sidebar.success(
+                    f"🟢 Lidhja SQL: LIVE\nTë dhënat: {data_maksimale.strftime('%d/%m/%Y')}"
+                )
+            else:
+                vonesa = (sot_data - data_maksimale.date()).days
+                st.sidebar.warning(
+                    f"🟡 Lidhja SQL: OK\n"
+                    f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
+                    f"Vonesa: {vonesa} ditë pa faturime."
+                )
     else:
-        ditest_vonesa = (sot_data - data_maksimale.date()).days
-        st.sidebar.warning(
-            f"Lidhja SQL: OK (Asnjë gabim)\n"
-            f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
-            f"Vonesa: {ditest_vonesa} ditë pa faturime të reja."
-        )
-
+        st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
 
 # --- FUNDI I SIDEBAR ---
 
