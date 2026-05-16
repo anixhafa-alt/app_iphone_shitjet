@@ -265,7 +265,7 @@ def nderto_sidebar():
         if "rritja_val" not in st.session_state:
             st.session_state["rritja_val"] = 10
 
-        # Krijimi i Librarisë Dinamike në Session State që të mos fshihen kur rifreskohet faqja
+        # Krijimi i Librarisë Dinamike në Session State
         if "libraria_dinamike" not in st.session_state:
             st.session_state["libraria_dinamike"] = {
                 "Zgjedhje Manuale (Pa Ruajtje)": None
@@ -280,17 +280,20 @@ def nderto_sidebar():
     # --- LIBRARIA DINAMIKE ---
     st.sidebar.subheader("📂 Libraria e Planeve")
 
+    # Lista e opsioneve të disponueshme për selectbox
+    opsionet_lib = list(st.session_state["libraria_dinamike"].keys())
+
     # Zgjedhja e një plani të ruajtur më parë
     plani_zgjedhur = st.sidebar.selectbox(
-        "Thirr një plan të ruajtur:",
-        options=list(st.session_state["libraria_dinamike"].keys()),
+        "Thirr një plan të ruajtur:", options=opsionet_lib, key="selectbox_libraria_key"
     )
 
     # Nëse përdoruesi zgjedh një plan të ruajtur, përditësojmë datat e kalendarit automatikisht
     if plani_zgjedhur != "Zgjedhje Manuale (Pa Ruajtje)":
         periudha_ruajtur = st.session_state["libraria_dinamike"][plani_zgjedhur]
-        st.session_state["start_d"] = periudha_ruajtur["start"]
-        st.session_state["end_d"] = periudha_ruajtur["end"]
+        if periudha_ruajtur is not None:
+            st.session_state["start_d"] = periudha_ruajtur["start"]
+            st.session_state["end_d"] = periudha_ruajtur["end"]
 
     # 2. Ndërtimi i Kalendarit (Gjithmonë aktiv për ndryshime)
     date_range = st.sidebar.date_input(
@@ -303,22 +306,50 @@ def nderto_sidebar():
     if isinstance(date_range, tuple) and len(date_range) == 2:
         st.session_state["start_d"], st.session_state["end_d"] = date_range
 
-    # --- KRIJIMI DHE RUAJTJA E NJË PLANI TË RI ---
-    with st.sidebar.expander("💾 Ruaj këtë periudhë në Librari"):
+    # --- MENAXHIMI I LIBRARISË (RUAJTJE / FSHIRJE) ---
+    with st.sidebar.expander("💾 Menaxho Librarinë (Ruaj / Fshi)"):
+        # Pjesa A: Ruajtja e një plani të ri
+        st.markdown("**Shto Plan të Ri**")
         emri_planit_ri = st.text_input(
             "Emri i planit (psh: Maj 2026 - R1):", key="emri_ri_txt"
         )
-        if st.button("Ruaj Planin", use_container_width=True):
+        if st.button("➕ Ruaj Planin", use_container_width=True):
             if emri_planit_ri.strip() != "":
-                # Ruajmë datat aktuale që janë zgjedhur te kalendari më lart
                 st.session_state["libraria_dinamike"][emri_planit_ri] = {
                     "start": st.session_state["start_d"],
                     "end": st.session_state["end_d"],
                 }
                 st.success(f"✅ '{emri_planit_ri}' u ruajt!")
-                st.rerun()  # Rifreskon faqen që plani i ri të shfaqet menjëherë te selectbox
+                st.rerun()
             else:
                 st.error("Ju lutem vendosni një emër për planin.")
+
+        st.divider()
+
+        # Pjesa B: Fshirja manuale e planeve të ruajtura
+        st.markdown("**Fshi një Plan ekzistues**")
+        plane_per_fshirje = [
+            p for p in opsionet_lib if p != "Zgjedhje Manuale (Pa Ruajtje)"
+        ]
+
+        if plane_per_fshirje:
+            plani_fshirjes = st.selectbox(
+                "Zgjidh cilin dëshiron të fshish:",
+                options=plane_per_fshirje,
+                key="fshirje_sel_key",
+            )
+            if st.button(
+                "❌ Fshi Planin e Zgjedhur", use_container_width=True, type="secondary"
+            ):
+                del st.session_state["libraria_dinamike"][plani_fshirjes]
+                st.warning(f"🗑️ '{plani_fshirjes}' u fshi nga libraria!")
+                # Resetojmë selectbox kryesor tek opsioni i parë standard
+                st.session_state["selectbox_libraria_key"] = (
+                    "Zgjedhje Manuale (Pa Ruajtje)"
+                )
+                st.rerun()
+        else:
+            st.caption("Nuk ka plane të ruajtura për të fshirë.")
 
     # --- FILTRAT E TJERË ---
     rritja = st.sidebar.number_input(
@@ -380,7 +411,6 @@ def nderto_sidebar():
                 "✅ Në këtë modul, janë përfshirë të gjithë artikujt për të mbajtur volumin e kategorisë."
             )
 
-    # Kthejmë vlerat që i duhen pjesës tjetër të kodit
     return start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected
 
 
