@@ -1781,143 +1781,9 @@ elif page == "Route Plan AI":
                 "text/csv",
             )
 # ---------------------------------------------------------
-# MODULI I RI: SHITJET DITORE (Kaskada Krahasuese Overlay me Gjerësi të Ndryshme)
+# MODULI I RI: SHITJET DITORE (Kaskada Identike të Mbivendosura - 100% si në Foto)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
-    import calendar
-    import plotly.graph_objects as go
-    from datetime import datetime, timedelta
-
-    sot = datetime.now()
-
-    # 1. Titulli i faqes i personalizuar dinamikisht
-    st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
-    st.markdown(
-        f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
-        unsafe_allow_html=True,
-    )
-    st.divider()
-
-    if df_raw is not None and not df_raw.empty:
-        # Përcaktojmë kolonën e sasisë në KG
-        kolona_kg = "Sasia" if "Sasia" in df_raw.columns else "Sasia_KG"
-
-        # --- KALKULIMI I PERIUDHAVE ---
-        vit_aktual, muaj_aktual = sot.year, sot.month
-
-        pare_muaj_date = sot.replace(day=1) - timedelta(days=1)
-        vit_para_muaj, para_muaj = pare_muaj_date.year, pare_muaj_date.month
-
-        vit_para_vit, para_vit_muaj = sot.year - 1, sot.month
-
-        # --- FILTRAMET E PËRGJITHSHËM ---
-        df_base = df_raw.copy()
-        if grup_sel != "Të gjitha":
-            df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
-
-        if agj_sel != "Të gjithë":
-            df_base = df_base[df_base["ForcaShitese"] == agj_sel]
-
-        if klientet_selected:
-            df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
-
-        # --- FUNKSIONI PËR MARRJEN E DATA-S ---
-        def merr_asortimentin_ditore(vit, muaj):
-            df_p = df_base[
-                (df_base["Data"].dt.year == vit) & (df_base["Data"].dt.month == muaj)
-            ].copy()
-            if not df_p.empty:
-                df_p["Dita_Numri"] = df_p["Data"].dt.day
-                return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
-            return {}
-
-        data_aktual = merr_asortimentin_ditore(vit_aktual, muaj_aktual)
-        data_para_muaj = merr_asortimentin_ditore(vit_para_muaj, para_muaj)
-        data_para_vit = merr_asortimentin_ditore(vit_para_vit, para_vit_muaj)
-
-        _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
-
-        # --- PREGATITJA E BOSHTIT X DHE Y ---
-        ditet_x = [f"D {d:02d}" for d in range(1, numri_diteve + 1)]
-        y_aktual = [data_aktual.get(d, 0.0) for d in range(1, numri_diteve + 1)]
-        y_para_muaj = [data_para_muaj.get(d, 0.0) for d in range(1, numri_diteve + 1)]
-        y_para_vit = [data_para_vit.get(d, 0.0) for d in range(1, numri_diteve + 1)]
-
-        # --- MULTI-WATERFALL CHART ME OVERLAY DHE TRANSPARENCË ---
-        fig = go.Figure()
-
-        # 1. Viti i Kaluar (Kolona më e gjerë në sfond, shumë transparente)
-        fig.add_trace(
-            go.Waterfall(
-                name=f"Viti i Kaluar ({vit_para_vit})",
-                orientation="v",
-                measure=["relative"] * numri_diteve,
-                x=ditet_x,
-                y=y_para_vit,
-                width=0.8,  # Gjerësia maksimale
-                textposition="none",
-                increasing={
-                    "marker": {"color": "rgba(117, 117, 117, 0.25)"}
-                },  # Gri shumë e hapur
-                connector={"line": {"color": "rgba(0,0,0,0)"}},
-            )
-        )
-
-        # 2. Muaji i Kaluar (Kolona e mesme, gjysmë transparente)
-        fig.add_trace(
-            go.Waterfall(
-                name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
-                orientation="v",
-                measure=["relative"] * numri_diteve,
-                x=ditet_x,
-                y=y_para_muaj,
-                width=0.6,  # Më e ngushtë se viti i kaluar
-                textposition="none",
-                increasing={
-                    "marker": {"color": "rgba(255, 145, 0, 0.45)"}
-                },  # Portokalli transparente
-                connector={"line": {"color": "rgba(0,0,0,0)"}},
-            )
-        )
-
-        # 3. Muaji Aktual (Kolona më e ngushtë përpara, e plotë pa transparencë)
-        fig.add_trace(
-            go.Waterfall(
-                name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)})",
-                orientation="v",
-                measure=["relative"] * numri_diteve,
-                x=ditet_x,
-                y=y_aktual,
-                width=0.4,  # Më e ngushta, që të qëndrojë në qendër dhe mos të fshehë të tjerat
-                text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
-                textposition="outside",
-                increasing={
-                    "marker": {"color": "rgba(26, 35, 126, 0.95)"}
-                },  # Blu e Errët e plotë
-                connector={"line": {"color": "rgba(0,0,0,0)"}},
-            )
-        )
-
-        # RREGULLIMI I FAZËS VIZUALE
-        fig.update_layout(
-            title="Krahasimi Kumulativ i Mbivendosur (Gjerësi Dinamike dhe Transparencë)",
-            barmode="overlay",  # Mbivendosja brenda së njëjtës datë
-            plot_bgcolor="#f8f9fa",
-            height=650,
-            xaxis=dict(
-                title="DITËT E MUAJIT",
-                tickangle=-90,
-                type="category",
-                gridcolor="#ffffff",
-            ),
-            yaxis=dict(title="SASIA (KG)", gridcolor="#ffffff"),
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
-            ),
-            hovermode="x unified",
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
     import calendar
     import plotly.graph_objects as go
     from datetime import datetime, timedelta
@@ -2010,10 +1876,13 @@ elif page == "Shitjet Ditore":
         )
         st.write("")
 
-        # --- NDËRTIMI I OVERLAY WATERFALL CHART ---
+        # --- NDËRTIMI I GRAPH-IT ME MBIVENDOSJE PERFEKTE ---
         fig = go.Figure()
 
-        # 1. Kaskada 1: Viti i Kaluar (Në Sfond - Më pak transparente)
+        # Gjendja e përbashkët e gjerësisë për të gjithë grafikët
+        gjeresia_kolones = 0.6
+
+        # 1. Grafiku i parë: Viti i Kaluar (Gjysmë transparent)
         fig.add_trace(
             go.Waterfall(
                 name=f"Viti i Kaluar ({vit_para_vit})",
@@ -2021,15 +1890,16 @@ elif page == "Shitjet Ditore":
                 measure=["relative"] * numri_diteve,
                 x=ditet_x,
                 y=y_para_vit,
-                textposition="none",  # Heqim tekstet e brendshme që mos të ngatërrohen vlerat
+                width=gjeresia_kolones,  # Gjerësi ekzaktesisht e barabartë
+                textposition="none",
                 increasing={
-                    "marker": {"color": "rgba(38, 166, 154, 0.4)"}
-                },  # Ngjyrë mente/teal me transparencë
+                    "marker": {"color": "rgba(38, 166, 154, 0.55)"}
+                },  # Jeshile/Teal gjysmë transparente
                 connector={"line": {"color": "rgba(0,0,0,0)"}},
             )
         )
 
-        # 2. Kaskada 2: Muaji i Kaluar (Në Sfond - Transparente)
+        # 2. Grafiku i dytë: Muaji i Kaluar (Gjysmë transparent)
         fig.add_trace(
             go.Waterfall(
                 name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
@@ -2037,15 +1907,16 @@ elif page == "Shitjet Ditore":
                 measure=["relative"] * numri_diteve,
                 x=ditet_x,
                 y=y_para_muaj,
+                width=gjeresia_kolones,  # Gjerësi ekzaktesisht e barabartë
                 textposition="none",
                 increasing={
-                    "marker": {"color": "rgba(255, 145, 0, 0.4)"}
-                },  # Portokalli transparente
+                    "marker": {"color": "rgba(255, 145, 0, 0.55)"}
+                },  # Portokalli gjysmë transparente
                 connector={"line": {"color": "rgba(0,0,0,0)"}},
             )
         )
 
-        # 3. Kaskada 3: Muaji Aktual (Përpara - E plotë pa transparencë)
+        # 3. Grafiku i tretë: Muaji Aktual (Gjysmë transparent që të dallohen të tjerat poshtë tij)
         fig.add_trace(
             go.Waterfall(
                 name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)})",
@@ -2053,20 +1924,21 @@ elif page == "Shitjet Ditore":
                 measure=["relative"] * numri_diteve,
                 x=ditet_x,
                 y=y_aktual,
+                width=gjeresia_kolones,  # Gjerësi ekzaktesisht e barabartë
                 text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
-                textposition="outside",  # Vlerat vetëm për muajin korrent sipër shtyllës
+                textposition="outside",  # Vlerat vetëm sipër shtyllës që të mos bëhet rrëmujë brenda
                 increasing={
-                    "marker": {"color": "rgba(26, 35, 126, 0.95)"}
-                },  # Blu e Errët e plotë
+                    "marker": {"color": "rgba(26, 35, 126, 0.6)"}
+                },  # Blu e Errët gjysmë transparente
                 connector={"line": {"color": "rgba(0,0,0,0)"}},
             )
         )
 
-        # RREGULLIMI I PAMJES SIPAS FOTOS SË EXCELIT
+        # RREGULLIMI I AMBIENTIT (OVERLAY)
         fig.update_layout(
-            title="Krahasimi i Kaskadave Ditore (Stili Overlay Transparent)",
-            barmode="overlay",  # <-- Kjo i detyron të nisin të tria nga e njëjta bazë zero dhe të mbivendosen vizualisht!
-            plot_bgcolor="#eef2f3",  # Sfond i lehtë gri/blu si në foton tënde
+            title="Krahasimi i Kaskadave Ditore (Identike dhe të Mbivendosura)",
+            barmode="overlay",  # I vendos fiks në të njëjtin rresht/bosht vertikal
+            plot_bgcolor="#eef2f3",  # Sfondi i lehtë si në Excel-in tuaj
             height=650,
             xaxis=dict(
                 title="DITET", tickangle=-90, type="category", gridcolor="#ffffff"
@@ -2075,7 +1947,7 @@ elif page == "Shitjet Ditore":
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
             ),
-            hovermode="x unified",
+            hovermode="x unified",  # Kur kalon mausin tregon vlerat e të 3 muajve njëkohësisht
         )
 
         st.plotly_chart(fig, use_container_width=True)
