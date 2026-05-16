@@ -1828,21 +1828,30 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSIONI PËR MARRJEN E DATA-S ---
+        # --- FUNKSIONI PËR MARRJEN E DATA-S (I RREGULLUAR PËR SAKTËSI) ---
         def merr_asortimentin_ditore(df_filtri, vit, muaj):
+            # Sigurohemi që data është në formatin e duhur
+            df_filtri = df_filtri.copy()
+            df_filtri["Data"] = pd.to_datetime(df_filtri["Data"], errors="coerce")
+
+            # Filtrojmë saktësisht për vitin dhe muajin
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
                 & (df_filtri["Data"].dt.month == muaj)
             ].copy()
+
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
+                # Groupby dhe sigurohemi që të mos humbasim asnjë vlerë
                 return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
             return {}
 
+        # Marrim të dhënat e sakta nga databaza e filtruar
         data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
         data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
         data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
 
+        # Gjejmë numrin e ditëve për muajin aktual
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
         # --- PREGATITJA E BOSHTIT NUMERIK DHE KASKADËS ---
@@ -1864,10 +1873,22 @@ elif page == "Shitjet Ditore":
         base_para_muaj, y_para_muaj = llogarit_kaskaden(data_para_muaj)
         base_para_vit, y_para_vit = llogarit_kaskaden(data_para_vit)
 
-        # --- METRIKAT KRYESORE ---
-        totali_aktual = sum(y_aktual)
-        totali_para_muaj = sum(y_para_muaj)
-        totali_para_vit = sum(y_para_vit)
+        # --- RE-LLOGARITJA E METRIKAVE REALE DIREKT NGA DATAFRAME (Zgjidhja e problemit) ---
+        # Në vend që t'i mbledhim nga kaskada, i mbledhim direkt nga tabela e filtruar që të mos humbasim asnjë kg!
+        df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
+
+        totali_aktual = df_base[
+            (df_base["Data"].dt.year == vit_aktual)
+            & (df_base["Data"].dt.month == muaj_aktual)
+        ][kolona_kg].sum()
+        totali_para_muaj = df_base[
+            (df_base["Data"].dt.year == vit_para_muaj)
+            & (df_base["Data"].dt.month == para_muaj)
+        ][kolona_kg].sum()
+        totali_para_vit = df_base[
+            (df_base["Data"].dt.year == vit_para_vit)
+            & (df_base["Data"].dt.month == para_vit_muaj)
+        ][kolona_kg].sum()
 
         c1, c2, c3 = st.columns(3)
         ndryshimi_muaj = (
