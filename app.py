@@ -872,7 +872,6 @@ elif page == "Planifikimi" and df_raw is not None:
         )
 
 # ---------------------------------------------------------
-# ---------------------------------------------------------
 # MODULI: REALIZIMI
 # ---------------------------------------------------------
 elif page == "Realizimi":
@@ -949,7 +948,7 @@ elif page == "Realizimi":
 
         # --- 3. METRIKAT KRYESORE ---
         total_perc = (t_real / t_target * 100) if t_target > 0 else 0
-        c1, c2, c3, c4, c5 = st.columns(
+        c1, c2, c5, c3, c4 = st.columns(
             5
         )  # Ndryshuar në 5 kolona për të rreshtuar Çmimin Mesatar
         c1.metric("Target KG", f"{t_target:,.0f}")
@@ -1266,7 +1265,6 @@ elif page == "Realizimi":
         )
 
 # ---------------------------------------------------------
-
 # MODULI: MUNDESITE
 # ---------------------------------------------------------
 elif page == "Mundësitë":
