@@ -83,7 +83,7 @@ if not check_password():
 
     st.stop()
 
-
+st.sidebar.warning("Versioni: 1.0.8 - Live Update")
 # --- NAVIGIMI ---
 
 st.sidebar.title("🧭 Menuja Kryesore")
@@ -99,7 +99,7 @@ page = st.sidebar.radio(
         "Route Plan AI",
     ],
 )
-st.sidebar.warning("Versioni: 1.0.8 - Live Update")
+
 
 # --- NGARKIMI I TE DHENAVE ---
 
