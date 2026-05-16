@@ -221,7 +221,7 @@ if not df_raw.empty:
 
         if pd.notnull(data_maksimale):
             # Formati i ri përfshin Datën dhe Orën (%d/%m/%Y %H:%M)
-            koha_formatuar = data_maksimale.strftime("%d/%m/%Y  %H:%M:%S")
+            koha_formatuar = data_maksimale.strftime("%d/%m/%Y në %H:%M:%S")
 
             if data_maksimale.date() == sot_data:
                 st.sidebar.success(f"🟢 Lidhja SQL: LIVE\n\n{koha_formatuar}")
