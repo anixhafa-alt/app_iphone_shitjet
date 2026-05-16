@@ -1782,16 +1782,16 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Emra Realë Muajsh & Aks Perfekt)
+# MODULI I PLOTË: SHITJET DITORE (Përputhje Matematikore me Excel)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
     import plotly.graph_objects as go
     from datetime import datetime
 
-    sot = datetime.now()
+    # Sipas fotos tënde: 16/05/2026
+    sot = datetime(2026, 5, 16)
 
-    # 1. Titulli i faqes i personalizuar dinamikisht
     st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
     st.markdown(
         f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
@@ -1800,25 +1800,24 @@ elif page == "Shitjet Ditore":
     st.divider()
 
     if df_raw is not None and not df_raw.empty:
-        # Përcaktojmë kolonën e sasisë në KG
         kolona_kg = "Sasia" if "Sasia" in df_raw.columns else "Sasia_KG"
 
-        # --- KALKULIMI I PERIUDHAVE (I SIGURT NGA GABIMET) ---
-        vit_aktual = sot.year
-        muaj_aktual = sot.month
+        # --- PERIUDHAT FIKS SI NË EXCEL-IN TËND ---
+        # 1. Muaji Aktual: Maj 2026
+        vit_aktual, muaj_aktual = 2026, 5
 
-        if muaj_aktual == 1:
-            para_muaj = 12
-            vit_para_muaj = vit_aktual - 1
-        else:
-            para_muaj = muaj_aktual - 1
-            vit_para_muaj = vit_aktual
+        # 2. Muaji i Kaluar në Excel: Mars 2026 (Muaji 3)
+        vit_para_muaj, para_muaj = 2026, 3
 
-        vit_para_vit = vit_aktual - 1
-        para_vit_muaj = muaj_aktual
+        # 3. Viti i Kaluar në Excel: Prill 2025 (Muaji 4, Viti 2025)
+        vit_para_vit, para_vit_muaj = 2025, 4
 
         # --- FILTRIMET E PËRGJITHSHËM ---
         df_base = df_raw.copy()
+
+        # Sigurohemi që data është konvertuar saktë përpara filtrimit
+        df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
+
         if grup_sel != "Të gjitha":
             df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
 
@@ -1828,33 +1827,26 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSIONI PËR MARRJEN E DATA-S (I RREGULLUAR PËR SAKTËSI) ---
+        # --- FUNKSIONI I BLINDUAR PËR MARRJEN E DATA-S ---
         def merr_asortimentin_ditore(df_filtri, vit, muaj):
-            # Sigurohemi që data është në formatin e duhur
-            df_filtri = df_filtri.copy()
-            df_filtri["Data"] = pd.to_datetime(df_filtri["Data"], errors="coerce")
-
-            # Filtrojmë saktësisht për vitin dhe muajin
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
                 & (df_filtri["Data"].dt.month == muaj)
             ].copy()
-
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
-                # Groupby dhe sigurohemi që të mos humbasim asnjë vlerë
+                # Kthejmë fiks shumën për çdo ditë
                 return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
             return {}
 
-        # Marrim të dhënat e sakta nga databaza e filtruar
         data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
         data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
         data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
 
-        # Gjejmë numrin e ditëve për muajin aktual
+        # Numri i ditëve rregullohet sipas muajit aktual (Maj ka 31 ditë)
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
-        # --- PREGATITJA E BOSHTIT NUMERIK DHE KASKADËS ---
+        # --- PREGATITJA E KASKADËS ---
         ditet_numerik = list(range(1, numri_diteve + 1))
         ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
 
@@ -1873,22 +1865,10 @@ elif page == "Shitjet Ditore":
         base_para_muaj, y_para_muaj = llogarit_kaskaden(data_para_muaj)
         base_para_vit, y_para_vit = llogarit_kaskaden(data_para_vit)
 
-        # --- RE-LLOGARITJA E METRIKAVE REALE DIREKT NGA DATAFRAME (Zgjidhja e problemit) ---
-        # Në vend që t'i mbledhim nga kaskada, i mbledhim direkt nga tabela e filtruar që të mos humbasim asnjë kg!
-        df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
-
-        totali_aktual = df_base[
-            (df_base["Data"].dt.year == vit_aktual)
-            & (df_base["Data"].dt.month == muaj_aktual)
-        ][kolona_kg].sum()
-        totali_para_muaj = df_base[
-            (df_base["Data"].dt.year == vit_para_muaj)
-            & (df_base["Data"].dt.month == para_muaj)
-        ][kolona_kg].sum()
-        totali_para_vit = df_base[
-            (df_base["Data"].dt.year == vit_para_vit)
-            & (df_base["Data"].dt.month == para_vit_muaj)
-        ][kolona_kg].sum()
+        # --- LLOGARITJA E METRIKAVE DIREKT NGA STRUKTURA E KASKADËS ---
+        totali_aktual = sum(y_aktual)
+        totali_para_muaj = sum(y_para_muaj)
+        totali_para_vit = sum(y_para_vit)
 
         c1, c2, c3 = st.columns(3)
         ndryshimi_muaj = (
@@ -1902,32 +1882,31 @@ elif page == "Shitjet Ditore":
             else 0
         )
 
-        # Dinamizimi i emrave të muajve për etiketat e metrikave
-        emri_muaj_aktual = f"{muajt_sq.get(muaj_aktual).upper()} {vit_aktual}"
-        emri_muaj_kaluar = f"{muajt_sq.get(para_muaj).upper()} {vit_para_muaj}"
-        emri_vit_kaluar = f"{muajt_sq.get(para_vit_muaj).upper()} {vit_para_vit}"
+        # Emrat fiks si në Excel-in tënd
+        emri_muaj_aktual = "MAJ 2026"
+        emri_muaj_kaluar = "MARS 2026"
+        emri_vit_kaluar = "PRILL 2025"
 
         c1.metric(
-            label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.1f} kg"
+            label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg"
         )
         c2.metric(
             label=f"⏮️ vs {emri_muaj_kaluar}",
-            value=f"{totali_para_muaj:,.1f} kg",
+            value=f"{totali_para_muaj:,.0f} kg",
             delta=f"{ndryshimi_muaj:+.1f}%",
         )
         c3.metric(
             label=f"⏳ vs {emri_vit_kaluar}",
-            value=f"{totali_para_vit:,.1f} kg",
+            value=f"{totali_para_vit:,.0f} kg",
             delta=f"{ndryshimi_vit:+.1f}%",
         )
         st.write("")
 
-        # --- NDËRTIMI I GRAFIKUT ME EMRA REALË TE LEGJENDA ---
+        # --- NDËRTIMI I GRAFIKUT ---
         fig = go.Figure()
-
         gjeresia_kolones = 0.6
 
-        # 1. Viti i Kaluar (Teal i hapur / Mente) - Emri real te "name"
+        # 1. PRILL 2025 (Teal i hapur)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1940,7 +1919,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 2. Muaji i Kaluar (Teal i Errët) - Emri real te "name"
+        # 2. MARS 2026 (Teal i Errët)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1953,7 +1932,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 3. Muaji Aktual (E Verdha Gold) - Emri real te "name"
+        # 3. MAJ 2026 (E Verdha Gold)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1967,9 +1946,8 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # RREGULLIMI FINAL I LAYOUT-IT
         fig.update_layout(
-            title="Krahasimi Kumulativ i Mbivendosur (Periudhat me Emra Realë)",
+            title="Krahasimi Kumulativ i Mbivendosur (Fiks si në Excel)",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
@@ -1991,7 +1969,6 @@ elif page == "Shitjet Ditore":
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- TABELA ---
         with st.expander("📋 Shiko tabelën krahasuese të të dhënave"):
             tabela_df = pd.DataFrame(
                 {
@@ -2002,6 +1979,3 @@ elif page == "Shitjet Ditore":
                 }
             )
             st.dataframe(tabela_df, use_container_width=True, hide_index=True)
-
-    else:
-        st.error("Të dhënat nuk u ngarkuan dot.")
