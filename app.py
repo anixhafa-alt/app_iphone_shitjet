@@ -966,7 +966,7 @@ elif page == "Realizimi":
             f"{koha_perq:.1f}% e muajit",
         )
         c5.metric(
-            "Çmimi Mesatar", f"{cmimi_mesatar:,.1f} Lekë/kg"
+            "Çmimi Mes./kg", f"{cmimi_mesatar:,.1f} Lekë"
         )  # Shfaqja e metrikës së re
 
         st.divider()
