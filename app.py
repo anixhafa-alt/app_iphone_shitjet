@@ -660,30 +660,18 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
     # st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
-    import base64
 
-    # 1. Kodi SVG i kthyer në tekst të pastër
-    svg_kod = """
-    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none">
-        <path d="M19 5c0-1.1-.9-2-2-2h-2c0-1.1-.9-2-2-2s-2 .9-2 2H9c-1.1 0-2 .9-2 2v2h12V5z" fill="#2c3e50"/>
-        <path d="M19 7H9v12c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V7z" stroke="#2c3e50" stroke-width="2" stroke-linejoin="round" fill="none"/>
-        <path d="M6 9c0-.6.4-1 1-1s1 .4 1 1v4c0 .6-.4 1-1 1s-1-.4-1-1V9z" fill="#2c3e50"/>
-        <path d="M2 13.5V18c0 .8.7 1.5 1.5 1.5h2c.8 0 1.5-.7 1.5-1.5v-4.5H2z" stroke="#2c3e50" stroke-width="1.5" fill="none"/>
-        <path d="M5.5 8.5C5.5 7 4.3 6.5 3.5 8c-.5.8-1 2.5-1 4.5h3v-4z" fill="#2c3e50"/>
-        <circle cx="14" cy="13" r="4.5" fill="#e53935"/>
-        <path d="M12.2 13l1.2 1.2 2.4-2.4" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    """
-
-    # 2. Enkodimi i sigurt në Base64 që Streamlit ta njohë si foto
-    b64_svg = base64.b64encode(svg_kod.encode("utf-8")).decode("utf-8")
-    data_url = f"data:image/svg+xml;base64,{b64_svg}"
-
-    # 3. Shfaqja e titullit me ikonën e re vektoriale
     st.markdown(
         f"""
         <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px; margin-bottom: 10px;">
-            <img src="{data_url}" width="44" height="44" style="vertical-align: middle;" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1a237e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+                <polyline points="8 14 10 16 16 10"></polyline>
+            </svg>
+            
             <h1 style="font-size: 2.3rem; font-weight: 700; color: #1a237e; margin: 0; padding: 0;">
                 Plani: {muajt_sq.get(sot.month)} {sot.year}
             </h1>
