@@ -1782,15 +1782,16 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (I Sinkronizuar me Realizimin)
+# MODULI I PLOTË: SHITJET DITORE (Llogaritja e Pastër në KG me produkte+.xlsx)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
     import pandas as pd
     import plotly.graph_objects as go
     from datetime import datetime
+    import requests
+    from io import BytesIO
 
-    # Data fiks e aplikacionit
     sot = datetime(2026, 5, 16)
 
     st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
@@ -1802,16 +1803,67 @@ elif page == "Shitjet Ditore":
 
     if df_raw is not None and not df_raw.empty:
 
-        # --- EMRI I KOLONËS SË KG (FIKS SI TE MODULET E TJERA) ---
-        # Kontrollojmë si quhet kolona e kilogramëve të llogaritur që vjen nga faqet e tjera
-        if "Sasia_KG" in df_raw.columns:
-            kolona_kg = "Sasia_KG"
-        elif "SasiaKG" in df_raw.columns:
-            kolona_kg = "SasiaKG"
-        elif "Pesha" in df_raw.columns:
-            kolona_kg = "Pesha"
-        else:
-            kolona_kg = "Sasia"  # Fallback nëse diçka nuk shkon
+        # --- SHKARKIMI DHE BASHKIMI ME EXCEL-IN E PRODUKTEVE NGA GITHUB ---
+        df_punimi = df_raw.copy()
+        try:
+            # Zëvendësoje këtë URL me linkun tënd real të GitHub, por shto '?raw=true' në fund
+            url_repo = "https://raw.githubusercontent.com/rreshit/app_iphone_shitjet/main/produkte+.xlsx?raw=true"
+
+            # Shkarkojmë skedarin në mënyrë të sigurt si Bytes
+            response = requests.get(url_repo)
+            if response.status_code == 200:
+                df_prod = pd.read_excel(BytesIO(response.content), engine="openpyxl")
+
+                # Gjejmë kolonën e përbashkët (Kodi i Artikullit ose SKU)
+                kolona_lidh_sql = (
+                    "KodiArtikullit" if "KodiArtikullit" in df_punimi.columns else "SKU"
+                )
+                kolona_lidh_excel = (
+                    "KodiArtikullit"
+                    if "KodiArtikullit" in df_prod.columns
+                    else ("SKU" if "SKU" in df_prod.columns else df_prod.columns[0])
+                )
+
+                # Gjejmë kolonën e peshës në Excel
+                kolona_peshe = (
+                    "Pesha"
+                    if "Pesha" in df_prod.columns
+                    else (
+                        "KG_per_Cope"
+                        if "KG_per_Cope" in df_prod.columns
+                        else "Pesha/KG"
+                    )
+                )
+
+                # Pastrojmë tabelën e produkteve
+                df_prod_paster = df_prod[
+                    [kolona_lidh_excel, kolona_peshe]
+                ].drop_duplicates()
+
+                # Bëjmë merge
+                df_punimi = pd.merge(
+                    df_punimi,
+                    df_prod_paster,
+                    left_on=kolona_lidh_sql,
+                    right_on=kolona_lidh_excel,
+                    how="left",
+                )
+
+                # Llogarisim Kilogramët: Copë * Pesha për njësi
+                df_punimi["Sasia_KG_Real"] = df_punimi["Sasia"] * df_punimi[
+                    kolona_peshe
+                ].fillna(0)
+                kolona_kg = "Sasia_KG_Real"
+            else:
+                st.error(
+                    f"Nuk u shkarkua dot Exceli nga GitHub. Statusi: {response.status_code}"
+                )
+                kolona_kg = "Sasia"
+        except Exception as e:
+            st.warning(
+                f"⚠️ Nuk u bë dot llogaritja e KG. U përdor kolona bazë. Gabimi: {e}"
+            )
+            kolona_kg = "Sasia"
 
         # --- PERIUDHAT FIKS SI NË EXCEL ---
         vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
@@ -1819,7 +1871,7 @@ elif page == "Shitjet Ditore":
         vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
 
         # --- FILTRIMET E PËRGJITHSHËM ---
-        df_base = df_raw.copy()
+        df_base = df_punimi.copy()
         df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
 
         if grup_sel != "Të gjitha":
@@ -1839,7 +1891,6 @@ elif page == "Shitjet Ditore":
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
-                # Sigurojmë që vlerat janë numerike
                 df_p[kolona_kg] = pd.to_numeric(
                     df_p[kolona_kg], errors="coerce"
                 ).fillna(0)
@@ -1911,7 +1962,6 @@ elif page == "Shitjet Ditore":
         fig = go.Figure()
         gjeresia_kolones = 0.6
 
-        # 1. PRILL 2025 (Teal i hapur)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1924,7 +1974,6 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 2. MARS 2026 (Teal i Errët)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1937,7 +1986,6 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 3. MAJ 2026 (E Verdha Gold)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
