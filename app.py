@@ -818,6 +818,14 @@ elif page == "Realizimi":
 
         t_real = df_live["kg"].sum()
 
+        # --- LLOGARITJA E ÇMIMIT MESATAR (E SHTUAR) ---
+        # Ndrysho "Cmimi" me emrin ekzakte të kolonës tuaj nëse ndryshon
+        cmimi_mesatar = (
+            df_live["Cmimi"].mean()
+            if "Cmimi" in df_live.columns and len(df_live) > 0
+            else 0
+        )
+
         # --- 2. DITËT E PUNËS (Pa të diela) ---
         start_muaji = sot.replace(day=1)
         fund_muaji = start_muaji + pd.offsets.MonthEnd(0)
@@ -835,7 +843,7 @@ elif page == "Realizimi":
 
         # --- 3. METRIKAT KRYESORE ---
         total_perc = (t_real / t_target * 100) if t_target > 0 else 0
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)  # Ndryshuar në 5 kolona
         c1.metric("Target KG", f"{t_target:,.0f}")
         c2.metric("Realizuar KG", f"{t_real:,.0f}")
         status_color = "normal" if total_perc >= koha_perq else "inverse"
@@ -850,6 +858,9 @@ elif page == "Realizimi":
             f"{ditet_punes_deri_sot}/{ditet_punes_totale}",
             f"{koha_perq:.1f}% e muajit",
         )
+        c5.metric(
+            "Çmimi Mesatar", f"{cmimi_mesatar:,.2f} Leke"
+        )  # Metrika e re e shtuar
 
         st.divider()
 
@@ -1061,7 +1072,7 @@ elif page == "Realizimi":
                 .filter-item {{ color: #555; }}
                 .filter-item strong {{ color: #1a237e; }}
                 .stats-container {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 15px; }}
-                .stat-box {{ background: white; padding: 20px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 23%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+                .stat-box {{ background: white; padding: 20px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 18%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
                 .stat-box h3 {{ margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #777; }}
                 .stat-box p {{ font-size: 22px; font-weight: bold; margin: 10px 0; color: #1a237e; }}
                 .trend-section {{ background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px; }}
@@ -1092,6 +1103,7 @@ elif page == "Realizimi":
                 <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div>
                 <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div>
                 <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div>
+                <div class="stat-box"><h3>Çmimi Mesatar</h3><p>{cmimi_mesatar:,.2f} Lekë</p></div>
             </div>
 
             <div class="trend-section">
