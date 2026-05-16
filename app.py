@@ -660,19 +660,16 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
     # st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
-
     st.markdown(
         f"""
-        <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1a237e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-                <polyline points="8 14 10 16 16 10"></polyline>
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="6"></circle>
+                <circle cx="12" cy="12" r="2"></circle>
             </svg>
             
-            <h1 style="font-size: 2.3rem; font-weight: 700; color: #1a237e; margin: 0; padding: 0;">
+            <h1 style="font-size: 2.3rem; font-weight: 700; color: #1a237e;">
                 Plani: {muajt_sq.get(sot.month)} {sot.year}
             </h1>
         </div>
@@ -680,6 +677,7 @@ elif page == "Planifikimi" and df_raw is not None:
         unsafe_allow_html=True,
     )
     st.divider()
+
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     st.info(f"📅 Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
