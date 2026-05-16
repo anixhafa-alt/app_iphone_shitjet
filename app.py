@@ -1781,9 +1781,209 @@ elif page == "Route Plan AI":
                 "text/csv",
             )
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Pa Gabime & Mbivendosje 100%)
+# MODULI I PËRFUNDUAR: SHITJET DITORE (Aks i Rreshtuar Milimetrikisht)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
+    import calendar
+    import plotly.graph_objects as go
+    from datetime import datetime
+
+    sot = datetime.now()
+
+    # 1. Titulli i faqes i personalizuar dinamikisht
+    st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
+    st.markdown(
+        f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
+        unsafe_allow_html=True,
+    )
+    st.divider()
+
+    if df_raw is not None and not df_raw.empty:
+        # Përcaktojmë kolonën e sasisë në KG
+        kolona_kg = "Sasia" if "Sasia" in df_raw.columns else "Sasia_KG"
+
+        # --- KALKULIMI I PERIUDHAVE (I SIGURT NGA GABIMET) ---
+        vit_aktual = sot.year
+        muaj_aktual = sot.month
+
+        if muaj_aktual == 1:
+            para_muaj = 12
+            vit_para_muaj = vit_aktual - 1
+        else:
+            para_muaj = muaj_aktual - 1
+            vit_para_muaj = vit_aktual
+
+        vit_para_vit = vit_aktual - 1
+        para_vit_muaj = muaj_aktual
+
+        # --- FILTRIMET E PËRGJITHSHËM ---
+        df_base = df_raw.copy()
+        if grup_sel != "Të gjitha":
+            df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
+
+        if agj_sel != "Të gjithë":
+            df_base = df_base[df_base["ForcaShitese"] == agj_sel]
+
+        if klientet_selected:
+            df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
+
+        # --- FUNKSIONI PËR MARRJEN E DATA-S (I RREGULLUAR ME PARAMETËR) ---
+        def merr_asortimentin_ditore(df_filtri, vit, muaj):
+            df_p = df_filtri[
+                (df_filtri["Data"].dt.year == vit)
+                & (df_filtri["Data"].dt.month == muaj)
+            ].copy()
+            if not df_p.empty:
+                df_p["Dita_Numri"] = df_p["Data"].dt.day
+                return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
+            return {}
+
+        data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
+        data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
+        data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
+
+        _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
+
+        # --- PREGATITJA E BOSHTIT NUMERIK DHE KASKADËS ---
+        # Bosht numerik që kolona të qëndrojë fiks mbi numrin
+        ditet_numerik = list(range(1, numri_diteve + 1))
+        ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
+
+        def llogarit_kaskaden(data_dict):
+            vlerat_reale = []
+            vlerat_baze = []
+            kumulativ = 0.0
+            for d in range(1, numri_diteve + 1):
+                vlera = data_dict.get(d, 0.0)
+                vlerat_baze.append(kumulativ)
+                vlerat_reale.append(vlera)
+                kumulativ += vlera
+            return vlerat_baze, vlerat_reale
+
+        base_aktual, y_aktual = llogarit_kaskaden(data_aktual)
+        base_para_muaj, y_para_muaj = llogarit_kaskaden(data_para_muaj)
+        base_para_vit, y_para_vit = llogarit_kaskaden(data_para_vit)
+
+        # --- METRIKAT KRYESORE ---
+        totali_aktual = sum(y_aktual)
+        totali_para_muaj = sum(y_para_muaj)
+        totali_para_vit = sum(y_para_vit)
+
+        c1, c2, c3 = st.columns(3)
+        ndryshimi_muaj = (
+            ((totali_aktual - totali_para_muaj) / totali_para_muaj * 100)
+            if totali_para_muaj > 0
+            else 0
+        )
+        ndryshimi_vit = (
+            ((totali_aktual - totali_para_vit) / totali_para_vit * 100)
+            if totali_para_vit > 0
+            else 0
+        )
+
+        c1.metric(
+            label=f"📦 Volumi {muajt_sq.get(muaj_aktual)} {vit_aktual}",
+            value=f"{totali_aktual:,.1f} kg",
+        )
+        c2.metric(
+            label=f"⏮️ vs Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
+            value=f"{totali_para_muaj:,.1f} kg",
+            delta=f"{ndryshimi_muaj:+.1f}%",
+        )
+        c3.metric(
+            label=f"⏳ vs Viti i Kaluar ({vit_para_vit})",
+            value=f"{totali_para_vit:,.1f} kg",
+            delta=f"{ndryshimi_vit:+.1f}%",
+        )
+        st.write("")
+
+        # --- NDËRTIMI I GRAFIKUT ME AKSE TË RRESHTUARA PERFEKT ---
+        fig = go.Figure()
+
+        # Vendosim gjerësinë e barabartë të kolonave
+        gjeresia_kolones = 0.6
+
+        # 1. Viti i Kaluar (Teal i hapur / Mente - Gjysmë transparent)
+        fig.add_trace(
+            go.Bar(
+                x=ditet_numerik,
+                y=y_para_vit,
+                base=base_para_vit,
+                name=f"Viti i Kaluar ({vit_para_vit})",
+                width=gjeresia_kolones,
+                marker_color="rgba(141, 211, 199, 0.55)",
+                textposition="none",
+            )
+        )
+
+        # 2. Muaji i Kaluar (Teal i Errët - Gjysmë transparent)
+        fig.add_trace(
+            go.Bar(
+                x=ditet_numerik,
+                y=y_para_muaj,
+                base=base_para_muaj,
+                name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
+                width=gjeresia_kolones,
+                marker_color="rgba(0, 105, 92, 0.55)",
+                textposition="none",
+            )
+        )
+
+        # 3. Muaji Aktual (E Verdha Gold - Gjysmë transparent)
+        fig.add_trace(
+            go.Bar(
+                x=ditet_numerik,
+                y=y_aktual,
+                base=base_aktual,
+                name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)})",
+                width=gjeresia_kolones,
+                marker_color="rgba(255, 193, 7, 0.65)",
+                text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
+                textposition="outside",
+            )
+        )
+
+        # RREGULLIMI FINAL I LAYOUT-IT (BOSHTI X)
+        fig.update_layout(
+            title="Krahasimi Kumulativ i Mbivendosur (Aks i Rreshtuar Perfekt)",
+            barmode="overlay",
+            plot_bgcolor="#eef2f3",
+            height=650,
+            xaxis=dict(
+                title="DITËT",
+                tickangle=-90,
+                type="linear",  # Konvertohet në linear numerik për të eliminuar distancat e grupuara
+                tickmode="array",
+                tickvals=ditet_numerik,  # Vendet ku do të vendosen ticks
+                ticktext=ditet_etiketa,  # Teksti që do të shfaqet fiks në qendër të kolonës (D 01, D 02)
+                range=[
+                    0.4,
+                    numri_diteve + 0.6,
+                ],  # Krijon pak hapësirë në anët e grafikut
+            ),
+            yaxis=dict(title="SHITJET DITORE (KG)", gridcolor="#ffffff"),
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
+            ),
+            hovermode="x unified",
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- TABELA ---
+        with st.expander("📋 Shiko tabelën krahasuese të të dhënave"):
+            tabela_df = pd.DataFrame(
+                {
+                    "Dita": ditet_etiketa,
+                    f"Muaji Aktual (kg)": y_aktual,
+                    f"Muaji i Kaluar (kg)": y_para_muaj,
+                    f"Viti i Kaluar (kg)": y_para_vit,
+                }
+            )
+            st.dataframe(tabela_df, use_container_width=True, hide_index=True)
+
+    else:
+        st.error("Të dhënat nuk u ngarkuan dot.")
     import calendar
     import plotly.graph_objects as go
     from datetime import datetime
