@@ -260,25 +260,67 @@ if df_raw is not None and not df_raw.empty:
         st.session_state["end_d"] = df_raw["Data"].max().date()
     if "rritja_val" not in st.session_state:
         st.session_state["rritja_val"] = 10
+    if "plani_zgjedhur_lib" not in st.session_state:  # <-- SHTUAR PËR LIBRARINË
+        st.session_state["plani_zgjedhur_lib"] = "Custom (Zgjedhje Manuale)"
 else:
     # Nëse nuk lidhet, shfaqim një mesazh miqësor dhe ndalojmë ekzekutimin e mëtutjeshëm
     st.error(
         "⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml."
     )
-    st.info("Aplikacioni po punon, por nuk ka të dhëna për të shfaqur.")
+    st.info("Aplikacioni po punon, but nuk ka të dhëna për të shfaqur.")
     st.stop()  # Ky rresht ndalon pjesën tjetër të kodit që të mos nxjerrë errore të tjera
 
 
-# 2. Ndërtimi i Menusë (Si në foto)
-date_range = st.sidebar.date_input(
-    "Periudha referente:",
-    value=(st.session_state["start_d"], st.session_state["end_d"]),
-    key="date_input_key",
+# --- LIBRARIA E PLANEVE TË RUAJTURA ---
+st.sidebar.subheader("📂 Libraria e Planeve")
+
+# Fjalori ku mund të shtosh plane të tjera të fiksuara në të ardhmen
+libraria_planeve = {
+    "Custom (Zgjedhje Manuale)": None,
+    "Plani i muajit Maj 2026 - R1": {
+        "start": datetime(2026, 5, 1).date(),
+        "end": datetime(2026, 5, 31).date(),
+    },
+    "Plani i muajit Qershor 2026 - R1": {
+        "start": datetime(2026, 6, 1).date(),
+        "end": datetime(2026, 6, 30).date(),
+    },
+}
+
+# Selectbox për zgjedhjen e planit nga libraria
+plani_zgjedhur = st.sidebar.selectbox(
+    "Zgjidh një plan të paracaktuar:",
+    options=list(libraria_planeve.keys()),
+    key="plani_zgjedhur_lib",
 )
 
-# Përditësojmë session_state kur ndryshon data
-if isinstance(date_range, tuple) and len(date_range) == 2:
-    st.session_state["start_d"], st.session_state["end_d"] = date_range
+
+# 2. Ndërtimi i Menusë (Logjika e datave e përshtatur me Librarinë)
+if plani_zgjedhur != "Custom (Zgjedhje Manuale)":
+    # Nëse zgjidhet një plan, marrim datat e fiksuara dhe bllokojmë ndryshimin e tyre (disabled=True)
+    vlerat_planit = libraria_planeve[plani_zgjedhur]
+    st.sidebar.info(f"📌 Po përdoret: {plani_zgjedhur}")
+
+    date_range = st.sidebar.date_input(
+        "Periudha referente:",
+        value=(vlerat_planit["start"], vlerat_planit["end"]),
+        key="date_input_key",
+        disabled=True,
+    )
+    # Përditësojmë session_state automatikisht me datat e planit të ruajtur
+    st.session_state["start_d"] = vlerat_planit["start"]
+    st.session_state["end_d"] = vlerat_planit["end"]
+else:
+    # Nëse është Custom, kalendari qëndron i hapur dhe funksionon siç e kishit me session_state
+    date_range = st.sidebar.date_input(
+        "Periudha referente:",
+        value=(st.session_state["start_d"], st.session_state["end_d"]),
+        key="date_input_key",
+    )
+    # Përditësojmë session_state kur përdoruesi ndryshon datën manualisht
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        st.session_state["start_d"], st.session_state["end_d"] = date_range
+
 
 rritja = st.sidebar.number_input(
     "Rritja e planit (%)", value=st.session_state["rritja_val"], key="rritja_input"
@@ -299,7 +341,7 @@ k_list = (
 )
 klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
 
-# Ruajmë datat aktuale për përdorim në Sidebar
+# Ruajmë datat aktuale për përdorim në pjesën tjetër të aplikacionit
 start_date = st.session_state["start_d"]
 end_date = st.session_state["end_d"]
 
@@ -309,7 +351,7 @@ if st.sidebar.button("Log Out"):
     st.session_state["password_correct"] = False
     st.rerun()
 
-# --- INFO MBI FILTRAT (Shtoje në Sidebar ose në krye të faqes) ---
+# --- INFO MBI FILTRAT ---
 with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
     # Llogarisim numrin e artikujve në bazë të statusit
     nr_aktiv = df_raw[df_raw["statusi"].astype(str).str.upper() == "AKTIV"][
@@ -337,7 +379,6 @@ with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
         st.caption(
             "✅ Në këtë modul, janë përfshirë të gjithë artikujt për të mbajtur volumin e kategorisë."
         )
-
 
 # --- FUNDI I SIDEBAR ---
 
