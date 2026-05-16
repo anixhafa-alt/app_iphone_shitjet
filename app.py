@@ -161,6 +161,25 @@ def load_all_data():
 
 df_raw = load_all_data()
 
+# Kontrolli i Datës së Fundit të Përditësimit
+if not df_raw.empty:
+    data_maksimale = df_raw["data"].max()
+    sot_data = datetime.now().date()
+
+    # Krijojmë një tregues në Sidebar ose në krye të faqes
+    st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
+
+    if data_maksimale.date() == sot_data:
+        st.sidebar.success(
+            f"Lidhja SQL: LIVE \nTë dhënat janë të sotme: {data_maksimale.strftime('%d/%m/%Y')}"
+        )
+    else:
+        ditest_vonesa = (sot_data - data_maksimale.date()).days
+        st.sidebar.warning(
+            f"Lidhja SQL: OK (Asnjë gabim)\n"
+            f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
+            f"Vonesa: {ditest_vonesa} ditë pa faturime të reja."
+        )
 
 # 1. Lexojmë lidhjen Produkt -> Kod Kategori (Sheet 'produktet')
 try:
