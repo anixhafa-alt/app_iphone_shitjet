@@ -1780,111 +1780,137 @@ elif page == "Route Plan AI":
                 f"Route_Plan_{agj_sel}.csv",
                 "text/csv",
             )
-# =========================================================
-# MODULI I RI: SHITJET DITORE (Sipas grafikut të dhënë)
-# =========================================================
-if page == "Shitjet Ditore":
-    # 1. Titulli i faqes me emrin e agjentit poshtë tij (ashtu siç e kërkove në fillim)
-    st.title("📊 Grafik - Shitje Ditore")
+# ---------------------------------------------------------
+# MODULI I RI: SHITJET DITORE (Waterfall Chart - Muaji Aktual)
+# ---------------------------------------------------------
+elif page == "Shitjet Ditore":
+    import plotly.graph_objects as go
+
+    sot = datetime.now()
+
+    # 1. Titulli i faqes i personalizuar dinamikisht
+    st.title(f"📊 Grafik Kaskadë (Waterfall) - Shitjet Ditore")
     st.markdown(
-        f"<h3 style='color: #1a237e; margin-top:-15px;'>👤 Agjenti: {agj_sel}</h3>",
+        f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
         unsafe_allow_html=True,
     )
     st.divider()
 
-    # 2. Filtrimi i të dhënave në bazë të përzgjedhjeve të Sidebar-it aktuale
-    # (Përdor datat start_date/end_date, grupin, agjentin dhe klientët që janë zgjedhur)
-    df_filtered = df_raw[
-        (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
-    ]
-
-    if grup_sel != "Të gjitha":
-        # Supozojmë se kolona e grupit quhet 'Kategoria' ose 'Grupi', përshtate sipas df_raw tënd
-        if "Kategoria" in df_filtered.columns:
-            df_filtered = df_filtered[df_filtered["Kategoria"] == grup_sel]
-
-    if agj_sel != "Të gjithë":
-        df_filtered = df_filtered[df_filtered["ForcaShitese"] == agj_sel]
-
-    if klientet_selected:
-        df_filtered = df_filtered[df_filtered["Klienti"].isin(klientet_selected)]
-
-    # 3. Kontrolli nëse ka të dhëna për këtë përzgjedhje
-    if not df_filtered.empty:
-
-        # Supozojmë se kolona e vlerës së shitjes quhet "Vlera" ose "Leke". Ndryshoje nëse quhet ndryshe (psh: "Sasia")
-        kolona_vleres = (
-            "Vlera"
-            if "Vlera" in df_filtered.columns
-            else df_filtered.select_dtypes(include=["number"]).columns[0]
+    if df_raw is not None and not df_raw.empty:
+        # 2. FILTRIMI AUTOMATIK: Vetëm për muajin dhe vitin aktual korrent
+        mask_muaji_aktual = (df_raw["Data"].dt.year == sot.year) & (
+            df_raw["Data"].dt.month == sot.month
         )
+        df_korrent = df_raw[mask_muaji_aktual].copy()
 
-        # Agregimi i shitjeve sipas ditës (Formati: DD/MM)
-        df_filtered["Dita_Formatuar"] = df_filtered["Data"].dt.strftime("%d/%m")
+        # Aplikojmë filtrat e tjerë të përzgjedhur në Sidebar (Agjenti, Grupi, Klienti)
+        if grup_sel != "Të gjitha":
+            df_korrent = df_korrent[df_korrent["Grup_Filtri"] == grup_sel]
 
-        # Grupojmë të dhënat për të gjetur totalin për çdo ditë
-        df_ditore = (
-            df_filtered.groupby("Dita_Formatuar")[kolona_vleres].sum().reset_index()
-        )
+        if agj_sel != "Të gjithë":
+            df_korrent = df_korrent[df_korrent["ForcaShitese"] == agj_sel]
 
-        # Sigurohemi që renditja të jetë kronologjike
-        df_ditore = df_ditore.sort_values("Dita_Formatuar")
+        if klientet_selected:
+            df_korrent = df_korrent[df_korrent["Klienti"].isin(klientet_selected)]
 
-        # 4. Ndërtimi i Metrikave Kryesore në krye të grafikut
-        c1, c2, c3 = st.columns(3)
-        totali_periudhes = df_ditore[kolona_vleres].sum()
-        mesatarja_ditore = df_ditore[kolona_vleres].mean()
-        ditet_me_shitje = len(df_ditore)
+        # Kontrollojmë nëse ka shitje për këtë përzgjedhje
+        if not df_korrent.empty:
+            # Grupojmë shitjet sipas datës specifike (vetëm ditët kronologjike të muajit aktual)
+            df_korrent["Dita"] = df_korrent["Data"].dt.strftime("%d")
 
-        c1.metric("💰 Totali i Shitjeve", f"{totali_periudhes:,.2f} ALL")
-        c2.metric("📈 Mesatarja Ditore", f"{mesatarja_ditore:,.2f} ALL")
-        c3.metric("📅 Ditë me Aktivitet", f"{ditet_me_shitje} Ditë")
+            # Përdorim kolonën e vlerës (Vlera_Historike ose kg, zgjidhni cilën dëshironi të shfaqni)
+            # Në këtë rast po përdorim "Vlera_Historike" siç është në databazën tuaj
+            df_ditore = (
+                df_korrent.groupby("Dita")["Vlera_Historike"].sum().reset_index()
+            )
+            df_ditore = df_ditore.sort_values("Dita")
 
-        st.write("")
+            # 3. Ndërtimi i Metrikave kryesore në krye
+            totali_muajit = df_ditore["Vlera_Historike"].sum()
+            mesatarja_ditore = df_ditore["Vlera_Historike"].mean()
+            ditet_me_shitje = len(df_ditore)
 
-        # 5. Krijimi i Grafikut interaktiv (Përdorim Plotly për t'i ngjarë maksimalisht fotos tënde)
-        import plotly.express as px
+            c1, c2, c3 = st.columns(3)
+            c1.metric("💰 Totali i Muajit (Lekë)", f"{totali_muajit:,.0f} L")
+            c2.metric("📈 Mesatarja Ditore", f"{mesatarja_ditore:,.0f} L")
+            c3.metric("📅 Ditë me Faturime", f"{ditet_me_shitje} Ditë")
+            st.write("")
 
-        fig = px.bar(
-            df_ditore,
-            x="Dita_Formatuar",
-            y=kolona_vleres,
-            title=f"Ecuria e Shitjeve nga {start_date.strftime('%d/%m/%Y')} deri {end_date.strftime('%d/%m/%Y')}",
-            labels={
-                "Dita_Formatuar": "Dita e Muajit",
-                kolona_vleres: "Vlera e Shitjes (ALL)",
-            },
-            text_auto=".2s",  # Shfaq vlerat mbi shtylla në mënyrë të mbledhur (psh: 45k, 1.2M)
-        )
+            # 4. PËRGATITJA E TË DHËNAVE PËR WATERFALL CHART
+            x_data = []
+            y_data = []
+            measure_data = []
 
-        # Stilimi i grafikut që të jetë modern dhe i pastër
-        fig.update_traces(
-            marker_color="#1a237e",  # Ngjyrë blu e errët raportesh
-            textposition="outside",
-            cliponaxis=False,
-        )
+            # Shtojmë ditët me radhë si vlera relative (shtesë mbi njëra-tjetrën)
+            for index, row in df_ditore.iterrows():
+                x_data.append(f"Dita {row['Dita']}")
+                y_data.append(row["Vlera_Historike"])
+                measure_data.append("relative")
 
-        fig.update_layout(
-            xaxis_tickangle=-45, plot_bgcolor="white", hovermode="x unified", height=500
-        )
+            # Në fund të grafikut shtojmë kolonën përmbledhëse të Totalit ("Total")
+            x_data.append("TOTALI MUAJIT")
+            y_data.append(totali_muajit)
+            measure_data.append("total")
 
-        # Shfaqja e grafikut në Streamlit
-        st.plotly_chart(fig, use_container_width=True)
-
-        # 6. Shfaqja e tabelës së të dhënave poshtë grafikut për kontroll manual
-        with st.expander("📋 Shiko tabelën e detajuar të shitjeve ditore"):
-            st.dataframe(
-                df_ditore.rename(
-                    columns={
-                        "Dita_Formatuar": "Dita",
-                        kolona_vleres: "Vlera Totale (ALL)",
-                    }
-                ),
-                use_container_width=True,
-                hide_index=True,
+            # 5. KRIJIMI I GRAFIKUT WATERFALL (KASKADË)
+            fig = go.Figure(
+                go.Waterfall(
+                    name="Shitjet",
+                    orientation="v",
+                    measure=measure_data,
+                    x=x_data,
+                    textposition="outside",
+                    text=[f"{v/1000:.1f}k" if v > 0 else "" for v in y_data[:-1]]
+                    + [
+                        f"{totali_muajit/1000:.1f}k"
+                    ],  # Formatimi i vlerave mbi shtylla (psh 45.2k)
+                    y=y_data,
+                    connector={
+                        "line": {
+                            "color": "rgb(166, 166, 166)",
+                            "width": 1,
+                            "dash": "dot",
+                        }
+                    },
+                    decreasing={
+                        "marker": {"color": "#e53935"}
+                    },  # Nëse ka ndonjë ditë negative (kthim) bëhet e kuqe
+                    increasing={
+                        "marker": {"color": "#2e7d32"}
+                    },  # Ditët normale me shitje rritëse bëhen të gjelbra
+                    totals={
+                        "marker": {"color": "#1a237e"}
+                    },  # Shtylla finale e Totalit bëhet Blu e errët si stili i aplikacionit tuaj
+                )
             )
 
+            fig.update_layout(
+                title=f"Ecuria e deritanishme e muajit {muajt_sq.get(sot.month)}",
+                showlegend=False,
+                plot_bgcolor="white",
+                height=550,
+                xaxis=dict(tickangle=-45),
+                yaxis=dict(title="Vlera e Shitjeve (Lekë)", gridcolor="#f0f0f0"),
+            )
+
+            # Shfaqja e grafikut interaktiv
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 6. Tabela opsionale poshtë për kontroll të shpejtë faturash
+            with st.expander("📋 Shiko tabelën e detajuar ditore"):
+                st.dataframe(
+                    df_ditore.rename(
+                        columns={
+                            "Dita": "Dita e Muajit",
+                            "Vlera_Historike": "Vlera Totale (Lekë)",
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        else:
+            st.warning(
+                f"⚠️ Nuk u gjet asnjë faturim në muajin aktual ({muajt_sq.get(sot.month)} {sot.year}) për agjentin ose grupin e zgjedhur."
+            )
     else:
-        st.warning(
-            "⚠️ Nuk ka të dhëna shitjesh për këtë agjent ose periudhë të zgjedhur."
-        )
+        st.error("Të dhënat nuk u ngarkuan dot.")
