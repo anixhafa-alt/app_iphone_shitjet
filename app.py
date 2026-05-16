@@ -97,6 +97,7 @@ page = st.sidebar.radio(
         "Historiku",
         "Asistenti AI",
         "Route Plan AI",
+        "Shitjet Ditore",
     ],
 )
 
@@ -1779,3 +1780,111 @@ elif page == "Route Plan AI":
                 f"Route_Plan_{agj_sel}.csv",
                 "text/csv",
             )
+# =========================================================
+# MODULI I RI: SHITJET DITORE (Sipas grafikut të dhënë)
+# =========================================================
+if page == "Shitjet Ditore":
+    # 1. Titulli i faqes me emrin e agjentit poshtë tij (ashtu siç e kërkove në fillim)
+    st.title("📊 Grafik - Shitje Ditore")
+    st.markdown(
+        f"<h3 style='color: #1a237e; margin-top:-15px;'>👤 Agjenti: {agj_sel}</h3>",
+        unsafe_allow_html=True,
+    )
+    st.divider()
+
+    # 2. Filtrimi i të dhënave në bazë të përzgjedhjeve të Sidebar-it aktuale
+    # (Përdor datat start_date/end_date, grupin, agjentin dhe klientët që janë zgjedhur)
+    df_filtered = df_raw[
+        (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
+    ]
+
+    if grup_sel != "Të gjitha":
+        # Supozojmë se kolona e grupit quhet 'Kategoria' ose 'Grupi', përshtate sipas df_raw tënd
+        if "Kategoria" in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["Kategoria"] == grup_sel]
+
+    if agj_sel != "Të gjithë":
+        df_filtered = df_filtered[df_filtered["ForcaShitese"] == agj_sel]
+
+    if klientet_selected:
+        df_filtered = df_filtered[df_filtered["Klienti"].isin(klientet_selected)]
+
+    # 3. Kontrolli nëse ka të dhëna për këtë përzgjedhje
+    if not df_filtered.empty:
+
+        # Supozojmë se kolona e vlerës së shitjes quhet "Vlera" ose "Leke". Ndryshoje nëse quhet ndryshe (psh: "Sasia")
+        kolona_vleres = (
+            "Vlera"
+            if "Vlera" in df_filtered.columns
+            else df_filtered.select_dtypes(include=["number"]).columns[0]
+        )
+
+        # Agregimi i shitjeve sipas ditës (Formati: DD/MM)
+        df_filtered["Dita_Formatuar"] = df_filtered["Data"].dt.strftime("%d/%m")
+
+        # Grupojmë të dhënat për të gjetur totalin për çdo ditë
+        df_ditore = (
+            df_filtered.groupby("Dita_Formatuar")[kolona_vleres].sum().reset_index()
+        )
+
+        # Sigurohemi që renditja të jetë kronologjike
+        df_ditore = df_ditore.sort_values("Dita_Formatuar")
+
+        # 4. Ndërtimi i Metrikave Kryesore në krye të grafikut
+        c1, c2, c3 = st.columns(3)
+        totali_periudhes = df_ditore[kolona_vleres].sum()
+        mesatarja_ditore = df_ditore[kolona_vleres].mean()
+        ditet_me_shitje = len(df_ditore)
+
+        c1.metric("💰 Totali i Shitjeve", f"{totali_periudhes:,.2f} ALL")
+        c2.metric("📈 Mesatarja Ditore", f"{mesatarja_ditore:,.2f} ALL")
+        c3.metric("📅 Ditë me Aktivitet", f"{ditet_me_shitje} Ditë")
+
+        st.write("")
+
+        # 5. Krijimi i Grafikut interaktiv (Përdorim Plotly për t'i ngjarë maksimalisht fotos tënde)
+        import plotly.express as px
+
+        fig = px.bar(
+            df_ditore,
+            x="Dita_Formatuar",
+            y=kolona_vleres,
+            title=f"Ecuria e Shitjeve nga {start_date.strftime('%d/%m/%Y')} deri {end_date.strftime('%d/%m/%Y')}",
+            labels={
+                "Dita_Formatuar": "Dita e Muajit",
+                kolona_vleres: "Vlera e Shitjes (ALL)",
+            },
+            text_auto=".2s",  # Shfaq vlerat mbi shtylla në mënyrë të mbledhur (psh: 45k, 1.2M)
+        )
+
+        # Stilimi i grafikut që të jetë modern dhe i pastër
+        fig.update_traces(
+            marker_color="#1a237e",  # Ngjyrë blu e errët raportesh
+            textposition="outside",
+            cliponaxis=False,
+        )
+
+        fig.update_layout(
+            xaxis_tickangle=-45, plot_bgcolor="white", hovermode="x unified", height=500
+        )
+
+        # Shfaqja e grafikut në Streamlit
+        st.plotly_chart(fig, use_container_width=True)
+
+        # 6. Shfaqja e tabelës së të dhënave poshtë grafikut për kontroll manual
+        with st.expander("📋 Shiko tabelën e detajuar të shitjeve ditore"):
+            st.dataframe(
+                df_ditore.rename(
+                    columns={
+                        "Dita_Formatuar": "Dita",
+                        kolona_vleres: "Vlera Totale (ALL)",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    else:
+        st.warning(
+            "⚠️ Nuk ka të dhëna shitjesh për këtë agjent ose periudhë të zgjedhur."
+        )
