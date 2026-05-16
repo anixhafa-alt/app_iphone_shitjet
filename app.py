@@ -1782,7 +1782,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Lidhja ekzakte e KG sipas Sheet-it)
+# MODULI I PLOTË: SHITJET DITORE (I Sinkronizuar me kg)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1801,53 +1801,8 @@ elif page == "Shitjet Ditore":
 
     if df_raw is not None and not df_raw.empty:
 
-        # --- BASHKIMI LOKAL I SAKTIKSHËM SIPAS FOTOS SATE ---
-        df_punimi = df_raw.copy()
-        try:
-            # Lexojmë fiks sheet-in 'produktet' nga skedari 'produkte+.xlsx'
-            df_prod = pd.read_excel(
-                "produkte+.xlsx", sheet_name="produktet", engine="openpyxl"
-            )
-
-            # Kolonat e sakta të lidhjes dhe peshës
-            kolona_lidh_sql = "KodiArt"
-            kolona_lidh_excel = "KODI"
-            kolona_peshe = "KG/SKU"
-
-            # Sigurohemi që të dyja kolonat e lidhjes janë të tipit string dhe pa hapësira bosh
-            df_punimi[kolona_lidh_sql] = (
-                df_punimi[kolona_lidh_sql].astype(str).str.strip()
-            )
-            df_prod[kolona_lidh_excel] = (
-                df_prod[kolona_lidh_excel].astype(str).str.strip()
-            )
-
-            # Marrim vetëm kolonat që na duhen dhe pastrojmë dublikatët nga Exceli
-            df_prod_paster = df_prod[[kolona_lidh_excel, kolona_peshe]].drop_duplicates(
-                subset=[kolona_lidh_excel]
-            )
-
-            # Bashkojmë SQL (df_punimi) me Excel-in (df_prod_paster)
-            df_punimi = pd.merge(
-                df_punimi,
-                df_prod_paster,
-                left_on=kolona_lidh_sql,
-                right_on=kolona_lidh_excel,
-                how="left",
-            )
-
-            # Kthejmë peshën në numër dhe llogarisim Kilogramët: Copë (Sasia) * Pesha (KG/SKU)
-            df_punimi[kolona_peshe] = pd.to_numeric(
-                df_punimi[kolona_peshe], errors="coerce"
-            ).fillna(0)
-            df_punimi["Sasia_KG_Real"] = df_punimi["Sasia"] * df_punimi[kolona_peshe]
-            kolona_kg = "Sasia_KG_Real"
-
-        except Exception as e:
-            st.error(
-                f"⚠️ Gabim gjatë lidhjes me 'produkte+.xlsx' (sheet='produktet'). Gabimi: {e}"
-            )
-            kolona_kg = "Sasia"  # Nëse dështon lidhja, kthehet te sasia standarde
+        # --- MARRIM DIREKT KOLONËN "kg" TË LLOGARITUR NGA FILLIMI I KODIT ---
+        kolona_kg = "kg"
 
         # --- PERIUDHAT FIKS SI NË STRUKTURË ---
         vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
@@ -1855,7 +1810,7 @@ elif page == "Shitjet Ditore":
         vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
 
         # --- FILTRIMET E PËRGJITHSHËM ---
-        df_base = df_punimi.copy()
+        df_base = df_raw.copy()
         df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
 
         if grup_sel != "Të gjitha":
@@ -1875,6 +1830,7 @@ elif page == "Shitjet Ditore":
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
+                # Sigurohemi që kolona "kg" trajtohet si numër pastër
                 df_p[kolona_kg] = pd.to_numeric(
                     df_p[kolona_kg], errors="coerce"
                 ).fillna(0)
@@ -1946,6 +1902,7 @@ elif page == "Shitjet Ditore":
         fig = go.Figure()
         gjeresia_kolones = 0.6
 
+        # 1. PRILL 2025
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1958,6 +1915,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
+        # 2. MARS 2026
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1970,6 +1928,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
+        # 3. MAJ 2026
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
