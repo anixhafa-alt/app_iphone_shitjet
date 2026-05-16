@@ -86,7 +86,7 @@ if not check_password():
 st.sidebar.warning("V 1.0.9 - Live Update")
 # --- NAVIGIMI ---
 
-st.sidebar.title("🧭 Menuja Kryesore")
+st.sidebar.title("🎛️ Menuja Kryesore")
 
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
