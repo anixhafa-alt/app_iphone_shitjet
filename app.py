@@ -1782,7 +1782,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Llogaritja Dinamike e KG nga GitHub)
+# MODULI I PLOTË: SHITJET DITORE (I Sinkronizuar me Realizimin)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1790,7 +1790,7 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
-    # Data fiks e aplikacionit (Sipas fotos sate)
+    # Data fiks e aplikacionit
     sot = datetime(2026, 5, 16)
 
     st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
@@ -1802,50 +1802,24 @@ elif page == "Shitjet Ditore":
 
     if df_raw is not None and not df_raw.empty:
 
-        # --- BASHKIMI ME EXCEL-IN E GITHUB PËR TË LLOGARITUR KG ---
-        try:
-            # SHËNIM: Ndrysho këtë URL me linkun tënd real "Raw" të GitHub nëse nuk e ke ngarkuar diku më lart në kod
-            url_github_produkte = (
-                "https://raw.githubusercontent.com/[USER]/[REPO]/main/produkte+.xlsx"
-            )
-
-            # Nëse e ke ngarkuar tashmë këtë tabelë më lart në aplikacion (p.sh. df_produkte), mund ta përdorësh direkt.
-            # Për siguri, po e lexojmë këtu:
-            df_prod = pd.read_excel(url_github_produkte)
-
-            # Sigurohemi që kolonat e lidhjes (p.sh. SKU ose KodiArtikullit) janë të njëjta
-            # Unë po supozoj se kolona e përbashkët quhet 'SKU' ose 'Kodi' dhe kolona e peshës quhet 'Pesha' ose 'KG_per_Cope'
-            # Përshtat emrat e kolonave sipas skedarit tënd:
-            kolona_lidhëse = "SKU" if "SKU" in df_raw.columns else "KodiArtikullit"
-            kolona_peshe = "Pesha" if "Pesha" in df_prod.columns else "KG_per_Cope"
-
-            # Marrim vetëm kolonat që na duhen nga Excel-i i produkteve
-            df_prod_paster = df_prod[[kolona_lidhëse, kolona_peshe]].drop_duplicates()
-
-            # Bëjmë lidhjen (Merge) e të dhënave të SQL me ato të GitHub
-            df_punimi = pd.merge(df_raw, df_prod_paster, on=kolona_lidhëse, how="left")
-
-            # LLOGARITJA DINAMIKE: Sasia (Copë) * Pesha e artikullit
-            df_punimi["Sasia_KG_Dinamike"] = df_punimi["Sasia"] * df_punimi[
-                kolona_peshe
-            ].fillna(0)
-            kolona_kg = "Sasia_KG_Dinamike"
-
-        except Exception as e:
-            # Nëse dështon leximi i GitHub për ndonjë arsye, krijojmë një fallback që të mos bllokohet faqja
-            st.warning(
-                f"⚠️ Nuk u llogaritën dot KG nga GitHub. U përdor kolona standarde. Gabimi: {e}"
-            )
-            df_punimi = df_raw.copy()
-            kolona_kg = "Sasia"  # ose kolona tjetër rezervë
+        # --- EMRI I KOLONËS SË KG (FIKS SI TE MODULET E TJERA) ---
+        # Kontrollojmë si quhet kolona e kilogramëve të llogaritur që vjen nga faqet e tjera
+        if "Sasia_KG" in df_raw.columns:
+            kolona_kg = "Sasia_KG"
+        elif "SasiaKG" in df_raw.columns:
+            kolona_kg = "SasiaKG"
+        elif "Pesha" in df_raw.columns:
+            kolona_kg = "Pesha"
+        else:
+            kolona_kg = "Sasia"  # Fallback nëse diçka nuk shkon
 
         # --- PERIUDHAT FIKS SI NË EXCEL ---
         vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
         vit_para_muaj, para_muaj = 2026, 3  # Mars 2026
         vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
 
-        # --- FILTRIMET E PËRGJITHSHËM (Mbi dataframe-in e ri të bashkuar) ---
-        df_base = df_punimi.copy()
+        # --- FILTRIMET E PËRGJITHSHËM ---
+        df_base = df_raw.copy()
         df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
 
         if grup_sel != "Të gjitha":
@@ -1857,7 +1831,7 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSIONI I MARRJEN SË TË DHËNAVE ---
+        # --- FUNKSIONI I MARRJES SË TË DHËNAVE ---
         def merr_asortimentin_ditore(df_filtri, vit, muaj):
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
@@ -1865,6 +1839,7 @@ elif page == "Shitjet Ditore":
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
+                # Sigurojmë që vlerat janë numerike
                 df_p[kolona_kg] = pd.to_numeric(
                     df_p[kolona_kg], errors="coerce"
                 ).fillna(0)
@@ -1936,7 +1911,7 @@ elif page == "Shitjet Ditore":
         fig = go.Figure()
         gjeresia_kolones = 0.6
 
-        # 1. PRILL 2025
+        # 1. PRILL 2025 (Teal i hapur)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1949,7 +1924,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 2. MARS 2026
+        # 2. MARS 2026 (Teal i Errët)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1962,7 +1937,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 3. MAJ 2026
+        # 3. MAJ 2026 (E Verdha Gold)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
