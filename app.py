@@ -86,7 +86,23 @@ if not check_password():
 st.sidebar.warning("V 1.0.9 - Live Update")
 # --- NAVIGIMI ---
 
-st.sidebar.title("🎛️ Menuja Kryesore")
+# st.sidebar.title("🧭 Menuja Kryesore")
+st.sidebar.markdown(
+    """
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+        </svg>
+        <h1 style="font-size: 1.75rem; font-weight: 700; margin: 0; padding: 0; color: #31333F;">
+            Menuja Kryesore
+        </h1>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
