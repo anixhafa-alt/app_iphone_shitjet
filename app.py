@@ -1782,14 +1782,13 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Përputhje Matematikore me Excel)
+# MODULI I KORRIGJUAR: SHITJET DITORE (Verifikimi i Kolonës së KG)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
     import plotly.graph_objects as go
     from datetime import datetime
 
-    # Sipas fotos tënde: 16/05/2026
     sot = datetime(2026, 5, 16)
 
     st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
@@ -1800,22 +1799,30 @@ elif page == "Shitjet Ditore":
     st.divider()
 
     if df_raw is not None and not df_raw.empty:
-        kolona_kg = "Sasia" if "Sasia" in df_raw.columns else "Sasia_KG"
 
-        # --- PERIUDHAT FIKS SI NË EXCEL-IN TËND ---
-        # 1. Muaji Aktual: Maj 2026
-        vit_aktual, muaj_aktual = 2026, 5
+        # 🔍 KUTIA E KONTROLLIT (SHTYPNI KËTË PËR TË ZGJIDHUR GABIMIN E SASISË)
+        with st.expander(
+            "🔍 KONTROLLI I EMRAVE TË KOLONAVE (Nëse sasitë nuk përputhen)"
+        ):
+            st.write("Kolonat e gjetura në databazë:", list(df_raw.columns))
+            # Kjo të lejon të zgjedhësh manualisht kolonën që ka kilogramët realë
+            kolona_kg = st.selectbox(
+                "Zgjidh kolonën e saktë të Kilogrameve (KG):",
+                options=list(df_raw.columns),
+                index=(
+                    list(df_raw.columns).index("Sasia_KG")
+                    if "Sasia_KG" in df_raw.columns
+                    else 0
+                ),
+            )
 
-        # 2. Muaji i Kaluar në Excel: Mars 2026 (Muaji 3)
-        vit_para_muaj, para_muaj = 2026, 3
-
-        # 3. Viti i Kaluar në Excel: Prill 2025 (Muaji 4, Viti 2025)
-        vit_para_vit, para_vit_muaj = 2025, 4
+        # --- PERIUDHAT FIKS SI NË EXCEL ---
+        vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
+        vit_para_muaj, para_muaj = 2026, 3  # Mars 2026
+        vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
 
         # --- FILTRIMET E PËRGJITHSHËM ---
         df_base = df_raw.copy()
-
-        # Sigurohemi që data është konvertuar saktë përpara filtrimit
         df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
 
         if grup_sel != "Të gjitha":
@@ -1835,13 +1842,15 @@ elif page == "Shitjet Ditore":
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
-                # Kthejmë fiks shumën për çdo ditë
+                # Mbledhim sipas kolonës së zgjedhur te selectbox-i
                 return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
             return {}
 
         data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
         data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
         data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
+
+        _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
         # Numri i ditëve rregullohet sipas muajit aktual (Maj ka 31 ditë)
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
