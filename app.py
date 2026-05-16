@@ -346,7 +346,7 @@ with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
 # ---------------------------------------------------------
 if page == "Historiku":
     st.title("📚 Historiku i Shitjeve & Analiza e Artikujve")
-
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
     if df_raw is not None:
         # 1. Krijojmë kopjen për punë
         df_hist = df_raw.copy()
@@ -543,6 +543,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
     st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     st.info(f"📅 Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
@@ -779,6 +780,7 @@ elif page == "Realizimi":
 
     sot = datetime.now()
     st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     if df_raw is not None:
         # --- 1. TARGETI DHE REALIZIMI KORRENT ---
@@ -1169,7 +1171,7 @@ elif page == "Realizimi":
 # ---------------------------------------------------------
 elif page == "Mundësitë":
     st.title("🎯 Analiza e Mundësive (Gap Analysis)")
-
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
     # --- SEKSIONI INFO MBI LLOGARITJEN ---
     with st.expander("ℹ️ Si llogaritet ky vlerësim? (Metodologjia)"):
         st.write("""
@@ -1262,6 +1264,7 @@ elif page == "Mundësitë":
 # ---------------------------------------------------------
 elif page == "Asistenti AI":
     st.title("🛡️ Strategjia e Shitjeve & Agjenda Inteligjente")
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     if agj_sel == "Të gjithë":
         st.warning("⚠️ Zgjidhni një agjent në sidebar për të parë planin e plotë.")
@@ -1519,6 +1522,8 @@ elif page == "Asistenti AI":
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
     st.title("📅 Route Plan AI")
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
+
     st.markdown(
         """
         <style> .stTooltipIcon { display: inline-block; } </style>
