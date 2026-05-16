@@ -1781,7 +1781,7 @@ elif page == "Route Plan AI":
                 "text/csv",
             )
 # ---------------------------------------------------------
-# MODULI I RI: SHITJET DITORE (Krahasimi i Volumit në KG)
+# MODULI I RI: SHITJET DITORE (Tri Kaskada Krahasuese në KG)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1791,7 +1791,7 @@ elif page == "Shitjet Ditore":
     sot = datetime.now()
 
     # 1. Titulli i faqes i personalizuar dinamikisht
-    st.title(f"📊 Analiza dhe Krahasimi i Shitjeve Ditore (KG)")
+    st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
     st.markdown(
         f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
         unsafe_allow_html=True,
@@ -1799,21 +1799,18 @@ elif page == "Shitjet Ditore":
     st.divider()
 
     if df_raw is not None and not df_raw.empty:
-        # Përcaktojmë kolonën e sasisë në KG (Nga struktura juaj është 'Sasia')
+        # Përcaktojmë kolonën e sasisë në KG
         kolona_kg = "Sasia" if "Sasia" in df_raw.columns else "Sasia_KG"
 
         # --- KALKULIMI I PERIUDHAVE ---
-        # A. Muaji Aktual
         vit_aktual, muaj_aktual = sot.year, sot.month
 
-        # B. 1 Muaj Përpara
         pare_muaj_date = sot.replace(day=1) - timedelta(days=1)
         vit_para_muaj, para_muaj = pare_muaj_date.year, pare_muaj_date.month
 
-        # C. 1 Vit Përpara (I njëjti muaj)
         vit_para_vit, para_vit_muaj = sot.year - 1, sot.month
 
-        # --- FILTRIMI I PËRGJITHSHËM (Agjenti, Grupi, Klienti) ---
+        # --- FILTRAMET E PËRGJITHSHËM ---
         df_base = df_raw.copy()
         if grup_sel != "Të gjitha":
             df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
@@ -1824,7 +1821,7 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSION NDREMTUES PËR GRUPOJMË DITËT ---
+        # --- FUNKSIONI PËR MARRJEN E DATA-S ---
         def merr_asortimentin_ditore(vit, muaj):
             df_p = df_base[
                 (df_base["Data"].dt.year == vit) & (df_base["Data"].dt.month == muaj)
@@ -1834,28 +1831,24 @@ elif page == "Shitjet Ditore":
                 return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
             return {}
 
-        # Marrim fjalorët e të dhënave për të 3 periudhat
         data_aktual = merr_asortimentin_ditore(vit_aktual, muaj_aktual)
         data_para_muaj = merr_asortimentin_ditore(vit_para_muaj, para_muaj)
         data_para_vit = merr_asortimentin_ditore(vit_para_vit, para_vit_muaj)
 
-        # Gjejmë numrin maksimal të ditëve të muajit aktual për boshtin X
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
-        # --- NDËRTIMI I SERIVE PËR GRAFIK ---
+        # --- PREGATITJA E BOSHTIT X DHE Y ---
         ditet_x = [f"D {d:02d}" for d in range(1, numri_diteve + 1)]
         y_aktual = [data_aktual.get(d, 0.0) for d in range(1, numri_diteve + 1)]
         y_para_muaj = [data_para_muaj.get(d, 0.0) for d in range(1, numri_diteve + 1)]
         y_para_vit = [data_para_vit.get(d, 0.0) for d in range(1, numri_diteve + 1)]
 
-        # --- METRIKAT KRYESORE (Krahasuese për Muajin Aktual) ---
+        # --- METRIKAT KRYESORE ---
         totali_aktual = sum(y_aktual)
         totali_para_muaj = sum(y_para_muaj)
         totali_para_vit = sum(y_para_vit)
 
         c1, c2, c3 = st.columns(3)
-
-        # Kalkulojmë ndryshimet në përqindje
         ndryshimi_muaj = (
             ((totali_aktual - totali_para_muaj) / totali_para_muaj * 100)
             if totali_para_muaj > 0
@@ -1877,69 +1870,79 @@ elif page == "Shitjet Ditore":
             delta=f"{ndryshimi_muaj:+.1f}%",
         )
         c3.metric(
-            label=f"⏳ vs Viti i Kaluar ({muajt_sq.get(para_vit_muaj)} {vit_para_vit})",
+            label=f"⏳ vs Viti i Kaluar ({vit_para_vit})",
             value=f"{totali_para_vit:,.1f} kg",
             delta=f"{ndryshimi_vit:+.1f}%",
         )
         st.write("")
 
-        # --- NDËRTIMI I GRAFIKUT INTERAKTIV ---
+        # --- NDËRTIMI I MULTI-WATERFALL CHART ---
         fig = go.Figure()
 
-        # Linja 1: Muaji Aktual (Shtylla kryesore ose Linjë e theksuar)
+        # 1. Kaskada e parë: Muaji Aktual
         fig.add_trace(
-            go.Bar(
+            go.Waterfall(
+                name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)})",
+                orientation="v",
+                measure=["relative"] * numri_diteve,
                 x=ditet_x,
                 y=y_aktual,
-                name=f"Muaji Aktual ({muajt_sq.get(muaj_aktual)} {vit_aktual})",
-                marker_color="#1a237e",  # Blu e Errët
-                text=[f"{v:,.0f}" if v > 0 else "" for v in y_aktual],
+                text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
                 textposition="outside",
+                increasing={
+                    "marker": {"color": "#1a237e"}
+                },  # Blu e Errët për muajin korrent
+                connector={"line": {"color": "#e0e0e0", "width": 1}},
             )
         )
 
-        # Linja 2: Një Muaj Përpara
+        # 2. Kaskada e dytë: Muaji i Kaluar
         fig.add_trace(
-            go.Scatter(
+            go.Waterfall(
+                name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)})",
+                orientation="v",
+                measure=["relative"] * numri_diteve,
                 x=ditet_x,
                 y=y_para_muaj,
-                mode="lines+markers",
-                name=f"Muaji i Kaluar ({muajt_sq.get(para_muaj)} {vit_para_muaj})",
-                line=dict(
-                    color="#ff9100", width=2, dash="dash"
-                ),  # Portokalli me ndërprerje
-                marker=dict(size=6),
+                text=[f"{v:.0f}" if v > 0 else "" for v in y_para_muaj],
+                textposition="outside",
+                increasing={"marker": {"color": "#ff9100"}},  # Portokalli
+                connector={"line": {"color": "#e0e0e0", "width": 1}},
             )
         )
 
-        # Linja 3: Një Vit Përpara (I njëjti muaj)
+        # 3. Kaskada e tretë: Viti i Kaluar
         fig.add_trace(
-            go.Scatter(
+            go.Waterfall(
+                name=f"Viti i Kaluar ({vit_para_vit})",
+                orientation="v",
+                measure=["relative"] * numri_diteve,
                 x=ditet_x,
                 y=y_para_vit,
-                mode="lines+markers",
-                name=f"Viti i Kaluar ({muajt_sq.get(para_vit_muaj)} {vit_para_vit})",
-                line=dict(color="#757575", width=2, dash="dot"),  # Gri me pika
-                marker=dict(size=6),
+                text=[f"{v:.0f}" if v > 0 else "" for v in y_para_vit],
+                textposition="outside",
+                increasing={"marker": {"color": "#757575"}},  # Gri
+                connector={"line": {"color": "#e0e0e0", "width": 1}},
             )
         )
 
-        # Stilimi i pamjes së grafikut
+        # Rregullimi i pamjes që kaskadat të qëndrojnë të grupuara krah për krah
         fig.update_layout(
-            title=f"Krahasimi Ditore i Volumit në KG",
-            xaxis=dict(title="Dita e Muajit", tickangle=-90, type="category"),
-            yaxis=dict(title="Sasia e Shitjes (KG)", gridcolor="#f0f0f0"),
+            title="Krahasimi i Kaskadave Ditore të Shitjeve (KG)",
+            waterfallgap=0.2,  # Hapësira midis grupeve të ditëve
             plot_bgcolor="white",
-            height=600,
+            height=650,
+            xaxis=dict(title="Dita e Muajit", tickangle=-90, type="category"),
+            yaxis=dict(title="Volumi i Shitjeve (KG)", gridcolor="#f0f0f0"),
             legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+                orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
             ),
             hovermode="x unified",
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- TABELA PËRMBLEDHËSE ---
+        # --- TABELA ---
         with st.expander("📋 Shiko tabelën krahasuese të të dhënave"):
             tabela_df = pd.DataFrame(
                 {
@@ -1951,134 +1954,5 @@ elif page == "Shitjet Ditore":
             )
             st.dataframe(tabela_df, use_container_width=True, hide_index=True)
 
-    else:
-        st.error("Të dhënat nuk u ngarkuan dot.")
-    import calendar
-    import plotly.graph_objects as go
-
-    sot = datetime.now()
-
-    # 1. Titulli i faqes i personalizuar dinamikisht
-    st.title(f"📊 Grafik Kaskadë (Waterfall) - Shitjet Ditore (KG)")
-    st.markdown(
-        f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
-        unsafe_allow_html=True,
-    )
-    st.divider()
-
-    if df_raw is not None and not df_raw.empty:
-        # Përcaktojmë kolonën e sasisë në KG (Nëse quhet ndryshe, p.sh. 'Sasia', ndryshoje këtu)
-        kolona_kg = "Sasia_KG" if "Sasia_KG" in df_raw.columns else "Sasia"
-
-        if kolona_kg not in df_raw.columns:
-            # Nëse nuk gjendet asnjëra, merr kolonën e parë numerike që nuk është Vlera
-            kolona_kg = [
-                c
-                for c in df_raw.select_dtypes(include=["number"]).columns
-                if "vlera" not in c.lower()
-            ][0]
-
-        # 2. FILTRIMI AUTOMATIK: Vetëm për muajin dhe vitin aktual korrent
-        mask_muaji_aktual = (df_raw["Data"].dt.year == sot.year) & (
-            df_raw["Data"].dt.month == sot.month
-        )
-        df_korrent = df_raw[mask_muaji_aktual].copy()
-
-        # Aplikojmë filtrat e tjerë të përzgjedhur në Sidebar (Agjenti, Grupi, Klienti)
-        if grup_sel != "Të gjitha":
-            df_korrent = df_korrent[df_korrent["Grup_Filtri"] == grup_sel]
-
-        if agj_sel != "Të gjithë":
-            df_korrent = df_korrent[df_korrent["ForcaShitese"] == agj_sel]
-
-        if klientet_selected:
-            df_korrent = df_korrent[df_korrent["Klienti"].isin(klientet_selected)]
-
-        # Gjejmë sa ditë ka muaji aktual
-        _, numri_diteve = calendar.monthrange(sot.year, sot.month)
-
-        # Grupojmë shitjet ekzistuese sipas ditës së muajit
-        df_korrent["Dita_Numri"] = df_korrent["Data"].dt.day
-        df_ditore = df_korrent.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
-
-        # 3. NDËRTIMI I LISTËS ME T TË GJITHA DITËT E MUAJIT
-        x_data = []
-        y_data = []
-        measure_data = []
-
-        totali_muajit_kg = 0
-
-        for dita in range(1, numri_diteve + 1):
-            vlera_kg = df_ditore.get(dita, 0.0)
-            totali_muajit_kg += vlera_kg
-
-            x_data.append(f"D {dita:02d}")
-            y_data.append(vlera_kg)
-            measure_data.append("relative")
-
-        # Llogarisim mesataren vetëm për ditët që kanë pasur volum real
-        ditet_me_shitje = sum(1 for v in df_ditore.values() if v > 0)
-        mesatarja_ditore_kg = (
-            totali_muajit_kg / ditet_me_shitje if ditet_me_shitje > 0 else 0
-        )
-
-        # 4. Ndërtimi i Metrikave kryesore në krye (Të gjitha në KG)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("📦 Volumi Total i Muajit", f"{totali_muajit_kg:,.1f} kg")
-        c2.metric("📈 Mesatarja Ditore Volumit", f"{mesatarja_ditore_kg:,.1f} kg")
-        c3.metric("📅 Ditë me Aktivitet", f"{ditet_me_shitje} nga {numri_diteve} Ditë")
-        st.write("")
-
-        # 5. KRIJIMI I GRAFIKUT WATERFALL (KASKADË)
-        if totali_muajit_kg > 0:
-            fig = go.Figure(
-                go.Waterfall(
-                    name="Volumi (KG)",
-                    orientation="v",
-                    measure=measure_data,
-                    x=x_data,
-                    textposition="outside",
-                    # Formatimi i tekstit mbi shtylla: Shfaqet psh '450 kg' ose '1.2k kg' nëse është shumë i lartë
-                    text=[f"{v:,.0f} kg" if v > 0 else "" for v in y_data],
-                    y=y_data,
-                    connector={
-                        "line": {
-                            "color": "rgb(166, 166, 166)",
-                            "width": 1,
-                            "dash": "dot",
-                        }
-                    },
-                    decreasing={"marker": {"color": "#e53935"}},
-                    increasing={"marker": {"color": "#2e7d32"}},
-                )
-            )
-
-            fig.update_layout(
-                title=f"Ecuria e Kaskadës së Volumit (KG) për Muajin {muajt_sq.get(sot.month)}",
-                showlegend=False,
-                plot_bgcolor="white",
-                height=550,
-                xaxis=dict(tickangle=-90, type="category"),
-                yaxis=dict(title="Sasia Kumulative (KG)", gridcolor="#f0f0f0"),
-            )
-
-            # Shfaqja e grafikut interaktiv
-            st.plotly_chart(fig, use_container_width=True)
-
-            # 6. Tabela opsionale poshtë për kontroll të detajuar
-            with st.expander("📋 Shiko tabelën e plotë të volumit ditore (KG)"):
-                tabela_df = pd.DataFrame(
-                    {
-                        "Dita e Muajit": [
-                            f"Dita {d}" for d in range(1, numri_diteve + 1)
-                        ],
-                        "Sasia e Shitjes (KG)": y_data,
-                    }
-                )
-                st.dataframe(tabela_df, use_container_width=True, hide_index=True)
-        else:
-            st.warning(
-                f"⚠️ Nuk u gjet asnjë faturim në muajin aktual ({muajt_sq.get(sot.month)} {sot.year}) për agjentin ose grupin e zgjedhur."
-            )
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
