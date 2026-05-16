@@ -771,6 +771,7 @@ elif page == "Planifikimi" and df_raw is not None:
         )
 
 # ---------------------------------------------------------
+# ---------------------------------------------------------
 # MODULI: REALIZIMI
 # ---------------------------------------------------------
 elif page == "Realizimi":
@@ -818,13 +819,16 @@ elif page == "Realizimi":
 
         t_real = df_live["kg"].sum()
 
-        # --- LLOGARITJA E ÇMIMIT MESATAR (E SHTUAR) ---
-        # Ndrysho "Cmimi" me emrin ekzakte të kolonës tuaj nëse ndryshon
-        cmimi_mesatar = (
-            df_live["Cmimi"].mean()
-            if "Cmimi" in df_live.columns and len(df_live) > 0
+        # --- LLOGARITJA E ÇMIMIT MESATAR LIVE (KORRIGJUAR) ---
+        t_vlera_live = (
+            df_live["Vlera_Historike"].sum()
+            if "Vlera_Historike" in df_live.columns
             else 0
         )
+        if t_real > 0:
+            cmimi_mesatar = t_vlera_live / t_real
+        else:
+            cmimi_mesatar = 0
 
         # --- 2. DITËT E PUNËS (Pa të diela) ---
         start_muaji = sot.replace(day=1)
@@ -843,7 +847,9 @@ elif page == "Realizimi":
 
         # --- 3. METRIKAT KRYESORE ---
         total_perc = (t_real / t_target * 100) if t_target > 0 else 0
-        c1, c2, c3, c4, c5 = st.columns(5)  # Ndryshuar në 5 kolona
+        c1, c2, c3, c4, c5 = st.columns(
+            5
+        )  # Ndryshuar në 5 kolona për të rreshtuar Çmimin Mesatar
         c1.metric("Target KG", f"{t_target:,.0f}")
         c2.metric("Realizuar KG", f"{t_real:,.0f}")
         status_color = "normal" if total_perc >= koha_perq else "inverse"
@@ -859,8 +865,8 @@ elif page == "Realizimi":
             f"{koha_perq:.1f}% e muajit",
         )
         c5.metric(
-            "Çmimi Mesatar", f"{cmimi_mesatar:,.2f} Leke"
-        )  # Metrika e re e shtuar
+            "Çmimi Mesatar", f"{cmimi_mesatar:,.2f} Lekë"
+        )  # Shfaqja e metrikës së re
 
         st.divider()
 
@@ -1156,6 +1162,7 @@ elif page == "Realizimi":
             mime="text/html",
             use_container_width=True,
         )
+
 # ---------------------------------------------------------
 
 # MODULI: MUNDESITE
