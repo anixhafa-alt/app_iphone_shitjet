@@ -1782,7 +1782,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Llogaritja Lokale e KG)
+# MODULI I PLOTË: SHITJET DITORE (Llogaritja e Pastër me KG/SKU)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1804,10 +1804,10 @@ elif page == "Shitjet Ditore":
         # --- BASHKIMI LOKAL ME EXCEL-IN E PRODUKTEVE PËR TË LLOGARITUR KG ---
         df_punimi = df_raw.copy()
         try:
-            # Lexojmë skedarin direkt nga dosja e projektit siç bëhet te Realizimi
+            # Lexojmë skedarin lokal të produkteve
             df_prod = pd.read_excel("produkte+.xlsx", engine="openpyxl")
 
-            # Gjejmë kolonat e lidhjes (përshtati nëse kanë emra të tjerë te tabela jote)
+            # Përcaktojmë kolonat e sakta të lidhjes
             kolona_lidh_sql = (
                 "KodiArtikullit" if "KodiArtikullit" in df_punimi.columns else "SKU"
             )
@@ -1817,19 +1817,15 @@ elif page == "Shitjet Ditore":
                 else ("SKU" if "SKU" in df_prod.columns else df_prod.columns[0])
             )
 
-            # Gjejmë kolonën e peshës në Excel
-            kolona_peshe = (
-                "Pesha"
-                if "Pesha" in df_prod.columns
-                else ("KG_per_Cope" if "KG_per_Cope" in df_prod.columns else "Pesha/KG")
-            )
+            # Kolona e saktë e peshës siç e konfirmove
+            kolona_peshe = "KG/SKU"
 
-            # Pastrojmë tabelën e produkteve nga dublikatët
+            # Pastrojmë tabelën e produkteve nga dublikatët për të mos shtuar rreshta artificialë
             df_prod_paster = df_prod[
                 [kolona_lidh_excel, kolona_peshe]
             ].drop_duplicates()
 
-            # Bashkojmë të dhënat (Merge)
+            # Bashkojmë të dhënat e shitjeve me peshën e produkteve
             df_punimi = pd.merge(
                 df_punimi,
                 df_prod_paster,
@@ -1838,17 +1834,18 @@ elif page == "Shitjet Ditore":
                 how="left",
             )
 
-            # LLOGARITJA: Copë (Sasia) * Pesha e artikullit = Kilogramë realë
-            df_punimi["Sasia_KG_Real"] = df_punimi["Sasia"] * df_punimi[
-                kolona_peshe
-            ].fillna(0)
+            # LLOGARITJA REALE: Sasia (Copë) * 'KG/SKU' (Pesha për njësi)
+            df_punimi[kolona_peshe] = pd.to_numeric(
+                df_punimi[kolona_peshe], errors="coerce"
+            ).fillna(0)
+            df_punimi["Sasia_KG_Real"] = df_punimi["Sasia"] * df_punimi[kolona_peshe]
             kolona_kg = "Sasia_KG_Real"
 
         except Exception as e:
-            st.error(f"⚠️ Nuk u lexua dot skedari 'produkte+.xlsx'. Gabimi: {e}")
-            kolona_kg = "Sasia"
+            st.error(f"⚠️ Nuk u llogaritën dot KG përmes kolonës 'KG/SKU'. Gabimi: {e}")
+            kolona_kg = "Sasia"  # Fallback nëse skedari nuk gjendet
 
-        # --- PERIUDHAT FIKS SI NË EXCEL-IN TËND ---
+        # --- PERIUDHAT FIKS SI NË EXCEL ---
         vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
         vit_para_muaj, para_muaj = 2026, 3  # Mars 2026
         vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
