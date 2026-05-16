@@ -206,14 +206,12 @@ if df_raw is not None and df_link is not None:
             df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
         )
 
-# Kontrolli i Datës së Fundit të Përditësimit (Versioni i Korrigjuar)
+# Kontrolli i Datës së Fundit të Përditësimit dhe Butoni i Rifreskimit
 if not df_raw.empty:
-    # Gjejmë emrin e saktë të kolonës së datës (qoftë 'data', 'DATA' apo 'Data')
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
 
     if kolona_date:
         emer_kolone = kolona_date[0]
-        # Sigurohemi që të jetë format datetime
         datet_konvertuara = pd.to_datetime(df_raw[emer_kolone], errors="coerce")
         data_maksimale = datet_konvertuara.max()
 
@@ -233,6 +231,19 @@ if not df_raw.empty:
                     f"Të dhënat e fundit: {data_maksimale.strftime('%d/%m/%Y')}\n"
                     f"Vonesa: {vonesa} ditë pa faturime."
                 )
+
+        # --- BUTONI I RI PËR REFRESH TË PLOTË ---
+        st.sidebar.markdown("---")
+        if st.sidebar.button(
+            "🔄 Rifresko nga SQL Server",
+            use_container_width=True,
+            help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore.",
+        ):
+            # Pastron të gjithë cache-in e leximit të të dhënave
+            st.cache_data.clear()
+            # Riberbën rregullimin e faqes (Reruns the app) për të bërë query-n e ri
+            st.rerun()
+
     else:
         st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
 
