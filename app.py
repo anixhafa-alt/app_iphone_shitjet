@@ -9,21 +9,46 @@ st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide"
 
 # Fjalori për Muajt Shqip
 muajt_sq = {
-    1: "Janar", 2: "Shkurt", 3: "Mars", 4: "Prill", 5: "Maj", 6: "Qershor",
-    7: "Korrik", 8: "Gusht", 9: "Shtator", 10: "Tetor", 11: "Nëntor", 12: "Dhjetor"
+    1: "Janar",
+    2: "Shkurt",
+    3: "Mars",
+    4: "Prill",
+    5: "Maj",
+    6: "Qershor",
+    7: "Korrik",
+    8: "Gusht",
+    9: "Shtator",
+    10: "Tetor",
+    11: "Nëntor",
+    12: "Dhjetor",
 }
+
 
 # --- SISTEMI I SIGURISE (LOGIN) ---
 def check_password():
     if "password_correct" not in st.session_state:
-        st.markdown("<h2 style='text-align: center;'>Hyrja në Sistem</h2>", unsafe_allow_html=True)
-        st.text_input("Shkruaj fjalëkalimin:", type="password", on_change=password_entered, key="password")
+        st.markdown(
+            "<h2 style='text-align: center;'>Hyrja në Sistem</h2>",
+            unsafe_allow_html=True,
+        )
+        st.text_input(
+            "Shkruaj fjalëkalimin:",
+            type="password",
+            on_change=password_entered,
+            key="password",
+        )
         return False
     elif not st.session_state["password_correct"]:
-        st.text_input("Fjalëkalim i gabuar!", type="password", on_change=password_entered, key="password")
+        st.text_input(
+            "Fjalëkalim i gabuar!",
+            type="password",
+            on_change=password_entered,
+            key="password",
+        )
         return False
     else:
         return True
+
 
 def password_entered():
     if st.session_state["password"] == "a":
@@ -31,6 +56,7 @@ def password_entered():
         del st.session_state["password"]
     else:
         st.session_state["password_correct"] = False
+
 
 if not check_password():
     st.stop()
@@ -96,15 +122,26 @@ st.sidebar.markdown(
 
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
-    ["Shitjet Ditore", "Realizimi", "Planifikimi", "Mundësitë", "Historiku", "Asistenti AI", "Route Plan AI"],
+    [
+        "Shitjet Ditore",
+        "Realizimi",
+        "Planifikimi",
+        "Mundësitë",
+        "Historiku",
+        "Asistenti AI",
+        "Route Plan AI",
+    ],
 )
+
 
 # --- NGARKIMI I TE DHENAVE ---
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
         conn = st.connection("sql", type="sql")
-        df_sql = conn.query("SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView")
+        df_sql = conn.query(
+            "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
+        )
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
 
@@ -115,8 +152,12 @@ def load_all_data():
 
         df = pd.merge(df_sql, df_map, left_on="KodiArt", right_on="KODI", how="left")
         df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
-        df.rename(columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True)
-        df["Vlera_Historike"] = pd.to_numeric(df["VleraRresht"], errors="coerce").fillna(0)
+        df.rename(
+            columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
+        )
+        df["Vlera_Historike"] = pd.to_numeric(
+            df["VleraRresht"], errors="coerce"
+        ).fillna(0)
         df["kat"] = df["kat"].fillna("ETJ")
         df["statusi"] = df["statusi"].fillna("inaktiv")
 
@@ -135,13 +176,19 @@ def load_all_data():
         st.error(f"Gabim teknik: {e}")
         return None
 
+
 df_raw = load_all_data()
 
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
-    df_link = df_link[["KODI", "KATEG."]].rename(columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"})
+    df_link = df_link[["KODI", "KATEG."]].rename(
+        columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"}
+    )
     if "NGA LISTA E CMIMEVE" in df_link.columns:
-        df_link = df_link[df_link["NGA LISTA E CMIMEVE"].astype(str).str.upper().str.strip() == "AKTIV"].copy()
+        df_link = df_link[
+            df_link["NGA LISTA E CMIMEVE"].astype(str).str.upper().str.strip()
+            == "AKTIV"
+        ].copy()
 except Exception as e:
     st.error(f"Gabim te sheet-i 'produktet': {e}")
     df_link = None
@@ -157,7 +204,9 @@ if df_raw is not None and df_link is not None:
     df_raw = pd.merge(df_raw, df_link, on="KodiArt", how="left")
     if df_names is not None:
         df_raw = pd.merge(df_raw, df_names, on="KOD KAT", how="left")
-        df_raw["kat"] = df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
+        df_raw["kat"] = (
+            df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
+        )
 
 if not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
@@ -171,13 +220,21 @@ if not df_raw.empty:
         if pd.notnull(data_maksimale):
             koha_formatuar = data_maksimale.strftime("%d/%m/%Y - %H:%M:%S")
             if data_maksimale.date() == sot_data:
-                st.sidebar.success(f"🟢 Lidhja SQL: LIVE\n\nFat. fundit: {koha_formatuar}")
+                st.sidebar.success(
+                    f"🟢 Lidhja SQL: LIVE\n\nFat. fundit: {koha_formatuar}"
+                )
             else:
                 vonesa = (sot_data - data_maksimale.date()).days
-                st.sidebar.warning(f"🟡 Lidhja SQL: OK\n\nPërditësimi i fundit:\n{koha_formatuar}\n\nVonesa: {vonesa} ditë pa faturime.")
+                st.sidebar.warning(
+                    f"🟡 Lidhja SQL: OK\n\nPërditësimi i fundit:\n{koha_formatuar}\n\nVonesa: {vonesa} ditë pa faturime."
+                )
 
         st.sidebar.markdown("---")
-        if st.sidebar.button("🔄 Rifresko nga SQL Server", use_container_width=True, help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore."):
+        if st.sidebar.button(
+            "🔄 Rifresko nga SQL Server",
+            use_container_width=True,
+            help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore.",
+        ):
             st.cache_data.clear()
             st.rerun()
     else:
@@ -207,16 +264,21 @@ def nderto_sidebar():
         if "rritja_val" not in st.session_state:
             st.session_state["rritja_val"] = 10
     else:
-        st.error("⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml.")
+        st.error(
+            "⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml."
+        )
         st.info("Aplikacioni po punon, bur bur bur nuk ka të dhëna për të shfaqur.")
         st.stop()
 
     # Thirrja e librarisë që reziston refresh-in
     libraria_p = merr_librarine_permanente()
     opsionet_lib = list(libraria_p.keys())
-    
+
     # Kontrollojmë nëse përdoruesi sapo ka thirrur një plan që duhet ngarkuar
-    if "plan_per_te_ngarkuar" in st.session_state and st.session_state["plan_per_te_ngarkuar"] is not None:
+    if (
+        "plan_per_te_ngarkuar" in st.session_state
+        and st.session_state["plan_per_te_ngarkuar"] is not None
+    ):
         emri_planit = st.session_state["plan_per_te_ngarkuar"]
         plani_ruajtur = libraria_p.get(emri_planit)
 
@@ -224,7 +286,10 @@ def nderto_sidebar():
             st.session_state["start_d"] = plani_ruajtur["start"]
             st.session_state["end_d"] = plani_ruajtur["end"]
             st.session_state["rritja_val"] = plani_ruajtur["rritja"]
-            st.session_state["date_input_key"] = (plani_ruajtur["start"],  plani_ruajtur["end"])
+            st.session_state["date_input_key"] = (
+                plani_ruajtur["start"],
+                plani_ruajtur["end"],
+            )
             st.session_state["rritja_input"] = plani_ruajtur["rritja"]
 
         st.session_state["plan_per_te_ngarkuar"] = None
@@ -260,7 +325,14 @@ def nderto_sidebar():
             st.session_state["start_d"], st.session_state["end_d"] = date_range
 
         rritja = st.number_input(
-            "Rritja e planit (%)", value=st.session_state
+            "Rritja e planit (%)",
+            value=st.session_state.get("rritja_input", 0.0),
+            step=0.1,
+            format="%.2f",
+            key="rritja_input",
+        )
+        st.session_state["rritja_val"] = rritja
+
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
