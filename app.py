@@ -88,7 +88,7 @@ from PIL import Image
 import os
 
 # Gjejmë rrugën e saktë të dosjes ku ndodhet app.py
-EMRI_FOTOS = "image_272194.jpg"
+EMRI_FOTOS = "logo.png"
 
 if os.path.exists(EMRI_FOTOS):
     try:
