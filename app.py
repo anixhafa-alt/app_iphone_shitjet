@@ -102,28 +102,34 @@ else:
     st.sidebar.title("AXION")
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
-# --- Pjesa tjetër e stilit CSS (E paprekur) ---
-
+# --- CSS I RREGULLUAR PËR AFRESI MAKSIMALE ---
 st.sidebar.markdown(
     """
     <style>
+    /* 1. Heqim hapësirën e tepërt që krijon veshja e imazhit në Streamlit */
+    [data-testid="stSidebar"] [data-testid="stImage"] {
+        margin-bottom: 0px !important;
+        padding-bottom: 0px !important;
+    }
+    
+    /* 2. Tërheqim tekstin e versionit fort lart */
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 13px !important;
-        color: #566573 !important; /* Gri elegante */
+        font-size: 12px !important;
+        color: #566573 !important;
         text-align: center;
-        margin-top: 10px;          /* Ndryshuar nga -10px në -28px për ta ngritur lart */
-        margin-bottom: 15px;        /* Shton pak hapësirë para titullit "Panel Kontrolli" */
+        margin-top: -45px !important;  /* Ndryshuar në -45px për impakt më të fortë */
+        margin-bottom: 20px !important; /* Hapësira para se të fillojë "Panel Kontrolli" */
         letter-spacing: 1px;
+        font-weight: 500;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# Shfaqja e versionit (tani do të qëndrojë fiks nën logon)
+# Shfaqja e versionit
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
-
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
