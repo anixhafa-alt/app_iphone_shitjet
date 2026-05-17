@@ -1969,12 +1969,12 @@ elif page == "Shitjet Ditore":
         )
 
         fig.update_layout(
-            title="Shitjet ditore në KG)",
+            title="KASKADA KRAHASUESE E SHITJEVE DITORE",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
             xaxis=dict(
-                title="DITËT",
+                title="Ditët e muajit",
                 tickangle=0,
                 type="linear",
                 tickmode="array",
@@ -1982,7 +1982,7 @@ elif page == "Shitjet Ditore":
                 ticktext=ditet_etiketa,
                 range=[0.4, numri_diteve + 0.6],
             ),
-            yaxis=dict(title="SHITJET [KG]", gridcolor="#ffffff"),
+            yaxis=dict(title="Shitjet (kg)", gridcolor="#ffffff"),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
             ),
