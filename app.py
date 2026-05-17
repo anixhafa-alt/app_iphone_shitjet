@@ -1813,11 +1813,6 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
-    # Përdorim këtë për të llogaritur saktë muajt prapa pa u ngatërruar me Janarin/Dhjetorin
-    from fillimi_skriptit import (
-        muajt_sq,
-    )  # Sigurohu që importon dicionarin tënd të muajve nëse nuk është global
-
     # Data aktuale e referencës (bazohet te kjo që ke vendosur ose datetime.today())
     sot = datetime(2026, 5, 16)
 
