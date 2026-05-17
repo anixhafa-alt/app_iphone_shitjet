@@ -112,7 +112,7 @@ st.sidebar.markdown(
         font-size: 13px !important;
         color: #566573 !important; /* Gri elegante */
         text-align: center;
-        margin-top: 0px;          /* Ndryshuar nga -10px në -28px për ta ngritur lart */
+        margin-top: 10px;          /* Ndryshuar nga -10px në -28px për ta ngritur lart */
         margin-bottom: 15px;        /* Shton pak hapësirë para titullit "Panel Kontrolli" */
         letter-spacing: 1px;
     }
