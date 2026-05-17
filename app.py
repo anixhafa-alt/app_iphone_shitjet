@@ -1869,7 +1869,8 @@ elif page == "Shitjet Ditore":
 
         # --- PREGATITJA E KASKADËS ---
         ditet_numerik = list(range(1, numri_diteve + 1))
-        ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
+        # ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
+        ditet_etiketa = [f"{d:02d}" for d in ditet_numerik]
 
         def llogarit_kaskaden(data_dict):
             vlerat_reale = []
@@ -1967,7 +1968,7 @@ elif page == "Shitjet Ditore":
         )
 
         fig.update_layout(
-            title="Krahasimi Kumulativ i Mbivendosur (Volumi real në KG)",
+            title="Shitjet ditore në KG)",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
@@ -1980,7 +1981,7 @@ elif page == "Shitjet Ditore":
                 ticktext=ditet_etiketa,
                 range=[0.4, numri_diteve + 0.6],
             ),
-            yaxis=dict(title="SHITJET DITORE (KG)", gridcolor="#ffffff"),
+            yaxis=dict(title="[KG]", gridcolor="#ffffff"),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
             ),
