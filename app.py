@@ -149,7 +149,6 @@ page = st.sidebar.radio(
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
-        # A. Lidhja me SQL
         conn = st.connection("sql", type="sql")
         df_sql = conn.query(
             "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
@@ -157,16 +156,13 @@ def load_all_data():
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
 
-        # B. Lidhja me Excel
         df_map = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
         df_map.columns = df_map.columns.str.strip()
         df_map = df_map[["KODI", "KATEG.", "KG/SKU", "NGA LISTA E CMIMEVE"]].copy()
         df_map["KODI"] = df_map["KODI"].astype(str).str.strip()
 
-        # C. Merge
         df = pd.merge(df_sql, df_map, left_on="KodiArt", right_on="KODI", how="left")
 
-        # D. Kalkulimet
         df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
         df.rename(
             columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
@@ -225,7 +221,7 @@ if df_raw is not None and df_link is not None:
         )
 
 # =========================================================
-# 6. SEKSIONI I RIKONFIGURUAR I SINKRONIZIMIT (I RREGULLUAR)
+# 6. KORNIZA E RE E SINKRONIZIMIT (E BASHKUAR SIKURSE NË FOTO)
 # =========================================================
 if df_raw is not None and not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
@@ -235,31 +231,29 @@ if df_raw is not None and not df_raw.empty:
         data_maksimale = datet_konvertuara.max()
         sot_data = datetime.now().date()
 
-        # A. Butoni vendoset në krye (Aty ku ishte rreshti që u hoq)
-        if st.sidebar.button(
-            "🔄 Rifresko nga SQL Server",
-            use_container_width=True,
-            help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore.",
-        ):
-            st.cache_data.clear()
-            st.rerun()
+        # Krijohet një kornizë e përbashkët që mban butonin dhe statusin ngjitur
+        with st.sidebar.container(border=True):
+            if st.button(
+                "🔄 Rifresko nga SQL Server",
+                use_container_width=True,
+                help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore.",
+            ):
+                st.cache_data.clear()
+                st.rerun()
 
-        # B. Shfaqja e lidhjes dhe datës në një rresht të vetëm me gërma të vogla (<small>)
-        if pd.notnull(data_maksimale):
-            koha_formatuar = data_maksimale.strftime("%d/%m/%Y - %H:%M:%S")
-            if data_maksimale.date() == sot_data:
-                st.sidebar.success(
-                    f"🟢 Lidhja SQL: LIVE | <small>Fat. fundit: {koha_formatuar}</small>",
-                    icon=None,
-                )
-            else:
-                vonesa = (sot_data - data_maksimale.date()).days
-                st.sidebar.warning(
-                    f"🟡 Lidhja SQL: OK | <small>Fat. fundit: {koha_formatuar} ({vonesa} ditë vonesë)</small>",
-                    icon=None,
-                )
-
-        st.sidebar.markdown("---")
+            if pd.notnull(data_maksimale):
+                koha_formatuar = data_maksimale.strftime("%d/%m/%Y - %H:%M:%S")
+                if data_maksimale.date() == sot_data:
+                    st.markdown(
+                        f"🟢 Lidhja SQL: LIVE | <small style='color: #2e7d32;'>Fat. fundit: {koha_formatuar}</small>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    vonesa = (sot_data - data_maksimale.date()).days
+                    st.markdown(
+                        f"🟡 Lidhja SQL: OK | <small style='color: #b78103;'>Fat. fundit: {koha_formatuar} ({vonesa} d. vonesë)</small>",
+                        unsafe_allow_html=True,
+                    )
     else:
         st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
 
@@ -269,7 +263,6 @@ if df_raw is not None and not df_raw.empty:
 # =========================================================
 @st.cache_resource
 def merr_librarine_permanente():
-    """Ky funksion krijon një librari në memorien e serverit që nuk fshihet nga refresh."""
     return {"Zgjedhje Manuale (Pa Ruajtje)": None}
 
 
@@ -312,7 +305,7 @@ def nderto_sidebar():
 
         st.session_state["plan_per_te_ngarkuar"] = None
 
-    # MODULI: VENDOSJA E PLANIT SI EXPANDER MBLEDHËS
+    # MODULI: VENDOSJA E PLANIT SI EXPANDER (Tani ngjitet direkt poshtë kornizës së mësipërme)
     with st.sidebar.expander("Vendosja e Planit ⚙️", expanded=True):
         st.subheader("📂 Libraria e Planeve")
 
