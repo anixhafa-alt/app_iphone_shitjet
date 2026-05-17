@@ -120,6 +120,24 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
+st.sidebar.markdown(
+    """
+    <style>
+    .version-text {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 13px !important;
+        color: #566573 !important; /* Gri elegante */
+        text-align: center;
+        margin-top: -28px;          /* Ndryshuar nga -10px në -28px për ta ngritur lart */
+        margin-bottom: 15px;        /* Shton pak hapësirë para titullit "Panel Kontrolli" */
+        letter-spacing: 1px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Shfaqja e versionit (tani do të qëndrojë fiks nën logon)
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
 
 # --- NAVIGIMI ---
