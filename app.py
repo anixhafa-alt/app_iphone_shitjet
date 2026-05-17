@@ -1805,7 +1805,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Krahasimi Dinamik dhe Automatik)
+# MODULI I PLOTË: SHITJET DITORE (Formatim Estetik pa Dhjetore)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1813,7 +1813,7 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
-    # Data aktuale e referencës (bazohet te kjo që ke vendosur ose datetime.today())
+    # Data aktuale e referencës
     sot = datetime(2026, 5, 16)
 
     st.title(f"Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
@@ -1829,11 +1829,9 @@ elif page == "Shitjet Ditore":
         kolona_kg = "kg"
 
         # --- LLOGARITJA AUTOMATIKE E PERIUDHAVE ---
-        # 1. Periudha Aktuale (Nga variabla 'sot')
         vit_aktual = sot.year
         muaj_aktual = sot.month
 
-        # 2. Muaji i Kaluar (Prill nëse jemi në Maj, ose Dhjetor i vitit të kaluar nëse jemi në Janar)
         if muaj_aktual == 1:
             vit_para_muaj = vit_aktual - 1
             para_muaj = 12
@@ -1841,7 +1839,6 @@ elif page == "Shitjet Ditore":
             vit_para_muaj = vit_aktual
             para_muaj = muaj_aktual - 1
 
-        # 3. I njëjti muaj, një vit më parë
         vit_para_vit = vit_aktual - 1
         para_vit_muaj = muaj_aktual
 
@@ -1919,14 +1916,16 @@ elif page == "Shitjet Ditore":
             else 0
         )
 
-        c1.metric(label=f"Shitjet {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg")
+        c1.metric(
+            label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg"
+        )
         c2.metric(
-            label=f"vs {emri_muaj_kaluar}",
+            label=f"⏮️ vs {emri_muaj_kaluar}",
             value=f"{totali_para_muaj:,.0f} kg",
             delta=f"{ndryshimi_muaj:+.1f}%",
         )
         c3.metric(
-            label=f"vs {emri_vit_kaluar}",
+            label=f"⏳ vs {emri_vit_kaluar}",
             value=f"{totali_para_vit:,.0f} kg",
             delta=f"{ndryshimi_vit:+.1f}%",
         )
@@ -1946,6 +1945,7 @@ elif page == "Shitjet Ditore":
                 width=gjeresia_kolones,
                 marker_color="rgba(141, 211, 199, 0.55)",
                 textposition="none",
+                hovertemplate="%{y:,.0f} kg<extra></extra>",  # Formati hover pa dhjetore
             )
         )
 
@@ -1959,6 +1959,7 @@ elif page == "Shitjet Ditore":
                 width=gjeresia_kolones,
                 marker_color="rgba(0, 105, 92, 0.55)",
                 textposition="none",
+                hovertemplate="%{y:,.0f} kg<extra></extra>",  # Formati hover pa dhjetore
             )
         )
 
@@ -1971,13 +1972,15 @@ elif page == "Shitjet Ditore":
                 name=emri_muaj_aktual,
                 width=gjeresia_kolones,
                 marker_color="rgba(255, 193, 7, 0.65)",
-                text=[f"{v:.0f}" if v > 0 else "" for v in y_aktual],
+                # Formatojmë tekstet sipër shtyllave me ndarës mijësh pa dhjetore
+                text=[f"{v:,.0f}" if v > 0 else "" for v in y_aktual],
                 textposition="outside",
+                hovertemplate="%{y:,.0f} kg<extra></extra>",  # Formati hover pa dhjetore
             )
         )
 
         fig.update_layout(
-            title=f"KASKADA KRAHASUESE E SHITJEVE DITORE",
+            title=f"KASKADA KRAHASUESE E SHITJEVE DITORE ({emri_muaj_aktual})",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
@@ -2008,7 +2011,19 @@ elif page == "Shitjet Ditore":
                     f"{emri_vit_kaluar} (kg)": y_para_vit,
                 }
             )
-            st.dataframe(tabela_df, use_container_width=True, hide_index=True)
+
+            # Formatimi estetik i tabelës Streamlit me ndarës mijëshe pa dhjetore
+            st.dataframe(
+                tabela_df.style.format(
+                    {
+                        f"{emri_muaj_aktual} (kg)": "{:,.0f}",
+                        f"{emri_muaj_kaluar} (kg)": "{:,.0f}",
+                        f"{emri_vit_kaluar} (kg)": "{:,.0f}",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
 
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
