@@ -329,7 +329,7 @@ def merr_librarine_permanente():
 # FUNKSIONI: NDËRTIMI I SIDEBAR (Mund ta mbledhësh në VS Code)
 # =========================================================
 def nderto_sidebar():
-    st.sidebar.header("⚙️ Kontrolli i Planit")
+    st.sidebar.header("📋 Vendosja e Planit")
 
     # 1. Kontrollojmë nëse df_raw ka të dhëna përpara se të vazhdojmë
     if df_raw is not None and not df_raw.empty:
