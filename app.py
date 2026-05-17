@@ -112,7 +112,7 @@ st.sidebar.markdown(
         color: #566573 !important;
         text-align: center;
         margin-top: -10px;
-        padding-bottom: 15px;
+        padding-bottom: 5px;
         letter-spacing: 1px;
     }
     </style>
