@@ -83,25 +83,6 @@ if not check_password():
 
     st.stop()
 
-# 1. Injektojmë stilin CSS për titullin e sidebar-it
-from PIL import Image
-import os
-
-# Gjejmë rrugën e saktë të dosjes ku ndodhet app.py
-EMRI_FOTOS = "logo.png"
-
-if os.path.exists(EMRI_FOTOS):
-    try:
-        # Hapim imazhin përmes PIL
-        logo_axion = Image.open(EMRI_FOTOS)
-        st.sidebar.image(logo_axion, use_container_width=True)
-    except Exception as e:
-        st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
-else:
-    # Nëse nuk gjendet si skedar, nuk e bllokojmë aplikacionin por nxjerrim titull tekst
-    st.sidebar.title("AXION")
-    st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
-
 # --- CSS I RREGULLUAR PËR AFRESI MAKSIMALE ---
 st.sidebar.markdown(
     """
@@ -130,6 +111,7 @@ st.sidebar.markdown(
 
 # Shfaqja e versionit
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
+
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
