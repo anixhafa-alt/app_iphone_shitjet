@@ -1816,7 +1816,7 @@ elif page == "Shitjet Ditore":
     # Data aktuale e referencës
     sot = datetime(2026, 5, 16)
 
-    st.title(f"Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
+    st.title(f"Shitjet Ditore")
     st.markdown(
         f"<h3 style='color: #1a237e; margin-top:-15px;'>Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
         unsafe_allow_html=True,
