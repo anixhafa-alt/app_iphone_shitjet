@@ -1805,7 +1805,7 @@ elif page == "Route Plan AI":
             )
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (I Sinkronizuar me kg)
+# MODULI I PLOTË: SHITJET DITORE (Krahasimi Dinamik dhe Automatik)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1813,9 +1813,14 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
+    # Përdorim këtë për të llogaritur saktë muajt prapa pa u ngatërruar me Janarin/Dhjetorin
+    from fillimi_skriptit import (
+        muajt_sq,
+    )  # Sigurohu që importon dicionarin tënd të muajve nëse nuk është global
+
+    # Data aktuale e referencës (bazohet te kjo që ke vendosur ose datetime.today())
     sot = datetime(2026, 5, 16)
 
-    # st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
     st.title(f"Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
     st.markdown(
         f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
@@ -1828,10 +1833,27 @@ elif page == "Shitjet Ditore":
         # --- MARRIM DIREKT KOLONËN "kg" TË LLOGARITUR NGA FILLIMI I KODIT ---
         kolona_kg = "kg"
 
-        # --- PERIUDHAT FIKS SI NË STRUKTURË ---
-        vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
-        vit_para_muaj, para_muaj = 2026, 3  # Mars 2026
-        vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
+        # --- LLOGARITJA AUTOMATIKE E PERIUDHAVE ---
+        # 1. Periudha Aktuale (Nga variabla 'sot')
+        vit_aktual = sot.year
+        muaj_aktual = sot.month
+
+        # 2. Muaji i Kaluar (Prill nëse jemi në Maj, ose Dhjetor i vitit të kaluar nëse jemi në Janar)
+        if muaj_aktual == 1:
+            vit_para_muaj = vit_aktual - 1
+            para_muaj = 12
+        else:
+            vit_para_muaj = vit_aktual
+            para_muaj = muaj_aktual - 1
+
+        # 3. I njëjti muaj, një vit më parë
+        vit_para_vit = vit_aktual - 1
+        para_vit_muaj = muaj_aktual
+
+        # --- EMRAT DINAMIKË PËR METRIKAT DHE LEGJENDËN ---
+        emri_muaj_aktual = f"{muajt_sq.get(muaj_aktual).upper()} {vit_aktual}"
+        emri_muaj_kaluar = f"{muajt_sq.get(para_muaj).upper()} {vit_para_muaj}"
+        emri_vit_kaluar = f"{muajt_sq.get(para_vit_muaj).upper()} {vit_para_vit}"
 
         # --- FILTRIMET E PËRGJITHSHËM ---
         df_base = df_raw.copy()
@@ -1854,7 +1876,6 @@ elif page == "Shitjet Ditore":
             ].copy()
             if not df_p.empty:
                 df_p["Dita_Numri"] = df_p["Data"].dt.day
-                # Sigurohemi që kolona "kg" trajtohet si numër pastër
                 df_p[kolona_kg] = pd.to_numeric(
                     df_p[kolona_kg], errors="coerce"
                 ).fillna(0)
@@ -1869,8 +1890,6 @@ elif page == "Shitjet Ditore":
 
         # --- PREGATITJA E KASKADËS ---
         ditet_numerik = list(range(1, numri_diteve + 1))
-
-        # ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
         ditet_etiketa = [f"{d:02d}" for d in ditet_numerik]
 
         def llogarit_kaskaden(data_dict):
@@ -1905,10 +1924,6 @@ elif page == "Shitjet Ditore":
             else 0
         )
 
-        emri_muaj_aktual = "MAJ 2026"
-        emri_muaj_kaluar = "MARS 2026"
-        emri_vit_kaluar = "PRILL 2025"
-
         c1.metric(
             label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg"
         )
@@ -1928,7 +1943,7 @@ elif page == "Shitjet Ditore":
         fig = go.Figure()
         gjeresia_kolones = 0.6
 
-        # 1. PRILL 2025
+        # 1. VIT PARAFRA (P.sh. MAJ 2025)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1941,7 +1956,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 2. MARS 2026
+        # 2. MUAJI I KALUAR (P.sh. PRILL 2026)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1954,7 +1969,7 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 3. MAJ 2026
+        # 3. MUAJI AKTUAL (P.sh. MAJ 2026)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1969,7 +1984,7 @@ elif page == "Shitjet Ditore":
         )
 
         fig.update_layout(
-            title="KASKADA KRAHASUESE E SHITJEVE DITORE",
+            title=f"KASKADA KRAHASUESE E SHITJEVE DITORE ({emri_muaj_aktual})",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
