@@ -1916,16 +1916,14 @@ elif page == "Shitjet Ditore":
             else 0
         )
 
-        c1.metric(
-            label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg"
-        )
+        c1.metric(label=f"Shitjet {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg")
         c2.metric(
-            label=f"⏮️ vs {emri_muaj_kaluar}",
+            label=f"vs {emri_muaj_kaluar}",
             value=f"{totali_para_muaj:,.0f} kg",
             delta=f"{ndryshimi_muaj:+.1f}%",
         )
         c3.metric(
-            label=f"⏳ vs {emri_vit_kaluar}",
+            label=f"vs {emri_vit_kaluar}",
             value=f"{totali_para_vit:,.0f} kg",
             delta=f"{ndryshimi_vit:+.1f}%",
         )
