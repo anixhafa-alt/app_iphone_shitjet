@@ -4,7 +4,9 @@ from datetime import datetime
 from PIL import Image
 import os
 
-# 1. Konfigurimi i faqes
+# =========================================================
+# 1. KONFIGURIMI I FAQES
+# =========================================================
 st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide")
 
 # Fjalori për Muajt Shqip
@@ -24,7 +26,17 @@ muajt_sq = {
 }
 
 
-# --- SISTEMI I SIGURISE (LOGIN) ---
+# =========================================================
+# 2. SISTEMI I SIGURISE (LOGIN)
+# =========================================================
+def password_entered():
+    if st.session_state["password"] == "a":
+        st.session_state["password_correct"] = True
+        del st.session_state["password"]
+    else:
+        st.session_state["password_correct"] = False
+
+
 def check_password():
     if "password_correct" not in st.session_state:
         st.markdown(
@@ -50,19 +62,14 @@ def check_password():
         return True
 
 
-def password_entered():
-    if st.session_state["password"] == "a":
-        st.session_state["password_correct"] = True
-        del st.session_state["password"]
-    else:
-        st.session_state["password_correct"] = False
-
-
 if not check_password():
     st.stop()
 
-# --- SHFAQJA E LOGOS ---
+# =========================================================
+# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
+# =========================================================
 EMRI_FOTOS = "logo.png"
+
 if os.path.exists(EMRI_FOTOS):
     try:
         logo_axion = Image.open(EMRI_FOTOS)
@@ -73,7 +80,7 @@ else:
     st.sidebar.title("AXION")
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
-# --- CSS PËR AFRESI MAKSIMALE TË VERSIONIT ---
+# Injektimi i CSS për afërsi maksimale të versionit në Sidebar
 st.sidebar.markdown(
     """
     <style>
@@ -99,10 +106,12 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# Shfaqja e versionit
+# Shfaqja e versionit fiks nën logo
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
 
-# --- NAVIGIMI ---
+# =========================================================
+# 4. NAVIGIMI (PANEL KONTROLLI)
+# =========================================================
 st.sidebar.markdown(
     """
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
@@ -134,10 +143,13 @@ page = st.sidebar.radio(
 )
 
 
-# --- NGARKIMI I TE DHENAVE ---
+# =========================================================
+# 5. NGARKIMI DHE BASHKIMI I TE DHENAVE (SQL + EXCEL)
+# =========================================================
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
+        # A. Lidhja me SQL Server
         conn = st.connection("sql", type="sql")
         df_sql = conn.query(
             "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
@@ -145,12 +157,16 @@ def load_all_data():
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
 
+        # B. Lidhja me Excel (Faqja produktet)
         df_map = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
         df_map.columns = df_map.columns.str.strip()
         df_map = df_map[["KODI", "KATEG.", "KG/SKU", "NGA LISTA E CMIMEVE"]].copy()
         df_map["KODI"] = df_map["KODI"].astype(str).str.strip()
 
+        # C. Bashkimi Left Merge
         df = pd.merge(df_sql, df_map, left_on="KodiArt", right_on="KODI", how="left")
+
+        # D. Kalkulimet dhe Kalkulimi i Peshës (KG)
         df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
         df.rename(
             columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
@@ -161,6 +177,7 @@ def load_all_data():
         df["kat"] = df["kat"].fillna("ETJ")
         df["statusi"] = df["statusi"].fillna("inaktiv")
 
+        # Klasifikimi i brendshëm i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
             if val == "V" or "OLIM" in val:
@@ -172,6 +189,7 @@ def load_all_data():
 
         df["Grup_Filtri"] = df["kat"].apply(klasifiko_kategorine)
         return df
+
     except Exception as e:
         st.error(f"Gabim teknik: {e}")
         return None
@@ -179,6 +197,7 @@ def load_all_data():
 
 df_raw = load_all_data()
 
+# Leximi i Sheet-it të lidhjes së produkteve aktive
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     df_link = df_link[["KODI", "KATEG."]].rename(
@@ -193,6 +212,7 @@ except Exception as e:
     st.error(f"Gabim te sheet-i 'produktet': {e}")
     df_link = None
 
+# Leximi i emrave të kategorive
 try:
     df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
     df_names = df_names[["KOD KAT", "EMRI KAT"]]
@@ -200,6 +220,7 @@ except Exception as e:
     st.error(f"Gabim te sheet-i 'kat_prod': {e}")
     df_names = None
 
+# Bashkimi i Madh (Triple Merge)
 if df_raw is not None and df_link is not None:
     df_raw = pd.merge(df_raw, df_link, on="KodiArt", how="left")
     if df_names is not None:
@@ -208,7 +229,10 @@ if df_raw is not None and df_link is not None:
             df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
         )
 
-if not df_raw.empty:
+# =========================================================
+# 6. STATUSI I SINKRONIZIMIT DHE RIFRESKIMI
+# =========================================================
+if df_raw is not None and not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
     if kolona_date:
         emer_kolone = kolona_date[0]
@@ -242,8 +266,7 @@ if not df_raw.empty:
 
 
 # =========================================================
-# FUNKSIONI: MENAXHIMI I LIBRARISË QË REZISTON REFRESH-IN (F5)
-# Rregulluar: Pozicionuar sipër funksionit që e thërret për të shmangur NameError
+# 7. FUNKSIONI: LIBRARIA PERMANENTE (E POZICIONUAR LART PËR TË SHMANGUR NAMEERROR)
 # =========================================================
 @st.cache_resource
 def merr_librarine_permanente():
@@ -252,10 +275,10 @@ def merr_librarine_permanente():
 
 
 # =========================================================
-# FUNKSIONI: NDËRTIMI I SIDEBAR (I RIORGANIZUAR ME EXPANDER KRYESOR)
+# 8. FUNKSIONI KRYESOR: NDËRTIMI I SIDEBAR (I RIORGANIZUAR)
 # =========================================================
 def nderto_sidebar():
-    # 1. Kontrollojmë nëse df_raw ka të dhëna përpara se të vazhdojmë
+    # Kontrollojmë nëse df_raw ka të dhëna përpara se të vazhdojmë
     if df_raw is not None and not df_raw.empty:
         if "start_d" not in st.session_state:
             st.session_state["start_d"] = df_raw["Data"].min().date()
@@ -267,14 +290,14 @@ def nderto_sidebar():
         st.error(
             "⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml."
         )
-        st.info("Aplikacioni po punon, bur bur bur nuk ka të dhëna për të shfaqur.")
+        st.info("Aplikacioni po punon, por nuk ka të dhëna për të shfaqur.")
         st.stop()
 
-    # Thirrja e librarisë që reziston refresh-in
+    # Thirrja e librarisë që reziston refresh-in (Tani Python e gjen sepse është deklaruar lart)
     libraria_p = merr_librarine_permanente()
     opsionet_lib = list(libraria_p.keys())
 
-    # Kontrollojmë nëse përdoruesi sapo ka thirrur një plan që duhet ngarkuar
+    # Logjika e ngarkimit të planit të ruajtur nga Session State
     if (
         "plan_per_te_ngarkuar" in st.session_state
         and st.session_state["plan_per_te_ngarkuar"] is not None
@@ -300,13 +323,13 @@ def nderto_sidebar():
     with st.sidebar.expander("Vendosja e Planit ⚙️", expanded=True):
         st.subheader("📂 Libraria e Planeve")
 
-        # Funksioni i ri i dëgjimit (Callback)
+        # Funksioni i ri i dëgjimit (Callback) kur ndryshon selectbox-in
         def on_change_libraria():
             zgjedhja = st.session_state["temp_selectbox_key"]
             if zgjedhja != "Zgjedhje Manuale (Pa Ruajtje)":
                 st.session_state["plan_per_te_ngarkuar"] = zgjedhja
 
-        # Tani widget-et fillojnë me st. sepse ndodhen brenda bllokut të expander-it të sidebar-it
+        # Elementet që futen brenda kutisë së madhe
         st.selectbox(
             "Thirr një plan të ruajtur:",
             options=opsionet_lib,
@@ -326,13 +349,109 @@ def nderto_sidebar():
 
         rritja = st.number_input(
             "Rritja e planit (%)",
-            value=st.session_state.get("rritja_input", 0.0),
-            step=0.1,
-            format="%.2f",
+            value=st.session_state["rritja_val"],
             key="rritja_input",
         )
         st.session_state["rritja_val"] = rritja
 
+        # --- SUB-EXPANDER: MENAXHIMI I LIBRARISË (KUTI BRENDA KUTISË) ---
+        with st.expander("💾 Menaxho Librarinë (Ruaj / Fshi)"):
+            st.markdown("**Shto Plan të Ri**")
+            emri_planit_ri = st.text_input(
+                "Emri i planit (psh: Maj 2026 - R1):", key="emri_ri_txt"
+            )
+
+            if st.button("➕ Ruaj Planin", use_container_width=True):
+                if emri_planit_ri.strip() != "":
+                    libraria_p[emri_planit_ri] = {
+                        "start": st.session_state["start_d"],
+                        "end": st.session_state["end_d"],
+                        "rritja": st.session_state["rritja_val"],
+                    }
+                    st.success(f"✅ '{emri_planit_ri}' u ruajt!")
+                    st.rerun()
+                else:
+                    st.error("Ju lutem vendosni një emër për planin.")
+
+            st.divider()
+
+            st.markdown("**Fshi një Plan ekzistues**")
+            plane_per_fshirje = [
+                p for p in opsionet_lib if p != "Zgjedhje Manuale (Pa Ruajtje)"
+            ]
+
+            if plane_per_fshirje:
+                plani_fshirjes = st.selectbox(
+                    "Zgjidh cilin dëshiron të fshish:",
+                    options=plane_per_fshirje,
+                    key="fshirje_sel_key",
+                )
+                if st.button("❌ Fshi Planin e Zgjedhur", use_container_width=True):
+                    del libraria_p[plani_fshirjes]
+                    st.warning(f"🗑️ '{plani_fshirjes}' u fshi!")
+                    st.rerun()
+            else:
+                st.caption("Nuk ka plane të ruajtura për të fshirë.")
+
+    # =========================================================
+    # FILTRAT E TJERË (Mbeten jashtë expander-it të planit)
+    # =========================================================
+    grup_sel = st.sidebar.selectbox(
+        "Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"]
+    )
+
+    agj_list = sorted(
+        [str(x) for x in df_raw["ForcaShitese"].unique() if x not in ["nan", "None"]]
+    )
+    agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
+
+    k_list = (
+        df_raw[df_raw["ForcaShitese"] == agj_sel]["Klienti"].unique()
+        if agj_sel != "Të gjithë"
+        else df_raw["Klienti"].unique()
+    )
+    klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
+
+    start_date = st.session_state["start_d"]
+    end_date = st.session_state["end_d"]
+
+    # Butoni i rregullt i Logout
+    st.sidebar.divider()
+    if st.sidebar.button("Log Out"):
+        st.session_state["password_correct"] = False
+        st.rerun()
+
+    # --- INFO MBI FILTRAT ---
+    with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
+        nr_aktiv = df_raw[df_raw["statusi"].astype(str).str.upper() == "AKTIV"][
+            "Artikulli"
+        ].nunique()
+        nr_inaktiv = df_raw[df_raw["statusi"].astype(str).str.upper() != "AKTIV"][
+            "Artikulli"
+        ].nunique()
+
+        st.write(
+            f"**Periudha:** {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+        )
+        st.write(f"📈 **Rritja e aplikuar:** {rritja}%")
+        st.write(f"👤 **Agjenti:** {agj_sel}")
+        st.write(
+            f"🏢 **Klientë të zgjedhur:** {len(klientet_selected) if klientet_selected else 'Të gjithë'}"
+        )
+        st.write(f"📦 **Artikuj Aktivë:** {nr_aktiv}")
+        st.write(f"🛑 **Artikuj Inaktivë:** {nr_inaktiv}")
+
+    # Kthimi i vlerave në nivelin kryesor të aplikacionit
+    return start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected
+
+
+# =========================================================
+# 9. THIRRJA E FUNKSIONIT TË SIDEBAR (E VENDOSUR KËTU PLOTËSISHT)
+# =========================================================
+start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_sidebar()
+
+# Tani këtu e poshtë mund të vazhdoni direkt me logjikën e moduleve tuaja
+# (p.sh. if page == "Planifikimi": ) pa pasur asnjë gabim NameError për variablin agj_sel!
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
