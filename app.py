@@ -1869,6 +1869,7 @@ elif page == "Shitjet Ditore":
 
         # --- PREGATITJA E KASKADËS ---
         ditet_numerik = list(range(1, numri_diteve + 1))
+
         # ditet_etiketa = [f"D {d:02d}" for d in ditet_numerik]
         ditet_etiketa = [f"{d:02d}" for d in ditet_numerik]
 
@@ -1974,14 +1975,14 @@ elif page == "Shitjet Ditore":
             height=650,
             xaxis=dict(
                 title="DITËT",
-                tickangle=-90,
+                tickangle=0,
                 type="linear",
                 tickmode="array",
                 tickvals=ditet_numerik,
                 ticktext=ditet_etiketa,
                 range=[0.4, numri_diteve + 0.6],
             ),
-            yaxis=dict(title="[KG]", gridcolor="#ffffff"),
+            yaxis=dict(title="SHITJET [KG]", gridcolor="#ffffff"),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
             ),
