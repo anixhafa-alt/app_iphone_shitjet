@@ -84,20 +84,34 @@ if not check_password():
     st.stop()
 
 # 1. Injektojmë stilin CSS për titullin e sidebar-it
-# 1. Vendosim logon në sidebar
-# Shënim: Zëvendëso "rruga_ku_ashte_logoja/image_272194.jpg" me rrugën e saktë të skedarit në projektin tënd
-st.sidebar.image("image_272194.jpg", use_container_width=True)
+from PIL import Image
+import os
 
-# 2. Injektojmë stilin CSS për versionin me shkronja të vogla
+# Gjejmë rrugën e saktë të dosjes ku ndodhet app.py
+EMRI_FOTOS = "image_272194.jpg"
+
+if os.path.exists(EMRI_FOTOS):
+    try:
+        # Hapim imazhin përmes PIL
+        logo_axion = Image.open(EMRI_FOTOS)
+        st.sidebar.image(logo_axion, use_container_width=True)
+    except Exception as e:
+        st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
+else:
+    # Nëse nuk gjendet si skedar, nuk e bllokojmë aplikacionin por nxjerrim titull tekst
+    st.sidebar.title("🦂 AXION")
+    st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
+
+# --- Pjesa tjetër e stilit CSS (E paprekur) ---
 st.sidebar.markdown(
     """
     <style>
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 13px !important;
-        color: #566573 !important; /* Një gri elegante që nuk vret syrin */
+        color: #566573 !important;
         text-align: center;
-        margin-top: -10px;          /* E afron tekstin me logon sipër */
+        margin-top: -10px;
         padding-bottom: 15px;
         letter-spacing: 1px;
     }
@@ -106,10 +120,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# 3. Shfaqim versionin
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
-
-# 4. Sqarimi i akronimit (opsionale, nën version)
 st.sidebar.caption(
     "<center>⚡ <b>I</b>nteligjenca <b>O</b>peracionale e <b>N</b>dërmarrjes</center>",
     unsafe_allow_html=True,
