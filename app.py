@@ -149,7 +149,7 @@ page = st.sidebar.radio(
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
-        # A. Lidhja me SQL Server
+        # A. Lidhja me SQL
         conn = st.connection("sql", type="sql")
         df_sql = conn.query(
             "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
@@ -157,16 +157,16 @@ def load_all_data():
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
 
-        # B. Lidhja me Excel (Faqja produktet)
+        # B. Lidhja me Excel
         df_map = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
         df_map.columns = df_map.columns.str.strip()
         df_map = df_map[["KODI", "KATEG.", "KG/SKU", "NGA LISTA E CMIMEVE"]].copy()
         df_map["KODI"] = df_map["KODI"].astype(str).str.strip()
 
-        # C. Bashkimi Left Merge
+        # C. Merge
         df = pd.merge(df_sql, df_map, left_on="KodiArt", right_on="KODI", how="left")
 
-        # D. Kalkulimet dhe Kalkulimi i Peshës (KG)
+        # D. Kalkulimet
         df["kg"] = df["Sasia"] * df["KG/SKU"].fillna(0)
         df.rename(
             columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
@@ -177,7 +177,6 @@ def load_all_data():
         df["kat"] = df["kat"].fillna("ETJ")
         df["statusi"] = df["statusi"].fillna("inaktiv")
 
-        # Klasifikimi i brendshëm i grupeve
         def klasifiko_kategorine(k):
             val = str(k).upper()
             if val == "V" or "OLIM" in val:
@@ -189,7 +188,6 @@ def load_all_data():
 
         df["Grup_Filtri"] = df["kat"].apply(klasifiko_kategorine)
         return df
-
     except Exception as e:
         st.error(f"Gabim teknik: {e}")
         return None
@@ -197,7 +195,6 @@ def load_all_data():
 
 df_raw = load_all_data()
 
-# Leximi i Sheet-it të lidhjes së produkteve aktive
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     df_link = df_link[["KODI", "KATEG."]].rename(
@@ -212,7 +209,6 @@ except Exception as e:
     st.error(f"Gabim te sheet-i 'produktet': {e}")
     df_link = None
 
-# Leximi i emrave të kategorive
 try:
     df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
     df_names = df_names[["KOD KAT", "EMRI KAT"]]
@@ -220,7 +216,6 @@ except Exception as e:
     st.error(f"Gabim te sheet-i 'kat_prod': {e}")
     df_names = None
 
-# Bashkimi i Madh (Triple Merge)
 if df_raw is not None and df_link is not None:
     df_raw = pd.merge(df_raw, df_link, on="KodiArt", how="left")
     if df_names is not None:
@@ -230,7 +225,7 @@ if df_raw is not None and df_link is not None:
         )
 
 # =========================================================
-# 6. STATUSI I SINKRONIZIMIT DHE RIFRESKIMI
+# 6. SEKSIONI I RIKONFIGURUAR I SINKRONIZIMIT (I RREGULLUAR)
 # =========================================================
 if df_raw is not None and not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
@@ -240,20 +235,7 @@ if df_raw is not None and not df_raw.empty:
         data_maksimale = datet_konvertuara.max()
         sot_data = datetime.now().date()
 
-        st.sidebar.subheader("🔄 Statusi i Sinkronizimit")
-        if pd.notnull(data_maksimale):
-            koha_formatuar = data_maksimale.strftime("%d/%m/%Y - %H:%M:%S")
-            if data_maksimale.date() == sot_data:
-                st.sidebar.success(
-                    f"🟢 Lidhja SQL: LIVE\n\nFat. fundit: {koha_formatuar}"
-                )
-            else:
-                vonesa = (sot_data - data_maksimale.date()).days
-                st.sidebar.warning(
-                    f"🟡 Lidhja SQL: OK\n\nPërditësimi i fundit:\n{koha_formatuar}\n\nVonesa: {vonesa} ditë pa faturime."
-                )
-
-        st.sidebar.markdown("---")
+        # A. Butoni vendoset në krye (Aty ku ishte rreshti që u hoq)
         if st.sidebar.button(
             "🔄 Rifresko nga SQL Server",
             use_container_width=True,
@@ -261,12 +243,29 @@ if df_raw is not None and not df_raw.empty:
         ):
             st.cache_data.clear()
             st.rerun()
+
+        # B. Shfaqja e lidhjes dhe datës në një rresht të vetëm me gërma të vogla (<small>)
+        if pd.notnull(data_maksimale):
+            koha_formatuar = data_maksimale.strftime("%d/%m/%Y - %H:%M:%S")
+            if data_maksimale.date() == sot_data:
+                st.sidebar.success(
+                    f"🟢 Lidhja SQL: LIVE | <small>Fat. fundit: {koha_formatuar}</small>",
+                    icon=None,
+                )
+            else:
+                vonesa = (sot_data - data_maksimale.date()).days
+                st.sidebar.warning(
+                    f"🟡 Lidhja SQL: OK | <small>Fat. fundit: {koha_formatuar} ({vonesa} ditë vonesë)</small>",
+                    icon=None,
+                )
+
+        st.sidebar.markdown("---")
     else:
         st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
 
 
 # =========================================================
-# 7. FUNKSIONI: LIBRARIA PERMANENTE (E POZICIONUAR LART PËR TË SHMANGUR NAMEERROR)
+# 7. FUNKSIONI: LIBRARIA PERMANENTE
 # =========================================================
 @st.cache_resource
 def merr_librarine_permanente():
@@ -275,10 +274,9 @@ def merr_librarine_permanente():
 
 
 # =========================================================
-# 8. FUNKSIONI KRYESOR: NDËRTIMI I SIDEBAR (I RIORGANIZUAR)
+# 8. FUNKSIONI KRYESOR: NDËRTIMI I SIDEBAR
 # =========================================================
 def nderto_sidebar():
-    # Kontrollojmë nëse df_raw ka të dhëna përpara se të vazhdojmë
     if df_raw is not None and not df_raw.empty:
         if "start_d" not in st.session_state:
             st.session_state["start_d"] = df_raw["Data"].min().date()
@@ -290,14 +288,11 @@ def nderto_sidebar():
         st.error(
             "⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml."
         )
-        st.info("Aplikacioni po punon, por nuk ka të dhëna për të shfaqur.")
         st.stop()
 
-    # Thirrja e librarisë që reziston refresh-in (Tani Python e gjen sepse është deklaruar lart)
     libraria_p = merr_librarine_permanente()
     opsionet_lib = list(libraria_p.keys())
 
-    # Logjika e ngarkimit të planit të ruajtur nga Session State
     if (
         "plan_per_te_ngarkuar" in st.session_state
         and st.session_state["plan_per_te_ngarkuar"] is not None
@@ -317,19 +312,15 @@ def nderto_sidebar():
 
         st.session_state["plan_per_te_ngarkuar"] = None
 
-    # =========================================================
-    # MODULI I RI: VENDOSJA E PLANIT SI EXPANDER MBLEDHËS
-    # =========================================================
+    # MODULI: VENDOSJA E PLANIT SI EXPANDER MBLEDHËS
     with st.sidebar.expander("Vendosja e Planit ⚙️", expanded=True):
         st.subheader("📂 Libraria e Planeve")
 
-        # Funksioni i ri i dëgjimit (Callback) kur ndryshon selectbox-in
         def on_change_libraria():
             zgjedhja = st.session_state["temp_selectbox_key"]
             if zgjedhja != "Zgjedhje Manuale (Pa Ruajtje)":
                 st.session_state["plan_per_te_ngarkuar"] = zgjedhja
 
-        # Elementet që futen brenda kutisë së madhe
         st.selectbox(
             "Thirr një plan të ruajtur:",
             options=opsionet_lib,
@@ -354,7 +345,6 @@ def nderto_sidebar():
         )
         st.session_state["rritja_val"] = rritja
 
-        # --- SUB-EXPANDER: MENAXHIMI I LIBRARISË (KUTI BRENDA KUTISË) ---
         with st.expander("💾 Menaxho Librarinë (Ruaj / Fshi)"):
             st.markdown("**Shto Plan të Ri**")
             emri_planit_ri = st.text_input(
@@ -393,9 +383,7 @@ def nderto_sidebar():
             else:
                 st.caption("Nuk ka plane të ruajtura për të fshirë.")
 
-    # =========================================================
-    # FILTRAT E TJERË (Mbeten jashtë expander-it të planit)
-    # =========================================================
+    # FILTRAT E TJERË
     grup_sel = st.sidebar.selectbox(
         "Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"]
     )
@@ -415,13 +403,11 @@ def nderto_sidebar():
     start_date = st.session_state["start_d"]
     end_date = st.session_state["end_d"]
 
-    # Butoni i rregullt i Logout
     st.sidebar.divider()
     if st.sidebar.button("Log Out"):
         st.session_state["password_correct"] = False
         st.rerun()
 
-    # --- INFO MBI FILTRAT ---
     with st.sidebar.expander("ℹ️ Detajet e përzgjedhjes", expanded=True):
         nr_aktiv = df_raw[df_raw["statusi"].astype(str).str.upper() == "AKTIV"][
             "Artikulli"
@@ -441,17 +427,13 @@ def nderto_sidebar():
         st.write(f"📦 **Artikuj Aktivë:** {nr_aktiv}")
         st.write(f"🛑 **Artikuj Inaktivë:** {nr_inaktiv}")
 
-    # Kthimi i vlerave në nivelin kryesor të aplikacionit
     return start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected
 
 
 # =========================================================
-# 9. THIRRJA E FUNKSIONIT TË SIDEBAR (E VENDOSUR KËTU PLOTËSISHT)
+# 9. THIRRJA E FUNKSIONIT TË SIDEBAR
 # =========================================================
 start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_sidebar()
-
-# Tani këtu e poshtë mund të vazhdoni direkt me logjikën e moduleve tuaja
-# (p.sh. if page == "Planifikimi": ) pa pasur asnjë gabim NameError për variablin agj_sel!
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
