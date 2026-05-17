@@ -1830,8 +1830,8 @@ elif page == "Shitjet Ditore":
 
         # --- PERIUDHAT FIKS SI NË STRUKTURË ---
         vit_aktual, muaj_aktual = 2026, 5  # Maj 2026
-        vit_para_muaj, para_muaj = 2026, 3  # Mars 2026
-        vit_para_vit, para_vit_muaj = 2025, 4  # Prill 2025
+        vit_para_muaj, para_muaj = 2026, 4  # Mars 2026
+        vit_para_vit, para_vit_muaj = 2025, 5  # Prill 2025
 
         # --- FILTRIMET E PËRGJITHSHËM ---
         df_base = df_raw.copy()
@@ -1906,8 +1906,8 @@ elif page == "Shitjet Ditore":
         )
 
         emri_muaj_aktual = "MAJ 2026"
-        emri_muaj_kaluar = "MARS 2026"
-        emri_vit_kaluar = "PRILL 2025"
+        emri_muaj_kaluar = "prill 2026"
+        emri_vit_kaluar = "maj 2025"
 
         c1.metric(
             label=f"📦 Volumi {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg"
