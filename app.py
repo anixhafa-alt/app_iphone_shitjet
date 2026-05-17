@@ -84,28 +84,32 @@ if not check_password():
     st.stop()
 
 # 1. Injektojmë stilin CSS për titullin e sidebar-it
+# 1. Vendosim logon në sidebar
+# Shënim: Zëvendëso "rruga_ku_ashte_logoja/image_272194.jpg" me rrugën e saktë të skedarit në projektin tënd
+st.sidebar.image("image_272194.jpg", use_container_width=True)
+
+# 2. Injektojmë stilin CSS për versionin me shkronja të vogla
 st.sidebar.markdown(
     """
     <style>
-    .sidebar-title {
+    .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 25px !important;
-        color: #FF3366 !important; /* Ngjyrë Ekstrame Moderne */
-        font-weight: 900;          /* Maksimumi i trashësisë */
+        font-size: 13px !important;
+        color: #566573 !important; /* Një gri elegante që nuk vret syrin */
         text-align: center;
-        letter-spacing: 3px;
-        /* Efekt dritëhije i trefishtë për impakt maksimal vizual */
-        text-shadow: 0 0 5px #FF3366, 0 0 10px #FF3366, 0 0 20px #FF3366; 
-        padding-bottom: 10px;
+        margin-top: -10px;          /* E afron tekstin me logon sipër */
+        padding-bottom: 15px;
+        letter-spacing: 1px;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown(
-    '<p class="sidebar-title">🔺 AXION v. 1.1.0</p>', unsafe_allow_html=True
-)
+# 3. Shfaqim versionin
+st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
+
+# 4. Sqarimi i akronimit (opsionale, nën version)
 st.sidebar.caption(
     "<center>⚡ <b>I</b>nteligjenca <b>O</b>peracionale e <b>N</b>dërmarrjes</center>",
     unsafe_allow_html=True,
