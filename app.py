@@ -83,7 +83,7 @@ if not check_password():
 
     st.stop()
 
-st.sidebar.warning("V 1.0.9 - Live Update")
+st.sidebar.warning("AXERP v. 1.1.0 ")
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
@@ -97,7 +97,7 @@ st.sidebar.markdown(
             <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
         </svg>
         <h1 style="font-size: 1.75rem; font-weight: 700; margin: 0; padding: 0; color: #31333F;">
-            Menuja Kryesore
+            Panel Konrolli
         </h1>
     </div>
     """,
