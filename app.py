@@ -462,7 +462,8 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # MODULI: HISTORIKU
 # ---------------------------------------------------------
 if page == "Historiku":
-    st.title("📚 Historiku i Shitjeve & Analiza e Artikujve")
+    # st.title("📚 Historiku i Shitjeve & Analiza e Artikujve")
+    st.title("Historiku i Shitjeve & Analiza e Artikujve")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
     if df_raw is not None:
         # 1. Krijojmë kopjen për punë
@@ -1814,7 +1815,8 @@ elif page == "Shitjet Ditore":
 
     sot = datetime(2026, 5, 16)
 
-    st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
+    # st.title(f"📊 Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
+    st.title(f"Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
     st.markdown(
         f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
         unsafe_allow_html=True,
