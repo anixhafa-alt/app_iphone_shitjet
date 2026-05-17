@@ -68,7 +68,7 @@ def check_password():
 
 def password_entered():
 
-    if st.session_state["password"] == "admin123":
+    if st.session_state["password"] == "a":
 
         st.session_state["password_correct"] = True
 
