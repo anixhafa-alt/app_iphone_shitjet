@@ -440,7 +440,7 @@ def nderto_sidebar():
         ].nunique()
 
         st.write(
-            f"📅 **Periudha:** {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+            f"**Periudha:** {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
         )
         st.write(f"📈 **Rritja e aplikuar:** {rritja}%")
         st.write(f"👤 **Agjenti:** {agj_sel}")
@@ -665,7 +665,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
-    st.info(f"📅 Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
+    st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
     t_kg_ref = gp["kg"].sum()
 
@@ -1219,7 +1219,7 @@ elif page == "Realizimi":
             </div>
 
             <div class="filter-bar">
-                <div class="filter-item">📅 Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div>
+                <div class="filter-item">Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div>
                 <div class="filter-item">📈 Rritja e aplikuar: <strong>{rritja}%</strong></div>
                 <div class="filter-item">📦 Grupi: <strong>{grup_sel}</strong></div>
                 <div class="filter-item">👤 Agjenti: <strong>{agj_sel}</strong></div>
@@ -1642,7 +1642,7 @@ elif page == "Asistenti AI":
 # MODULI I RI: ROUTE PLAN AI (Plani Strategjik Ditor)
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
-    # st.title("📅 Route Plan AI")
+    # st.title("Route Plan AI")
     st.title("Route Plan AI")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
@@ -1818,7 +1818,7 @@ elif page == "Shitjet Ditore":
 
     st.title(f"Grafik Kaskadë Krahasues - Shitjet Ditore (KG)")
     st.markdown(
-        f"<h3 style='color: #1a237e; margin-top:-15px;'>📅 Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
+        f"<h3 style='color: #1a237e; margin-top:-15px;'>Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
         unsafe_allow_html=True,
     )
     st.divider()
