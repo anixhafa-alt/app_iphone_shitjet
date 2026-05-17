@@ -157,13 +157,13 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
     [
-        "Planifikimi",
+        "Shitjet Ditore",
         "Realizimi",
+        "Planifikimi",
         "Mundësitë",
         "Historiku",
         "Asistenti AI",
         "Route Plan AI",
-        "Shitjet Ditore",
     ],
 )
 
