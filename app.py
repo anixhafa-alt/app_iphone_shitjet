@@ -99,7 +99,7 @@ if os.path.exists(EMRI_FOTOS):
         st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
 else:
     # Nëse nuk gjendet si skedar, nuk e bllokojmë aplikacionin por nxjerrim titull tekst
-    st.sidebar.title("🦂 AXION")
+    st.sidebar.title("AXION")
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
 # --- Pjesa tjetër e stilit CSS (E paprekur) ---
@@ -121,10 +121,7 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
-st.sidebar.caption(
-    "<center>⚡ <b>I</b>nteligjenca <b>O</b>peracionale e <b>N</b>dërmarrjes</center>",
-    unsafe_allow_html=True,
-)
+
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
