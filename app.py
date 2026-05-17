@@ -83,7 +83,7 @@ if not check_password():
 
     st.stop()
 
-st.sidebar.warning("AXERP v. 1.1.0 ")
+st.sidebar.title("AXERP v. 1.1.0 ")
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
