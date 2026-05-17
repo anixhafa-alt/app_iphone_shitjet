@@ -897,7 +897,8 @@ elif page == "Realizimi":
     import numpy as np
 
     sot = datetime.now()
-    st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
+    # st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
+    st.title(f"Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     if df_raw is not None:
@@ -1287,7 +1288,8 @@ elif page == "Realizimi":
 # MODULI: MUNDESITE
 # ---------------------------------------------------------
 elif page == "Mundësitë":
-    st.title("🎯 Analiza e Mundësive (Gap Analysis)")
+    # st.title("🎯 Analiza e Mundësive (Gap Analysis)")
+    st.title("Analiza e Mundësive (Gap Analysis)")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
     # --- SEKSIONI INFO MBI LLOGARITJEN ---
     with st.expander("ℹ️ Si llogaritet ky vlerësim? (Metodologjia)"):
@@ -1380,7 +1382,8 @@ elif page == "Mundësitë":
 # MODULI: ASISTENTI AI (Versioni i Plotë me të gjitha Listat)
 # ---------------------------------------------------------
 elif page == "Asistenti AI":
-    st.title("🛡️ Strategjia e Shitjeve & Agjenda Inteligjente")
+    # st.title("🛡️ Strategjia e Shitjeve & Agjenda Inteligjente")
+    st.title("Strategjia e Shitjeve & Agjenda Inteligjente")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     if agj_sel == "Të gjithë":
@@ -1638,7 +1641,8 @@ elif page == "Asistenti AI":
 # MODULI I RI: ROUTE PLAN AI (Plani Strategjik Ditor)
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
-    st.title("📅 Route Plan AI")
+    # st.title("📅 Route Plan AI")
+    st.title("Route Plan AI")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     st.markdown(
