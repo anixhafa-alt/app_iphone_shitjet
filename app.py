@@ -317,141 +317,119 @@ if not df_raw.empty:
 
 
 # =========================================================
-# FUNKSIONI: MENAXHIMI I LIBRARISË QË REZISTON REFRESH-IN (F5)
-# =========================================================
-@st.cache_resource
-def merr_librarine_permanente():
-    """Ky funksion krijon një librari në memorien e serverit që nuk fshihet nga refresh."""
-    return {"Zgjedhje Manuale (Pa Ruajtje)": None}
-
-
-# =========================================================
-# FUNKSIONI: NDËRTIMI I SIDEBAR (Mund ta mbledhësh në VS Code)
+# FUNKSIONI: NDËRTIMI I SIDEBAR (I RIORGANIZUAR)
 # =========================================================
 def nderto_sidebar():
-    st.sidebar.header("Vendosja e Planit ⚙️")
-
-    # 1. Kontrollojmë nëse df_raw ka të dhëna përpara se të vazhdojmë
-    if df_raw is not None and not df_raw.empty:
-        # Ruajtja fillestare e vlerave standarde në Session State
-        if "start_d" not in st.session_state:
-            st.session_state["start_d"] = df_raw["Data"].min().date()
-        if "end_d" not in st.session_state:
-            st.session_state["end_d"] = df_raw["Data"].max().date()
-        if "rritja_val" not in st.session_state:
-            st.session_state["rritja_val"] = 10
-    else:
-        st.error(
-            "⚠️ Nuk u morën dot të dhënat nga databaza. Kontrollo lidhjen dhe secrets.toml."
-        )
-        st.info("Aplikacioni po punon, por nuk ka të dhëna për të shfaqur.")
+    # 1. Kontrollojmë të dhënat fillimisht
+    if df_raw is None or df_raw.empty:
+        st.sidebar.error("⚠️ Nuk u morën dot të dhënat.")
         st.stop()
 
-    # Thirrja e librarisë që reziston refresh-in
+    # 2. Inicializojmë Session State (ashtu siç e kishit)
+    if "start_d" not in st.session_state:
+        st.session_state["start_d"] = df_raw["Data"].min().date()
+    if "end_d" not in st.session_state:
+        st.session_state["end_d"] = df_raw["Data"].max().date()
+    if "rritja_val" not in st.session_state:
+        st.session_state["rritja_val"] = 10
+
+    # Thirrja e librarisë
     libraria_p = merr_librarine_permanente()
     opsionet_lib = list(libraria_p.keys())
 
-    # --- ZGJIDHJA E ERRORIT ---
-    # Kontrollojmë nëse përdoruesi sapo ka thirrur një plan që duhet ngarkuar
-    if (
-        "plan_per_te_ngarkuar" in st.session_state
-        and st.session_state["plan_per_te_ngarkuar"] is not None
-    ):
+    # 3. Logjika e ngarkimit të planit (ashtu siç e kishit)
+    if st.session_state.get("plan_per_te_ngarkuar"):
         emri_planit = st.session_state["plan_per_te_ngarkuar"]
         plani_ruajtur = libraria_p.get(emri_planit)
-
-        if plani_ruajtur is not None:
-            # 1. Përditësojmë vlerat e brendshme të sesionit
+        if plani_ruajtur:
             st.session_state["start_d"] = plani_ruajtur["start"]
             st.session_state["end_d"] = plani_ruajtur["end"]
             st.session_state["rritja_val"] = plani_ruajtur["rritja"]
-
-            # 2. Detyrojmë widget-et e tjera të marrin këto vlerat
             st.session_state["date_input_key"] = (
                 plani_ruajtur["start"],
                 plani_ruajtur["end"],
             )
             st.session_state["rritja_input"] = plani_ruajtur["rritja"]
-
-        # Pasi u krye ngarkimi, e pastrojmë sinjalizuesin që mos të futemi në loop vlerash
         st.session_state["plan_per_te_ngarkuar"] = None
 
-    # --- LIBRARIA DINAMIKE ---
-    st.sidebar.subheader("📂 Libraria e Planeve")
+    # =========================================================
+    # KRIJIMI I EKSPANDERIT KRYESOR "VENDOSJA E PLANIT"
+    # =========================================================
+    with st.sidebar.expander("Vendosja e Planit ⚙️", expanded=True):
 
-    # Funksioni i ri i dëgjimit (Callback) kur përdoruesi ndryshon selectbox-in
-    def on_change_libraria():
-        zgjedhja = st.session_state["temp_selectbox_key"]
-        if zgjedhja != "Zgjedhje Manuale (Pa Ruajtje)":
-            # Ndizet sinjalizuesi që rreshtat më lart të ngarkojnë datat dhe përqindjen
-            st.session_state["plan_per_te_ngarkuar"] = zgjedhja
+        st.subheader("📂 Libraria e Planeve")
 
-    # Ndërtojmë selectbox-in që qëndron gjithmonë te "Zgjedhje Manuale (Pa Ruajtje)" (Index=0)
-    st.sidebar.selectbox(
-        "Thirr një plan të ruajtur:",
-        options=opsionet_lib,
-        index=0,
-        key="temp_selectbox_key",
-        on_change=on_change_libraria,
-    )
+        # Callback për Selectbox
+        def on_change_libraria():
+            zgjedhja = st.session_state["temp_selectbox_key"]
+            if zgjedhja != "Zgjedhje Manuale (Pa Ruajtje)":
+                st.session_state["plan_per_te_ngarkuar"] = zgjedhja
 
-    # 2. Ndërtimi i Kalendarit (Gjithmonë aktiv dhe i lidhur live me metrikat)
-    date_range = st.sidebar.date_input(
-        "Periudha referente:",
-        value=(st.session_state["start_d"], st.session_state["end_d"]),
-        key="date_input_key",
-    )
-
-    # Përditësojmë session_state kur ndryshon data manualisht nga kalendari
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        st.session_state["start_d"], st.session_state["end_d"] = date_range
-
-    # Fusha e inputit për Rritjen (%) - E lidhur live me metrikat aktuale
-    rritja = st.sidebar.number_input(
-        "Rritja e planit (%)", value=st.session_state["rritja_val"], key="rritja_input"
-    )
-    st.session_state["rritja_val"] = rritja
-
-    # --- MENAXHIMI I LIBRARISË (RUAJTJE / FSHIRJE) ---
-    with st.sidebar.expander("💾 Menaxho Librarinë (Ruaj / Fshi)"):
-        # Pjesa A: Ruajtja e një plani të ri
-        st.markdown("**Shto Plan të Ri**")
-        emri_planit_ri = st.text_input(
-            "Emri i planit (psh: Maj 2026 - R1):", key="emri_ri_txt"
+        # A. Selectbox i Planeve
+        st.selectbox(
+            "Thirr një plan të ruajtur:",
+            options=opsionet_lib,
+            index=0,
+            key="temp_selectbox_key",
+            on_change=on_change_libraria,
         )
-        if st.button("➕ Ruaj Planin", use_container_width=True):
-            if emri_planit_ri.strip() != "":
-                # Ruajmë direkt te libraria permanente që nuk fshihet nga refresh
-                libraria_p[emri_planit_ri] = {
-                    "start": st.session_state["start_d"],
-                    "end": st.session_state["end_d"],
-                    "rritja": st.session_state["rritja_val"],
-                }
-                st.success(f"✅ '{emri_planit_ri}' u ruajt!")
-                st.rerun()
-            else:
-                st.error("Ju lutem vendosni një emër për planin.")
+
+        # B. Kalendari
+        date_range = st.date_input(
+            "Periudha referente:",
+            value=(st.session_state["start_d"], st.session_state["end_d"]),
+            key="date_input_key",
+        )
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            st.session_state["start_d"], st.session_state["end_d"] = date_range
+
+        # C. Inputi i Rritjes
+        rritja = st.number_input(
+            "Rritja e planit (%)",
+            value=st.session_state["rritja_val"],
+            key="rritja_input",
+        )
+        st.session_state["rritja_val"] = rritja
 
         st.divider()
 
-        # Pjesa B: Fshirja manuale e planeve të ruajtura
-        st.markdown("**Fshi një Plan ekzistues**")
-        plane_per_fshirje = [
-            p for p in opsionet_lib if p != "Zgjedhje Manuale (Pa Ruajtje)"
-        ]
+        # =========================================================
+        # SUB-EKSPANDER: MENAXHIMI I LIBRARISË (BRENDA EKSPANDERIT)
+        # =========================================================
+        with st.expander("💾 Menaxho Librarinë"):
+            # Pjesa A: Ruajtja
+            st.markdown("**Shto Plan të Ri**")
+            emri_planit_ri = st.text_input("Emri i planit:", key="emri_ri_txt")
 
-        if plane_per_fshirje:
-            plani_fshirjes = st.selectbox(
-                "Zgjidh cilin dëshiron të fshish:",
-                options=plane_per_fshirje,
-                key="fshirje_sel_key",
-            )
-            if st.button("❌ Fshi Planin e Zgjedhur", use_container_width=True):
-                del libraria_p[plani_fshirjes]
-                st.warning(f"🗑️ '{plani_fshirjes}' u fshi!")
-                st.rerun()
-        else:
-            st.caption("Nuk ka plane të ruajtura për të fshirë.")
+            if st.button("➕ Ruaj Planin", use_container_width=True):
+                if emri_planit_ri.strip():
+                    libraria_p[emri_planit_ri] = {
+                        "start": st.session_state["start_d"],
+                        "end": st.session_state["end_d"],
+                        "rritja": st.session_state["rritja_val"],
+                    }
+                    st.success("✅ U ruajt!")
+                    st.rerun()
+                else:
+                    st.error("Vendosni një emër.")
+
+            st.divider()
+
+            # Pjesa B: Fshirja
+            st.markdown("**Fshi një Plan**")
+            plane_per_fshirje = [
+                p for p in opsionet_lib if p != "Zgjedhje Manuale (Pa Ruajtje)"
+            ]
+
+            if plane_per_fshirje:
+                plani_fshirjes = st.selectbox(
+                    "Zgjidh për fshirje:", options=plane_per_fshirje, key="fsh_sel"
+                )
+                if st.button("❌ Fshi", use_container_width=True):
+                    del libraria_p[plani_fshirjes]
+                    st.rerun()
+            else:
+                st.caption("Nuk ka plane.")
 
     # --- FILTRAT E TJERË ---
     grup_sel = st.sidebar.selectbox(
