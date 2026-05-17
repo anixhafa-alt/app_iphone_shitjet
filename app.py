@@ -103,22 +103,6 @@ else:
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
 # --- Pjesa tjetër e stilit CSS (E paprekur) ---
-st.sidebar.markdown(
-    """
-    <style>
-    .version-text {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 13px !important;
-        color: #566573 !important;
-        text-align: center;
-        margin-top: -10px;
-        padding-bottom: 5px;
-        letter-spacing: 1px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 st.sidebar.markdown(
     """
@@ -128,7 +112,7 @@ st.sidebar.markdown(
         font-size: 13px !important;
         color: #566573 !important; /* Gri elegante */
         text-align: center;
-        margin-top: -10px;          /* Ndryshuar nga -10px në -28px për ta ngritur lart */
+        margin-top: 0px;          /* Ndryshuar nga -10px në -28px për ta ngritur lart */
         margin-bottom: 15px;        /* Shton pak hapësirë para titullit "Panel Kontrolli" */
         letter-spacing: 1px;
     }
