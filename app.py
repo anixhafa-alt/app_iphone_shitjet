@@ -88,14 +88,15 @@ st.sidebar.markdown(
     """
     <style>
     .sidebar-title {
-        font-family: 'Courier New', Courier, monospace; /* Font stili që të kujton kodimin */
-        font-size: 26px !important;
-        color: #00F5FF !important; /* Blu Neon Shpërthyese */
-        font-weight: bold;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 25px !important;
+        color: #FF3366 !important; /* Ngjyrë Ekstrame Moderne */
+        font-weight: 900;          /* Maksimumi i trashësisë */
         text-align: center;
-        letter-spacing: 2px;       /* Hapësirë mes shkronjave për stil */
-        text-shadow: 0 0 10px #00F5FF; /* Efekt dritëbllokues (Glow effect) */
-        padding-bottom: 5px;
+        letter-spacing: 3px;
+        /* Efekt dritëhije i trefishtë për impakt maksimal vizual */
+        text-shadow: 0 0 5px #FF3366, 0 0 10px #FF3366, 0 0 20px #FF3366; 
+        padding-bottom: 10px;
     }
     </style>
     """,
@@ -103,13 +104,12 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown(
-    '<p class="sidebar-title">💠 AXION v. 1.1.0</p>', unsafe_allow_html=True
+    '<p class="sidebar-title">🔺 AXION v. 1.1.0</p>', unsafe_allow_html=True
 )
 st.sidebar.caption(
     "<center>⚡ <b>I</b>nteligjenca <b>O</b>peracionale e <b>N</b>dërmarrjes</center>",
     unsafe_allow_html=True,
 )
-
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
