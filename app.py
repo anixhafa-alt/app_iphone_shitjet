@@ -83,7 +83,28 @@ if not check_password():
 
     st.stop()
 
-st.sidebar.title("AXERP v. 1.1.0 ")
+# 1. Injektojmë stilin CSS për titullin e sidebar-it
+st.sidebar.markdown(
+    """
+    <style>
+    /* Targetojmë tekstin brenda titullit të sidebar */
+    .sidebar-title {
+        font-family: 'Arial', sans-serif; /* Ndrysho fontin këtu (p.sh. 'Helvetica', 'Roboto', 'Courier New') */
+        font-size: 24px !important;       /* Madhësia e shkronjave */
+        color: #FF4B4B !important;       /* Ngjyra (Mund të përdorësh Hex Code ose emra si 'navy', 'blue') */
+        font-weight: bold;               /* Trashësia e shkronjave */
+        text-align: center;              /* Vendosja në qendër (opsionale) */
+        padding-bottom: 20px;            /* Hapësira poshtë titullit */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# 2. Shfaqim titullin duke përdorur klasën CSS që krijuam më lart
+st.sidebar.markdown(
+    '<p class="sidebar-title">🎛️ AXERP v. 1.1.0</p>', unsafe_allow_html=True
+)
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
