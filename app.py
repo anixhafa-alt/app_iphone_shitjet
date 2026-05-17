@@ -87,24 +87,29 @@ if not check_password():
 st.sidebar.markdown(
     """
     <style>
-    /* Targetojmë tekstin brenda titullit të sidebar */
     .sidebar-title {
-        font-family: 'Arial', sans-serif; /* Ndrysho fontin këtu (p.sh. 'Helvetica', 'Roboto', 'Courier New') */
-        font-size: 30px !important;       /* Madhësia e shkronjave */
-        color: #FF4B4B !important;       /* Ngjyra (Mund të përdorësh Hex Code ose emra si 'navy', 'blue') */
-        font-weight: bold;               /* Trashësia e shkronjave */
-        text-align: center;              /* Vendosja në qendër (opsionale) */
-        padding-bottom: 20px;            /* Hapësira poshtë titullit */
+        font-family: 'Courier New', Courier, monospace; /* Font stili që të kujton kodimin */
+        font-size: 26px !important;
+        color: #00F5FF !important; /* Blu Neon Shpërthyese */
+        font-weight: bold;
+        text-align: center;
+        letter-spacing: 2px;       /* Hapësirë mes shkronjave për stil */
+        text-shadow: 0 0 10px #00F5FF; /* Efekt dritëbllokues (Glow effect) */
+        padding-bottom: 5px;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# 2. Shfaqim titullin duke përdorur klasën CSS që krijuam më lart
 st.sidebar.markdown(
-    '<p class="sidebar-title">🦂 AXERP v. 1.1.0</p>', unsafe_allow_html=True
+    '<p class="sidebar-title">💠 AXION v. 1.1.0</p>', unsafe_allow_html=True
 )
+st.sidebar.caption(
+    "<center>⚡ <b>I</b>nteligjenca <b>O</b>peracionale e <b>N</b>dërmarrjes</center>",
+    unsafe_allow_html=True,
+)
+
 # --- NAVIGIMI ---
 
 # st.sidebar.title("🧭 Menuja Kryesore")
