@@ -2008,7 +2008,7 @@ elif page == "Shitjet Ditore":
 
 # ---------------------------------------------------------
 # MODULI: KLIENTËT ME SHUMË AGJENTË (Sipas Kodit të Klientit)
-# ---------------------------------------------------------
+# --------------------------------------------------------
 elif page == "Klientët me shumë Agjentë" and df_raw is not None:
     st.title("👥 Klientët e Furnizuar nga Më Shumë se Një Agjent")
     st.markdown(
@@ -2082,24 +2082,35 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 by="Numri_Agjenteve", ascending=False
             )
 
-            # Llogarisim numrin total të klientëve unikë që kanë blerë në këtë periudhë
+            # Llogarisim numrin total të klientëve unikë që kanë blerë në këtë periudhë historike
             total_kliente_aktive = df_filtri["KodiKlient"].nunique()
 
-            # Llogarisim përqindjen e klientëve në konflikt (opsionale, por jep shumë informacion)
+            # Llogarisim përqindjen e klientëve në konflikt
             perqindja_konflikt = (
                 (len(raporti_final) / total_kliente_aktive * 100)
                 if total_kliente_aktive > 0
                 else 0
             )
 
-            # 5. Shfaqja e Metrikave të Përgjithshme (4 kolona)
+            # 5. Shfaqja e Metrikave të Përgjithshme (Shtuar numri i klientëve aktualë live)
             st.divider()
-            m1, m2, m3, m4 = st.columns(4)
+            m0, m1, m2, m3, m4 = st.columns(5)
+
+            # METRIKA E RE E KËRKUAR: Merr numrin total të klientëve nga regjistri live i SQL
+            if df_klientet_regjistri is not None:
+                total_regjister_live = len(df_klientet_regjistri)
+                m0.metric(
+                    label="📋 Regjistri i Klientëve",
+                    value=f"{total_regjister_live:,}",
+                    help="Numri total i klientëve që ekzistojnë aktualisht në pamjen dbo.KlientetListView në SQL Server.",
+                )
+            else:
+                m0.metric(label="📋 Regjistri i Klientëve", value="Nuk u ngarkua")
 
             m1.metric(
-                label="🏪 Total Klientë Aktivë",
+                label="🏪 Klientë me Blerje",
                 value=f"{total_kliente_aktive:,}",
-                help="Numri total i klientëve unikë që kanë kryer blerje në të gjithë periudhën e zgjedhur.",
+                help="Numri i klientëve unikë që kanë kryer të paktën një blerje gjatë periudhës së zgjedhur.",
             )
             m2.metric(
                 label="⚠️ Klientë në Konflikt",
@@ -2128,8 +2139,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 .reset_index()
             )
 
-            # Kthejmë VitiMuaji në string që Plotly ta afishojë saktë në boshtin X
-            # dhe krijojmë një etiketë të bukur në shqip (psh. "Janar 2026")
+            # Kthejmë VitiMuaji në string dhe krijojmë etiketën në shqip
             df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
             )
@@ -2149,7 +2159,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 color_discrete_sequence=["#1f77b4"],  # Ngjyrë blu standarde e këndshme
             )
 
-            # Konfigurimi estetik i grafikut që të përshtatet me dizajnin tënd
+            # Konfigurimi estetik i grafikut
             fig_aktive.update_traces(
                 textposition="outside",
                 hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
@@ -2157,7 +2167,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             fig_aktive.update_layout(
                 xaxis_title=None,
                 yaxis_title="Numri i Klientëve Unique",
-                paper_bgcolor="rgba(0,0,0,0)",  # NDRYSHIMI: Përdoret paper_bgcolor në vend të backgroundcolor
+                paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",  # Sfondi i brendshëm transparent
                 margin=dict(l=20, r=20, t=20, b=20),
                 height=350,
@@ -2185,7 +2195,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     ),
                 }
 
-                # Ndryshojmë radhën e kolonave për t'u dukur më bukur (Kodi i pari)
+                # Rregullojmë radhën e kolonave
                 raporti_final = raporti_final[
                     [
                         "KodiKlient",
