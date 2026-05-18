@@ -6,7 +6,7 @@ import os
 
 # =========================================================
 # 1. KONFIGURIMI I FAQES
-# =========================================================
+# region ==================================================
 st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide")
 
 # Fjalori për Muajt Shqip
@@ -24,11 +24,12 @@ muajt_sq = {
     11: "Nëntor",
     12: "Dhjetor",
 }
+# endregion
 
 
 # =========================================================
 # 2. SISTEMI I SIGURISE (LOGIN)
-# =========================================================
+# region ==================================================
 def password_entered():
     if st.session_state["password"] == "a":
         st.session_state["password_correct"] = True
@@ -64,10 +65,11 @@ def check_password():
 
 if not check_password():
     st.stop()
+# endregion
 
 # =========================================================
 # 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
-# =========================================================
+# region ==================================================
 EMRI_FOTOS = "logo.png"
 
 if os.path.exists(EMRI_FOTOS):
@@ -108,10 +110,11 @@ st.sidebar.markdown(
 
 # Shfaqja e versionit fiks nën logo
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
+# endregion
 
 # =========================================================
 # 4. NAVIGIMI (PANEL KONTROLLI)
-# =========================================================
+# region ==================================================
 st.sidebar.markdown(
     """
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
@@ -141,11 +144,12 @@ page = st.sidebar.radio(
         "Route Plan AI",
     ],
 )
+# endregion
 
 
 # =========================================================
 # 5. NGARKIMI DHE BASHKIMI I TE DHENAVE (SQL + EXCEL)
-# =========================================================
+# region ==================================================
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
@@ -219,10 +223,11 @@ if df_raw is not None and df_link is not None:
         df_raw["kat"] = (
             df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
         )
+# endregion
 
 # =========================================================
 # 6. KORNIZA E RE E SINKRONIZIMIT (E BASHKUAR SIKURSE NË FOTO)
-# =========================================================
+# region ==================================================
 if df_raw is not None and not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
     if kolona_date:
@@ -256,19 +261,23 @@ if df_raw is not None and not df_raw.empty:
                     )
     else:
         st.sidebar.error("⚠️ Nuk u gjet kolona 'DATA' në tabelë.")
+# endregion
 
 
 # =========================================================
 # 7. FUNKSIONI: LIBRARIA PERMANENTE
-# =========================================================
+# region ==================================================
 @st.cache_resource
 def merr_librarine_permanente():
     return {"Zgjedhje Manuale (Pa Ruajtje)": None}
 
 
+# endregion
+
+
 # =========================================================
 # 8. FUNKSIONI KRYESOR: NDËRTIMI I SIDEBAR
-# =========================================================
+# region ==================================================
 def nderto_sidebar():
     if df_raw is not None and not df_raw.empty:
         if "start_d" not in st.session_state:
@@ -423,11 +432,17 @@ def nderto_sidebar():
     return start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected
 
 
+# endregion
+
 # =========================================================
 # 9. THIRRJA E FUNKSIONIT TË SIDEBAR
-# =========================================================
+# region ==================================================
 start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_sidebar()
+# endregion
 
+# =========================================================
+# 10. MODULET
+# region ==================================================
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
 # ---------------------------------------------------------
@@ -1995,3 +2010,4 @@ elif page == "Shitjet Ditore":
 
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
+# endregion
