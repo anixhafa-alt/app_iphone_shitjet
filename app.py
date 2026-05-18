@@ -156,7 +156,7 @@ def load_all_data():
     try:
         conn = st.connection("sql", type="sql")
         df_sql = conn.query(
-            "SELECT Data, ForcaShitese, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
+            "SELECT Data, ForcaShitese, KodiKlient, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
         )
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
@@ -2036,157 +2036,170 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
         "Ky modul analizon përplasjet e agjentëve duke u bazuar te **Kodi Unik i Klientit** për periudhën e zgjedhur."
     )
 
-    # 1. Krijojmë përzgjedhësit e periudhës në formë muaj-vit
-    df_raw["VitiMuaji"] = df_raw["Data"].dt.to_period("M")
-    lista_muajve = sorted(df_raw["VitiMuaji"].unique())
-    opsionet_muajve = {
-        m: f"{muajt_sq.get(m.month, m.month)} {m.year}" for m in lista_muajve
-    }
-
-    st.subheader("🔍 Zgjidh Periudhën e Analizës")
-    col1, col2 = st.columns(2)
-    with col1:
-        muaji_fillimit = st.selectbox(
-            "Nga Muaji:",
-            options=lista_muajve,
-            index=0,
-            format_func=lambda x: opsionet_muajve[x],
+    # Kontrolli i sigurisë nëse kolona ekziston në tabelën df_raw
+    if "KodiKlient" not in df_raw.columns:
+        st.error(
+            "❌ Gabim strukturor: Kolona 'KodiKlient' nuk u gjet në të dhënat e shkarkuara nga SQL Server. Ju lutem kontrolloni nëse e keni shtuar te load_all_data()."
         )
-    with col2:
-        muaji_mbarimit = st.selectbox(
-            "Deri te Muaji:",
-            options=lista_muajve,
-            index=len(lista_muajve) - 1,
-            format_func=lambda x: opsionet_muajve[x],
-        )
-
-    if muaji_fillimit > muaji_mbarimit:
-        st.error("❌ Gabim: 'Nga Muaji' nuk mund të jetë më i madh se 'Deri te Muaji'!")
     else:
-        # 2. Filtrimi i të dhënave bazë
-        df_filtri = df_raw[
-            (df_raw["VitiMuaji"] >= muaji_fillimit)
-            & (df_raw["VitiMuaji"] <= muaji_mbarimit)
-        ].copy()
+        # 1. Krijojmë përzgjedhësit e periudhës në formë muaj-vit
+        df_raw["VitiMuaji"] = df_raw["Data"].dt.to_period("M")
+        lista_muajve = sorted(df_raw["VitiMuaji"].unique())
+        opsionet_muajve = {
+            m: f"{muajt_sq.get(m.month, m.month)} {m.year}" for m in lista_muajve
+        }
 
-        # Sigurohemi që kolonat kyçe nuk janë boshe (KodiKlient dhe ForcaShitese)
-        df_filtri = df_filtri[
-            df_filtri["KodiKlient"].notna() & df_filtri["ForcaShitese"].notna()
-        ]
-
-        # 3. Agregimi: Grupojmë sipas 'KodiKlient' dhe marrim emrin e parë që gjejmë për atë kod
-        raporti_df = (
-            df_filtri.groupby("KodiKlient")
-            .agg(
-                EmriKlientit=(
-                    "Klienti",
-                    "first",
-                ),  # Merr emrin korrespondues të atij kodi
-                Agjentet=("ForcaShitese", lambda x: ", ".join(sorted(x.unique()))),
-                Numri_Agjenteve=("ForcaShitese", "nunique"),
-                Totale_KG=("kg", "sum"),
-                Vlera_Totale=("Vlera_Historike", "sum"),
+        st.subheader("🔍 Zgjidh Periudhën e Analizës")
+        col1, col2 = st.columns(2)
+        with col1:
+            muaji_fillimit = st.selectbox(
+                "Nga Muaji:",
+                options=lista_muajve,
+                index=0,
+                format_func=lambda x: opsionet_muajve[x],
             )
-            .reset_index()
-        )
+        with col2:
+            muaji_mbarimit = st.selectbox(
+                "Deri te Muaji:",
+                options=lista_muajve,
+                index=len(lista_muajve) - 1,
+                format_func=lambda x: opsionet_muajve[x],
+            )
 
-        # 4. Filtri Kyç: Vetëm kodet që kanë më shumë se 1 agjent unik
-        raporti_final = raporti_df[raporti_df["Numri_Agjenteve"] > 1].sort_values(
-            by="Numri_Agjenteve", ascending=False
-        )
+        if muaji_fillimit > muaji_mbarimit:
+            st.error(
+                "❌ Gabim: 'Nga Muaji' nuk mund të jetë më i madh se 'Deri te Muaji'!"
+            )
+        else:
+            # 2. Filtrimi i të dhënave bazë
+            df_filtri = df_raw[
+                (df_raw["VitiMuaji"] >= muaji_fillimit)
+                & (df_raw["VitiMuaji"] <= muaji_mbarimit)
+            ].copy()
 
-        # 5. Shfaqja e Metrikave të Përgjithshme
-        st.divider()
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Kode Klientësh në Konflikt", f"{len(raporti_final):,}")
-        m2.metric("Total KG e Prekur", f"{raporti_final['Totale_KG'].sum():,.0f} kg")
-        m3.metric(
-            "Vlera Totale në Konflikt", f"{raporti_final['Vlera_Totale'].sum():,.0f} L"
-        )
-
-        # 6. Shfaqja e Tabelës Kryesore
-        st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
-
-        if not raporti_final.empty:
-            config_kolonave_konflikt = {
-                "KodiKlient": st.column_config.TextColumn("🔑 Kodi Klientit"),
-                "EmriKlientit": st.column_config.TextColumn("🏪 Emri i Klientit"),
-                "Agjentet": st.column_config.TextColumn("👤 Agjentët Furnizues"),
-                "Numri_Agjenteve": st.column_config.NumberColumn(
-                    "🔢 Nr. Agjentëve", format="%d"
-                ),
-                "Totale_KG": st.column_config.NumberColumn("⚖️ Totale KG", format="%d"),
-                "Vlera_Totale": st.column_config.NumberColumn(
-                    "💰 Vlera Totale (Lekë)", format="%d"
-                ),
-            }
-
-            # Ndryshojmë radhën e kolonave për t'u dukur më bukur (Kodi i pari)
-            raporti_final = raporti_final[
-                [
-                    "KodiKlient",
-                    "EmriKlientit",
-                    "Agjentet",
-                    "Numri_Agjenteve",
-                    "Totale_KG",
-                    "Vlera_Totale",
-                ]
+            # Sigurohemi që kolonat kyçe nuk janë boshe
+            df_filtri = df_filtri[
+                df_filtri["KodiKlient"].notna() & df_filtri["ForcaShitese"].notna()
             ]
 
-            st.dataframe(
-                raporti_final,
-                use_container_width=True,
-                hide_index=True,
-                column_config=config_kolonave_konflikt,
-                height=450,
-            )
-
-            # 7. Mundësia për shkarkim në CSV
-            csv_konflikt = raporti_final.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="📥 Shkarko Raportin e Konflikteve (CSV)",
-                data=csv_konflikt,
-                file_name=f"konfliktet_sipas_kodit_{muaji_fillimit}_{muaji_mbarimit}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-            # 8. Detajimi në nivel artikulli (Drill-down sipas Kodit)
-            st.divider()
-            st.subheader("🔍 Analizë e Detajuar për një Klient specifik")
-
-            # Krijojmë një listë përzgjedhjeje që tregon "Kodi - Emri" për menaxherin
-            raporti_final["Kodi_Emri"] = (
-                raporti_final["KodiKlient"].astype(str)
-                + " - "
-                + raporti_final["EmriKlientit"]
-            )
-            klienti_zgjedhur_opsion = st.selectbox(
-                "Zgjidh Kodin dhe Emrin e klientit:",
-                options=raporti_final["Kodi_Emri"].unique(),
-            )
-
-            if klienti_zgjedhur_opsion:
-                # Shkëputim kodin nga stringu i përzgjedhur
-                kodi_per_filtrim = klienti_zgjedhur_opsion.split(" - ")[0]
-
-                df_detaje = (
-                    df_filtri[df_filtri["KodiKlient"] == kodi_per_filtrim]
-                    .groupby(["ForcaShitese", "kat", "Artikulli"])
-                    .agg(Sasia_KG=("kg", "sum"), Vlera=("Vlera_Historike", "sum"))
-                    .reset_index()
+            # 3. Agregimi: Grupojmë sipas 'KodiKlient' dhe marrim emrin e parë që gjejmë për atë kod
+            raporti_df = (
+                df_filtri.groupby("KodiKlient")
+                .agg(
+                    EmriKlientit=(
+                        "Klienti",
+                        "first",
+                    ),  # Merr emrin e parë për atë kod klienti
+                    Agjentet=("ForcaShitese", lambda x: ", ".join(sorted(x.unique()))),
+                    Numri_Agjenteve=("ForcaShitese", "nunique"),
+                    Totale_KG=("kg", "sum"),
+                    Vlera_Totale=("Vlera_Historike", "sum"),
                 )
+                .reset_index()
+            )
+
+            # 4. Filtri Kyç: Vetëm kodet që kanë më shumë se 1 agjent unik
+            raporti_final = raporti_df[raporti_df["Numri_Agjenteve"] > 1].sort_values(
+                by="Numri_Agjenteve", ascending=False
+            )
+
+            # 5. Shfaqja e Metrikave të Përgjithshme
+            st.divider()
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Kode Klientësh në Konflikt", f"{len(raporti_final):,}")
+            m2.metric(
+                "Total KG e Prekur", f"{raporti_final['Totale_KG'].sum():,.0f} kg"
+            )
+            m3.metric(
+                "Vlera Totale në Konflikt",
+                f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
+            )
+
+            # 6. Shfaqja e Tabelës Kryesore
+            st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
+
+            if not raporti_final.empty:
+                config_kolonave_konflikt = {
+                    "KodiKlient": st.column_config.TextColumn("🔑 Kodi Klientit"),
+                    "EmriKlientit": st.column_config.TextColumn("🏪 Emri i Klientit"),
+                    "Agjentet": st.column_config.TextColumn("👤 Agjentët Furnizues"),
+                    "Numri_Agjenteve": st.column_config.NumberColumn(
+                        "🔢 Nr. Agjentëve", format="%d"
+                    ),
+                    "Totale_KG": st.column_config.NumberColumn(
+                        "⚖️ Totale KG", format="%d"
+                    ),
+                    "Vlera_Totale": st.column_config.NumberColumn(
+                        "💰 Vlera Totale (Lekë)", format="%d"
+                    ),
+                }
+
+                # Ndryshojmë radhën e kolonave për t'u dukur më bukur (Kodi i pari)
+                raporti_final = raporti_final[
+                    [
+                        "KodiKlient",
+                        "EmriKlientit",
+                        "Agjentet",
+                        "Numri_Agjenteve",
+                        "Totale_KG",
+                        "Vlera_Totale",
+                    ]
+                ]
 
                 st.dataframe(
-                    df_detaje.style.format(
-                        {"Sasia_KG": "{:,.1f}", "Vlera": "{:,.0f} L"}
-                    ),
+                    raporti_final,
                     use_container_width=True,
                     hide_index=True,
+                    column_config=config_kolonave_konflikt,
+                    height=450,
                 )
-        else:
-            st.success(
-                "🟢 Nuk u gjet asnjë kod klienti i furnizuar nga më shumë se një agjent për këtë periudhë."
-            )
+
+                # 7. Mundësia për shkarkim në CSV
+                csv_konflikt = raporti_final.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="📥 Shkarko Raportin e Konflikteve (CSV)",
+                    data=csv_konflikt,
+                    file_name=f"konfliktet_sipas_kodit_{muaji_fillimit}_{muaji_mbarimit}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+                # 8. Detajimi në nivel artikulli (Drill-down sipas Kodit)
+                st.divider()
+                st.subheader("🔍 Analizë e Detajuar për një Klient specifik")
+
+                # Krijojmë një listë përzgjedhjeje që tregon "Kodi - Emri" për menaxherin
+                raporti_final["Kodi_Emri"] = (
+                    raporti_final["KodiKlient"].astype(str)
+                    + " - "
+                    + raporti_final["EmriKlientit"]
+                )
+                klienti_zgjedhur_opsion = st.selectbox(
+                    "Zgjidh Kodin dhe Emrin e klientit:",
+                    options=raporti_final["Kodi_Emri"].unique(),
+                )
+
+                if klienti_zgjedhur_opsion:
+                    # Shkëputim kodin e pastër nga stringu i përzgjedhur
+                    kodi_per_filtrim = klienti_zgjedhur_opsion.split(" - ")[0]
+
+                    df_detaje = (
+                        df_filtri[df_filtri["KodiKlient"] == kodi_per_filtrim]
+                        .groupby(["ForcaShitese", "kat", "Artikulli"])
+                        .agg(Sasia_KG=("kg", "sum"), Vlera=("Vlera_Historike", "sum"))
+                        .reset_index()
+                    )
+
+                    st.dataframe(
+                        df_detaje.style.format(
+                            {"Sasia_KG": "{:,.1f}", "Vlera": "{:,.0f} L"}
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+            else:
+                st.success(
+                    "🟢 Nuk u gjet asnjë kod klienti i furnizuar nga më shumë se një agjent për këtë periudhë."
+                )
 
 # endregion
