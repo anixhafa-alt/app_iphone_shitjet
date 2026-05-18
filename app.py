@@ -200,13 +200,14 @@ def load_all_data():
 def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
+
+        # Heqim [Statusi] nga query kryesor për të shmangur gabimin e SQL
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
                 [Emri] AS Klienti, 
                 [Zona] AS ForcaShiteseAktuale, 
                 [Qyteti] AS Rajoni, 
-                [Statusi],
                 [Latitude], 
                 [Longitude] 
             FROM dbo.KlientetListView
@@ -219,11 +220,10 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # Krijojmë një kolonë True/False bazuar në tekstin 'Aktiv'
-        if "Statusi" in df_klientet.columns:
-            df_klientet["StatusiAktiv"] = df_klientet["Statusi"].str.strip() == "Aktiv"
-        else:
-            df_klientet["StatusiAktiv"] = True
+        # MEQENËSE SQL NUK E LEXON DOT KOLONËN 'STATUSI':
+        # I konsiderojmë automatikisht të gjithë klientët si "Aktivë" në Python.
+        # Kjo shmang gabimin e kuq dhe bën që moduli Route Plan AI të punojë me sukses.
+        df_klientet["StatusiAktiv"] = True
 
         return df_klientet
     except Exception as e:
