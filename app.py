@@ -201,15 +201,13 @@ def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
 
-        # Heqim [Statusi] nga query kryesor për të shmangur gabimin e SQL
+        # Query i pastruar plotësisht nga kolonat që shkaktojnë gabime në SQL Server
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
                 [Emri] AS Klienti, 
                 [Zona] AS ForcaShiteseAktuale, 
-                [Qyteti] AS Rajoni, 
-                [Latitude], 
-                [Longitude] 
+                [Qyteti] AS Rajoni
             FROM dbo.KlientetListView
         """
         df_klientet = conn.query(query)
@@ -220,10 +218,12 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # MEQENËSE SQL NUK E LEXON DOT KOLONËN 'STATUSI':
-        # I konsiderojmë automatikisht të gjithë klientët si "Aktivë" në Python.
-        # Kjo shmang gabimin e kuq dhe bën që moduli Route Plan AI të punojë me sukses.
+        # RREGULLIMI PËR TË SHMANGUR BLLOKIMIN:
+        # Krijojmë kolonat e nevojshme për modulin e rrugëve direkt në Python.
+        # Meqenëse nuk kemi koordinata reale, i vendosim përkohësisht None (ose boshe)
         df_klientet["StatusiAktiv"] = True
+        df_klientet["Latitude"] = None
+        df_klientet["Longitude"] = None
 
         return df_klientet
     except Exception as e:
