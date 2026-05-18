@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+imfrom datetime import datetime
 from PIL import Image
 import os
 
@@ -137,11 +137,14 @@ page = st.sidebar.radio(
     [
         "Shitjet Ditore",
         "Realizimi",
+        "Planifikimi",
         "Mundësitë",
-        "Historiku",
+        "Historiku
         "Klientët me shumë Agjentë",
         "Asistenti AI",
         "Route Plan AI",
+    ],
+)
 # endregion
 
 
@@ -2135,7 +2138,6 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     hide_index=True
                 )
         else:
-            st.success("🟢 Paqe në terren! Nuk u gjet asnjë klient i furnizuar nga më shumë se një agjent për këtë periudhë.")       
-        
+            st.success("🟢 Paqe në terren! Nuk u gjet asnjë klient i furnizuar nga më shumë se një agjent për këtë periudhë.")        
         
 # endregion
