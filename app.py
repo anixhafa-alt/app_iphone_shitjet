@@ -201,15 +201,13 @@ def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
 
-        # Query i pastruar që merr të dhënat bazë nga SQL Server
+        # Marrim vetëm kolonat që ekzistojnë me siguri në view-në tënde SQL
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
                 [Emri] AS Klienti, 
                 [Zona] AS ForcaShiteseAktuale, 
-                [Qyteti] AS Rajoni,
-                [Latitude],
-                [Longitude]
+                [Qyteti] AS Rajoni
             FROM dbo.KlientetListView
         """
         df_klientet = conn.query(query)
@@ -220,24 +218,8 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # 1. Pastrojmë formatin e tekstit nga SQL (nëse ka presë e kthejmë në pikë)
-        df_klientet["Latitude"] = (
-            df_klientet["Latitude"].astype(str).str.replace(",", ".").str.strip()
-        )
-        df_klientet["Longitude"] = (
-            df_klientet["Longitude"].astype(str).str.replace(",", ".").str.strip()
-        )
-
-        # 2. I kthejmë në numra standardë Python (vlerat e kota bëhen NaN)
-        df_klientet["Latitude"] = pd.to_numeric(
-            df_klientet["Latitude"], errors="coerce"
-        )
-        df_klientet["Longitude"] = pd.to_numeric(
-            df_klientet["Longitude"], errors="coerce"
-        )
-
-        # 3. KORDINATAT FALLBACK SIPAS QYTETEVE (Zgjidhja Inteligjente)
-        # Nëse SQL i ka boshe, përcaktojmë koordinatat qendrore për qytetet kryesore të Shqipërisë
+        # --- ZGJIDHJA INTELIGJENTE: FALLBACK MODE ---
+        # Pasi SQL nuk i ka këto kolona, i gjenerojmë automatikisht në Python sipas qytetit real
         koordinatat_qyteteve = {
             "TIRANE": (41.3275, 19.8187),
             "DURRES": (41.3242, 19.4564),
@@ -252,36 +234,31 @@ def load_customer_list():
 
         import numpy as np
 
-        # Funksion i vogël që plotëson koordinatat nëse janë bosh (NaN)
         def ploteso_koordinatat(row):
-            lat, lon = row["Latitude"], row["Longitude"]
-            # Nëse koordinata është e pavlefshme ose boshe
-            if pd.isna(lat) or pd.isna(lon):
-                qyteti_pastruar = str(row["Rajoni"]).upper().strip()
-                # Marrim koordinatën e qytetit, ose si default Tiranën
-                qendrat = koordinatat_qyteteve.get(qyteti_pastruar, (41.3275, 19.8187))
-                # Shtojmë një variacion shumë të vogël random që klientët të mos mbivendosen në një pikë të vetme
-                return pd.Series(
-                    [
-                        qendrat[0] + np.random.uniform(-0.03, 0.03),
-                        qendrat[1] + np.random.uniform(-0.03, 0.03),
-                    ]
-                )
-            return pd.Series([lat, lon])
+            qyteti_pastruar = str(row["Rajoni"]).upper().strip()
+            # Marrim koordinatën e qytetit, nëse nuk gjendet përdorim si default Tiranën
+            qendrat = koordinatat_qyteteve.get(qyteti_pastruar, (41.3275, 19.8187))
+            # Shtojmë pak variacion random që klientët e të njëjtit qytet mos mbivendosen në një pikë
+            return pd.Series(
+                [
+                    qendrat[0] + np.random.uniform(-0.03, 0.03),
+                    qendrat[1] + np.random.uniform(-0.03, 0.03),
+                ]
+            )
 
-        # Aplikojmë rregullimin vetëm mbi klientët që nuk kanë gjeolokacion të saktë në SQL
+        # Krijojmë kolonat e nevojshme direkt në Python
         df_klientet[["Latitude", "Longitude"]] = df_klientet.apply(
             ploteso_koordinatat, axis=1
         )
-
         df_klientet["StatusiAktiv"] = True
+
         return df_klientet
     except Exception as e:
         st.error(f"⚠️ Gabim teknik gjatë leximit të regjistrit të klientëve: {e}")
         return None
 
 
-# Ngarkojmë listat e të dhënave (vetëm një herë)
+# NGARKIMI I TË DHËNAVE (Thirret vetëm NJË herë për çdo variabël)
 df_klientet_regjistri = load_customer_list()
 df_raw = load_all_data()
 
