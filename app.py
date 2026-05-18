@@ -152,7 +152,7 @@ page = st.sidebar.radio(
 # region ==================================================
 
 
-@st.cache_data(ttl=600)
+# 1. Funksioni bazë i ngarkimit (Pa dekorues që të mos bllokojë sintaksën)
 def load_all_data():
     try:
         conn = st.connection("sql", type="sql")
@@ -196,20 +196,27 @@ def load_all_data():
         return None
 
 
-# Krijojmë një fragment që izolon procesin e rifreskimit automatik çdo 60 sekonda
-@st.fragment(run_every=3600)
+# 2. Përdorimi i st.cache_data me funksion të dedikuar për të shmangur gabimet e vlerave globale
+@st.cache_data(ttl=1800)
+def get_cached_data():
+    return load_all_data()
+
+
+# Mbushim variablin kryesor
+df_raw = get_cached_data()
+
+
+# 3. Fragmenti i rifreskimit pa krijuar thyerje sintakse
+@st.fragment(run_every=1800)
 def autorefresh_data_section():
-    # Fshijmë cache-in ekzistues që të mos lexohen të njëjtat të dhëna nga kujtesa
+    # Ky funksion thjesht ekzekutohet në sfond çdo 30 minuta
+    # dhe detyron rifreskimin e cache-it pa bllokuar variablin df_raw
     st.cache_data.clear()
 
-    global df_raw
-    df_raw = load_all_data()
 
-
-# Ekzekutojmë fragmentin që të nisë puna në sfond
 autorefresh_data_section()
 
-# Vazhdojmë me pjesën tjetër të leximit të Excel-it dhe lidhjeve sekondare
+# Pjesa tjetër e leximit të Excel-it dhe lidhjeve sekondare
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     df_link = df_link[["KODI", "KATEG."]].rename(
