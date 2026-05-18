@@ -223,6 +223,21 @@ if df_raw is not None and df_link is not None:
         df_raw["kat"] = (
             df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
         )
+# =========================================================
+# RIFRESKIMI AUTOMATIK ÇDO 30 MINUTA (PA NGADALËSIM)
+# =========================================================
+import time
+
+# Përdorim një variabël në session_state për të mbajtur kohën e rifreskimit të fundit
+if "koha_rifreskimit_fundit" not in st.session_state:
+    st.session_state["koha_rifreskimit_fundit"] = time.time()
+
+# Kontrollojmë nëse kanë kaluar 1800 sekonda (30 minuta) nga rifreskimi i fundit
+if time.time() - st.session_state["koha_rifreskimit_fundit"] > 1800:
+    st.cache_data.clear()  # Fshin cache-in e vjetër
+    st.session_state["koha_rifreskimit_fundit"] = time.time()  # Përditëson kohën
+    st.rerun()  # Rinis faqen me të dhënat e reja
+
 # endregion
 
 # =========================================================
