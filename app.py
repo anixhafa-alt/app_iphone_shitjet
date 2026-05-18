@@ -146,10 +146,10 @@ page = st.sidebar.radio(
 )
 # endregion
 
-
 # =========================================================
 # 5. NGARKIMI DHE BASHKIMI I TE DHENAVE (SQL + EXCEL)
 # region ==================================================
+uu
 
 
 # 1. Funksioni bazë i ngarkimit (Pa dekorues që të mos bllokojë sintaksën)
