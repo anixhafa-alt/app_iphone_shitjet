@@ -150,6 +150,8 @@ page = st.sidebar.radio(
 # =========================================================
 # 5. NGARKIMI DHE BASHKIMI I TE DHENAVE (SQL + EXCEL)
 # region ==================================================
+
+
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
@@ -171,6 +173,7 @@ def load_all_data():
         df.rename(
             columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
         )
+
         df["Vlera_Historike"] = pd.to_numeric(
             df["VleraRresht"], errors="coerce"
         ).fillna(0)
@@ -193,8 +196,20 @@ def load_all_data():
         return None
 
 
-df_raw = load_all_data()
+# Krijojmë një fragment që izolon procesin e rifreskimit automatik çdo 60 sekonda
+@st.fragment(run_every=60)
+def autorefresh_data_section():
+    # Fshijmë cache-in ekzistues që të mos lexohen të njëjtat të dhëna nga kujtesa
+    st.cache_data.clear()
 
+    global df_raw
+    df_raw = load_all_data()
+
+
+# Ekzekutojmë fragmentin që të nisë puna në sfond
+autorefresh_data_section()
+
+# Vazhdojmë me pjesën tjetër të leximit të Excel-it dhe lidhjeve sekondare
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     df_link = df_link[["KODI", "KATEG."]].rename(
