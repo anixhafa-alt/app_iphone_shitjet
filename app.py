@@ -2187,9 +2187,6 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             # Shfaqja e grafikut në Streamlit
             st.plotly_chart(fig_aktive, use_container_width=True)
 
-            # Vazhdon pika 6 (Shfaqja e Tabelës Kryesore)...
-            st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
-
             # 6. Shfaqja e Tabelës Kryesore
             st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
 
