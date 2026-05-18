@@ -2113,20 +2113,20 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 else 0
             )
 
-            # 5. Shfaqja e Metrikave të Përgjithshme (Tani me 4 kolona)
+            # 5. Shfaqja e Metrikave të Përgjithshme (4 kolona)
             st.divider()
             m1, m2, m3, m4 = st.columns(4)
 
             m1.metric(
                 label="🏪 Total Klientë Aktivë",
                 value=f"{total_kliente_aktive:,}",
-                help="Numri total i klientëve unikë që kanë kryer blerje në këtë periudhë.",
+                help="Numri total i klientëve unikë që kanë kryer blerje në të gjithë periudhën e zgjedhur.",
             )
             m2.metric(
                 label="⚠️ Klientë në Konflikt",
                 value=f"{len(raporti_final):,}",
                 delta=f"{perqindja_konflikt:.1f}% e totalit",
-                delta_color="inverse",  # E ngjyros me të kuqe sepse rritja e konfliktit është negative
+                delta_color="inverse",
             )
             m3.metric(
                 label="⚖️ Total KG e Prekur",
@@ -2136,6 +2136,59 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 label="💰 Vlera në Konflikt",
                 value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
             )
+
+            # ---------------------------------------------------------
+            # 5.5 GRAFIKU: ECURIA E KLIENTËVE AKTIVË PËR ÇDO MUAJ
+            # ---------------------------------------------------------
+            st.subheader("📈 Ecuria e Klientëve Aktivë Muaj pas Muaji")
+
+            # Grupojmë të dhënat e filtruara sipas VitiMuaji dhe numërojmë klientët unikë
+            df_grafiku = (
+                df_filtri.groupby("VitiMuaji")
+                .agg(Kliente_Aktive=("KodiKlient", "nunique"))
+                .reset_index()
+            )
+
+            # Kthejmë VitiMuaji në string që Plotly ta afishojë saktë në boshtin X
+            # dhe krijojmë një etiketë të bukur në shqip (psh. "Janar 2026")
+            df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
+                lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
+            )
+
+            import plotly.express as px
+
+            # Krijojmë grafikun me kolona (Bar Chart)
+            fig_aktive = px.bar(
+                df_grafiku,
+                x="Muaji_Etiketa",
+                y="Kliente_Aktive",
+                text="Kliente_Aktive",  # Shfaq numrin sipër çdo kolone
+                labels={
+                    "Muaji_Etiketa": "Periudha",
+                    "Kliente_Aktive": "Klientë Aktivë",
+                },
+                color_discrete_sequence=["#1f77b4"],  # Ngjyrë blu standarde e këndshme
+            )
+
+            # Konfigurimi estetik i grafikut që të përshtatet me dizajnin tënd
+            fig_aktive.update_traces(
+                textposition="outside",
+                hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
+            )
+            fig_aktive.update_layout(
+                xaxis_title=None,
+                yaxis_title="Numri i Klientëve Unique",
+                backgroundcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=20, r=20, t=20, b=20),
+                height=350,
+            )
+
+            # Shfaqja e grafikut në Streamlit
+            st.plotly_chart(fig_aktive, use_container_width=True)
+
+            # Vazhdon pika 6 (Shfaqja e Tabelës Kryesore)...
+            st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
 
             # 6. Shfaqja e Tabelës Kryesore
             st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
