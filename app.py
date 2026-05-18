@@ -67,6 +67,7 @@ if not check_password():
     st.stop()
 # endregion
 
+
 # =========================================================
 # 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
 # region ==================================================
@@ -112,6 +113,7 @@ st.sidebar.markdown(
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
+
 # =========================================================
 # 4. NAVIGIMI (PANEL KONTROLLI)
 # region ==================================================
@@ -150,7 +152,7 @@ page = st.sidebar.radio(
 
 # =========================================================
 # 5. NGARKIMI DHE BASHKIMI I TE DHENAVE (SQL + EXCEL)
-# regaion ==================================================
+# region ==================================================
 @st.cache_data(ttl=600)
 def load_all_data():
     try:
@@ -190,7 +192,7 @@ def load_all_data():
         df["Grup_Filtri"] = df["kat"].apply(klasifiko_kategorine)
         return df
     except Exception as e:
-        st.error(f"Gabim teknik: {e}")
+        st.error(f"Gabim teknik te load_all_data: {e}")
         return None
 
 
@@ -198,8 +200,6 @@ def load_all_data():
 def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
-
-        # Query i përshtatur saktësisht me strukturën e fotos tënde
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
@@ -219,13 +219,11 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # Krijojmë një kolonë True/False bazuar në tekstin 'Aktiv' që pamë te fotoja
+        # Krijojmë një kolonë True/False bazuar në tekstin 'Aktiv'
         if "Statusi" in df_klientet.columns:
             df_klientet["StatusiAktiv"] = df_klientet["Statusi"].str.strip() == "Aktiv"
         else:
-            df_klientet["StatusiAktiv"] = (
-                True  # Nëse diçka nuk shkon, i konsideron aktivë që mos bllokojë
-            )
+            df_klientet["StatusiAktiv"] = True
 
         return df_klientet
     except Exception as e:
@@ -233,15 +231,14 @@ def load_customer_list():
         return None
 
 
-# Ngarkojmë listën në variabël global
+# Ngarkojmë listat e të dhënave (vetëm një herë)
 df_klientet_regjistri = load_customer_list()
-# Ngarkojmë listën në një variabël global për ta pasur gati në çdo modul
-df_klientet_regjistri = load_customer_list()
-
 df_raw = load_all_data()
 
+# Ngarkimi dhe përpunimi i kategorive suplementare nga Excel-i
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+    df_link.columns = df_link.columns.str.strip()
     df_link = df_link[["KODI", "KATEG."]].rename(
         columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"}
     )
@@ -256,18 +253,26 @@ except Exception as e:
 
 try:
     df_names = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+    df_names.columns = df_names.columns.str.strip()
     df_names = df_names[["KOD KAT", "EMRI KAT"]]
 except Exception as e:
     st.error(f"Gabim te sheet-i 'kat_prod': {e}")
     df_names = None
 
+# Bashkimi përfundimtar i të dhënave për strukturën e kategorive
 if df_raw is not None and df_link is not None:
+    df_link["KodiArt"] = df_link["KodiArt"].astype(str).str.strip()
+    df_raw["KodiArt"] = df_raw["KodiArt"].astype(str).str.strip()
+
     df_raw = pd.merge(df_raw, df_link, on="KodiArt", how="left")
+
     if df_names is not None:
         df_raw = pd.merge(df_raw, df_names, on="KOD KAT", how="left")
         df_raw["kat"] = (
             df_raw["EMRI KAT"].fillna(df_raw["KOD KAT"]).fillna("Pa Kategori")
         )
+# endregion
+
 # =========================================================
 # RIFRESKIMI AUTOMATIK ÇDO 30 MINUTA (PA NGADALËSIM)
 # =========================================================
