@@ -139,7 +139,7 @@ page = st.sidebar.radio(
         "Realizimi",
         "Planifikimi",
         "Mundësitë",
-        "Historiku
+        "Historiku,
         "Klientët me shumë Agjentë",
         "Asistenti AI",
         "Route Plan AI",
