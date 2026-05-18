@@ -201,13 +201,15 @@ def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
 
-        # HEQIM PLOTËSISHT LATITUDE DHE LONGITUDE NGA QUERY PËR TË SHMANGUR GABIMIN E KUQ
+        # Query i pastruar që merr të dhënat bazë nga SQL Server
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
                 [Emri] AS Klienti, 
                 [Zona] AS ForcaShiteseAktuale, 
-                [Qyteti] AS Rajoni
+                [Qyteti] AS Rajoni,
+                [Latitude],
+                [Longitude]
             FROM dbo.KlientetListView
         """
         df_klientet = conn.query(query)
@@ -218,13 +220,61 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # RREGULLIMI STRATEGJIK:
-        # I krijojmë këto kolona si boshe (None) direkt në Python që moduli të mos bëjë Crash.
-        # Në këtë mënyrë, lista e klientëve ngarkohet pa asnjë gabim SQL!
-        df_klientet["StatusiAktiv"] = True
-        df_klientet["Latitude"] = None
-        df_klientet["Longitude"] = None
+        # 1. Pastrojmë formatin e tekstit nga SQL (nëse ka presë e kthejmë në pikë)
+        df_klientet["Latitude"] = (
+            df_klientet["Latitude"].astype(str).str.replace(",", ".").str.strip()
+        )
+        df_klientet["Longitude"] = (
+            df_klientet["Longitude"].astype(str).str.replace(",", ".").str.strip()
+        )
 
+        # 2. I kthejmë në numra standardë Python (vlerat e kota bëhen NaN)
+        df_klientet["Latitude"] = pd.to_numeric(
+            df_klientet["Latitude"], errors="coerce"
+        )
+        df_klientet["Longitude"] = pd.to_numeric(
+            df_klientet["Longitude"], errors="coerce"
+        )
+
+        # 3. KORDINATAT FALLBACK SIPAS QYTETEVE (Zgjidhja Inteligjente)
+        # Nëse SQL i ka boshe, përcaktojmë koordinatat qendrore për qytetet kryesore të Shqipërisë
+        koordinatat_qyteteve = {
+            "TIRANE": (41.3275, 19.8187),
+            "DURRES": (41.3242, 19.4564),
+            "ELBASAN": (41.1125, 20.0822),
+            "VLORE": (40.4661, 19.4897),
+            "SHKODER": (42.0683, 19.5126),
+            "FIER": (40.7275, 19.5622),
+            "KORCE": (40.6158, 20.7778),
+            "BERAT": (40.7058, 19.9522),
+            "LUSHNJE": (40.9419, 19.7028),
+        }
+
+        import numpy as np
+
+        # Funksion i vogël që plotëson koordinatat nëse janë bosh (NaN)
+        def ploteso_koordinatat(row):
+            lat, lon = row["Latitude"], row["Longitude"]
+            # Nëse koordinata është e pavlefshme ose boshe
+            if pd.isna(lat) or pd.isna(lon):
+                qyteti_pastruar = str(row["Rajoni"]).upper().strip()
+                # Marrim koordinatën e qytetit, ose si default Tiranën
+                qendrat = koordinatat_qyteteve.get(qyteti_pastruar, (41.3275, 19.8187))
+                # Shtojmë një variacion shumë të vogël random që klientët të mos mbivendosen në një pikë të vetme
+                return pd.Series(
+                    [
+                        qendrat[0] + np.random.uniform(-0.03, 0.03),
+                        qendrat[1] + np.random.uniform(-0.03, 0.03),
+                    ]
+                )
+            return pd.Series([lat, lon])
+
+        # Aplikojmë rregullimin vetëm mbi klientët që nuk kanë gjeolokacion të saktë në SQL
+        df_klientet[["Latitude", "Longitude"]] = df_klientet.apply(
+            ploteso_koordinatat, axis=1
+        )
+
+        df_klientet["StatusiAktiv"] = True
         return df_klientet
     except Exception as e:
         st.error(f"⚠️ Gabim teknik gjatë leximit të regjistrit të klientëve: {e}")
