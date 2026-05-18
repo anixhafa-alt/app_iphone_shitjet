@@ -2178,8 +2178,8 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             fig_aktive.update_layout(
                 xaxis_title=None,
                 yaxis_title="Numri i Klientëve Unique",
-                backgroundcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",  # NDRYSHIMI: Përdoret paper_bgcolor në vend të backgroundcolor
+                plot_bgcolor="rgba(0,0,0,0)",  # Sfondi i brendshëm transparent
                 margin=dict(l=20, r=20, t=20, b=20),
                 height=350,
             )
