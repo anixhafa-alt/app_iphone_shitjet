@@ -2103,16 +2103,38 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 by="Numri_Agjenteve", ascending=False
             )
 
-            # 5. Shfaqja e Metrikave të Përgjithshme
+            # Llogarisim numrin total të klientëve unikë që kanë blerë në këtë periudhë
+            total_kliente_aktive = df_filtri["KodiKlient"].nunique()
+
+            # Llogarisim përqindjen e klientëve në konflikt (opsionale, por jep shumë informacion)
+            perqindja_konflikt = (
+                (len(raporti_final) / total_kliente_aktive * 100)
+                if total_kliente_aktive > 0
+                else 0
+            )
+
+            # 5. Shfaqja e Metrikave të Përgjithshme (Tani me 4 kolona)
             st.divider()
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Kode Klientësh në Konflikt", f"{len(raporti_final):,}")
+            m1, m2, m3, m4 = st.columns(4)
+
+            m1.metric(
+                label="🏪 Total Klientë Aktivë",
+                value=f"{total_kliente_aktive:,}",
+                help="Numri total i klientëve unikë që kanë kryer blerje në këtë periudhë.",
+            )
             m2.metric(
-                "Total KG e Prekur", f"{raporti_final['Totale_KG'].sum():,.0f} kg"
+                label="⚠️ Klientë në Konflikt",
+                value=f"{len(raporti_final):,}",
+                delta=f"{perqindja_konflikt:.1f}% e totalit",
+                delta_color="inverse",  # E ngjyros me të kuqe sepse rritja e konfliktit është negative
             )
             m3.metric(
-                "Vlera Totale në Konflikt",
-                f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
+                label="⚖️ Total KG e Prekur",
+                value=f"{raporti_final['Totale_KG'].sum():,.0f} kg",
+            )
+            m4.metric(
+                label="💰 Vlera në Konflikt",
+                value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
             )
 
             # 6. Shfaqja e Tabelës Kryesore
