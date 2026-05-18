@@ -137,13 +137,11 @@ page = st.sidebar.radio(
     [
         "Shitjet Ditore",
         "Realizimi",
-        "Planifikimi",
         "Mundësitë",
         "Historiku",
+        "Klientët me shumë Agjentë",
         "Asistenti AI",
         "Route Plan AI",
-    ],
-)
 # endregion
 
 
@@ -2025,4 +2023,119 @@ elif page == "Shitjet Ditore":
 
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
+        
+# ---------------------------------------------------------
+# MODULI: KLIENTËT ME SHUMË AGJENTË (Klimat e Përbashkëta)
+# ---------------------------------------------------------
+elif page == "Klientët me shumë Agjentë" and df_raw is not None:
+    st.title("👥 Klientët e Furnizuar nga Më Shumë se Një Agjent")
+    st.markdown("Ky modul analizon përplasjet e agjentëve tek i njëjti klient për periudhën e zgjedhur.")
+
+    # 1. Krijojmë përzgjedhësit e periudhës në formë muaj-vit (Përdorim datat nga df_raw)
+    df_raw['VitiMuaji'] = df_raw['Data'].dt.to_period('M')
+    lista_muajve = sorted(df_raw['VitiMuaji'].unique())
+    
+    # Formatojmë muajt për t'u dukur bukur në ndërfaqe (psh: Janar 2026)
+    opsionet_muajve = {m: f"{muajt_sq.get(m.month, m.month)} {m.year}" for m in lista_muajve}
+
+    st.subheader("🔍 Zgjidh Periudhën e Analizës")
+    col1, col2 = st.columns(2)
+    with col1:
+        muaji_fillimit = st.selectbox(
+            "Nga Muaji:", 
+            options=lista_muajve, 
+            index=0, 
+            format_func=lambda x: opsionet_muajve[x]
+        )
+    with col2:
+        muaji_mbarimit = st.selectbox(
+            "Deri te Muaji:", 
+            options=lista_muajve, 
+            index=len(lista_muajve)-1, 
+            format_func=lambda x: opsionet_muajve[x]
+        )
+
+    # Sigurohemi që muaji i fillimit nuk është më i madh se i mbarimit
+    if muaji_fillimit > muaji_mbarimit:
+        st.error("❌ Gabim: 'Nga Muaji' nuk mund të jetë më i madh se 'Deri te Muaji'!")
+    else:
+        # 2. Filtrimi i të dhënave bazë sipas periudhës së zgjedhur
+        df_filtri = df_raw[(df_raw['VitiMuaji'] >= muaji_fillimit) & (df_raw['VitiMuaji'] <= muaji_mbarimit)].copy()
+
+        # Pastrojmë të dhënat e papasqyruara saktë
+        df_filtri = df_filtri[df_filtri['Klienti'].notna() & df_filtri['ForcaShitese'].notna()]
+
+        # 3. Agregimi: Gjejmë agjentët unikë dhe shitjet totale për çdo klient
+        raporti_df = (
+            df_filtri.groupby("Klienti")
+            .agg(
+                Agjentet=("ForcaShitese", lambda x: ", ".join(sorted(x.unique()))),
+                Numri_Agjenteve=("ForcaShitese", "nunique"),
+                Totale_KG=("kg", "sum"),
+                Vlera_Totale=("Vlera_Historike", "sum")
+            )
+            .reset_index()
+        )
+
+        # 4. Filtri Kyç: Mbajmë vetëm klientët që kanë MË SHUMË SE 1 AGJENT
+        raporti_final = raporti_df[raporti_df['Numri_Agjenteve'] > 1].sort_values(by="Numri_Agjenteve", ascending=False)
+
+        # 5. Shfaqja e Metrikave të Përgjithshme
+        st.divider()
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Klientë në Konflikt", f"{len(raporti_final):,}")
+        m2.metric("Total KG e Prekur", f"{raporti_final['Totale_KG'].sum():,.0f} kg")
+        m3.metric("Vlera Totale në Konflikt", f"{raporti_final['Vlera_Totale'].sum():,.0f} L")
+
+        # 6. Shfaqja e Tabelës Kryesore
+        st.subheader("📋 Lista e Klientëve dhe Agjentëve përkatës")
+        
+        if not raporti_final.empty:
+            # Konfigurimi i kolonave për estetikë
+            config_kolonave_konflikt = {
+                "Klienti": st.column_config.TextColumn("🏪 Emri i Klientit"),
+                "Agjentet": st.column_config.TextColumn("👤 Agjentët Furnizues"),
+                "Numri_Agjenteve": st.column_config.NumberColumn("🔢 Nr. Agjentëve", format="%d"),
+                "Totale_KG": st.column_config.NumberColumn("⚖️ Totale KG", format="%d"),
+                "Vlera_Totale": st.column_config.NumberColumn("💰 Vlera Totale (Lekë)", format="%d"),
+            }
+
+            st.dataframe(
+                raporti_final,
+                use_container_width=True,
+                hide_index=True,
+                column_config=config_kolonave_konflikt,
+                height=500
+            )
+
+            # 7. Mundësia për shkarkim në Excel/CSV
+            csv_konflikt = raporti_final.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="📥 Shkarko Raportin e Konflikteve (CSV)",
+                data=csv_konflikt,
+                file_name=f"konfliktet_agjenteve_{muaji_fillimit}_{muaji_mbarimit}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
+            # 8. Detajimi në nivel artikulli (Drill-down opsional)
+            st.divider()
+            st.subheader("🔍 Shiko detajet e shitjeve për një klient specifik")
+            klienti_zgjedhur = st.selectbox("Zgjidh klientin për analizë të detajuar:", options=raporti_final['Klienti'].unique())
+            
+            if klienti_zgjedhur:
+                df_detaje = df_filtri[df_filtri['Klienti'] == klienti_zgjedhur].groupby(['ForcaShitese', 'kat', 'Artikulli']).agg(
+                    Sasia_KG=('kg', 'sum'),
+                    Vlera=('Vlera_Historike', 'sum')
+                ).reset_index()
+                
+                st.dataframe(
+                    df_detaje.style.format({"Sasia_KG": "{:,.1f}", "Vlera": "{:,.0f} L"}),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.success("🟢 Paqe në terren! Nuk u gjet asnjë klient i furnizuar nga më shumë se një agjent për këtë periudhë.")       
+        
+        
 # endregion
