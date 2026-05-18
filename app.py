@@ -197,7 +197,7 @@ def load_all_data():
 
 
 # Krijojmë një fragment që izolon procesin e rifreskimit automatik çdo 60 sekonda
-@st.fragment(run_every=60)
+@st.fragment(run_every=3600)
 def autorefresh_data_section():
     # Fshijmë cache-in ekzistues që të mos lexohen të njëjtat të dhëna nga kujtesa
     st.cache_data.clear()
