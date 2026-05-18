@@ -201,13 +201,15 @@ def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
 
-        # Query i pastruar plotësisht nga kolonat që shkaktojnë gabime në SQL Server
+        # I kërkojmë sërish kolonat e koordinatave, por duke i pastruar që në SQL
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
                 [Emri] AS Klienti, 
                 [Zona] AS ForcaShiteseAktuale, 
-                [Qyteti] AS Rajoni
+                [Qyteti] AS Rajoni,
+                [Latitude],
+                [Longitude]
             FROM dbo.KlientetListView
         """
         df_klientet = conn.query(query)
@@ -218,13 +220,42 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # RREGULLIMI PËR TË SHMANGUR BLLOKIMIN:
-        # Krijojmë kolonat e nevojshme për modulin e rrugëve direkt në Python.
-        # Meqenëse nuk kemi koordinata reale, i vendosim përkohësisht None (ose boshe)
-        df_klientet["StatusiAktiv"] = True
-        df_klientet["Latitude"] = None
-        df_klientet["Longitude"] = None
+        # --- RREGULLIMI INTELIGJENT I KOORDINATAVE ---
 
+        # 1. Kthejmë vlerat në string dhe zëvendësojmë presën me pikë (nëse ka gabime formati në SQL)
+        df_klientet["Latitude"] = (
+            df_klientet["Latitude"].astype(str).str.replace(",", ".").str.strip()
+        )
+        df_klientet["Longitude"] = (
+            df_klientet["Longitude"].astype(str).str.replace(",", ".").str.strip()
+        )
+
+        # 2. I kthejmë në numra. Nëse ka tekste të gabuara apo fusha 'None', do të bëhen automatikisht NaN (bosh)
+        df_klientet["Latitude"] = pd.to_numeric(
+            df_klientet["Latitude"], errors="coerce"
+        )
+        df_klientet["Longitude"] = pd.to_numeric(
+            df_klientet["Longitude"], errors="coerce"
+        )
+
+        # 3. KREMTI MBROJTËS: Nëse të gjitha koordinatat në SQL janë bosh (NaN)
+        # do të krijojmë koordinata artificiale rreth Tiranës sa për provë, që harta të mos rrijë e fikur.
+        if df_klientet["Latitude"].isna().all():
+            st.sidebar.warning(
+                "ℹ️ Koordinatat në SQL janë NULL/Boshe. U aktivizuan koordinatat simulated për provë."
+            )
+            import numpy as np
+
+            # Vendosim pikën qendrore në Tiranë (41.3275, 19.8187) dhe i shpërndajmë lehtë klientët
+            n_rows = len(df_klientet)
+            df_klientet["Latitude"] = 41.3275 + np.random.uniform(
+                -0.05, 0.05, size=n_rows
+            )
+            df_klientet["Longitude"] = 19.8187 + np.random.uniform(
+                -0.05, 0.05, size=n_rows
+            )
+
+        df_klientet["StatusiAktiv"] = True
         return df_klientet
     except Exception as e:
         st.error(f"⚠️ Gabim teknik gjatë leximit të regjistrit të klientëve: {e}")
