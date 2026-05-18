@@ -146,12 +146,11 @@ page = st.sidebar.radio(
 )
 # endregion
 
+
 # =========================================================
 # 5. NGARKIMI DHE BASHKIMI I TE DHENAVE (SQL + EXCEL)
-# region ==================================================
-
-
-# 1. Funksioni bazë i ngarkimit (Pa dekorues që të mos bllokojë sintaksën)
+# regaion ==================================================
+@st.cache_data(ttl=600)
 def load_all_data():
     try:
         conn = st.connection("sql", type="sql")
@@ -172,7 +171,6 @@ def load_all_data():
         df.rename(
             columns={"KATEG.": "kat", "NGA LISTA E CMIMEVE": "statusi"}, inplace=True
         )
-
         df["Vlera_Historike"] = pd.to_numeric(
             df["VleraRresht"], errors="coerce"
         ).fillna(0)
@@ -195,27 +193,8 @@ def load_all_data():
         return None
 
 
-# 2. Përdorimi i st.cache_data me funksion të dedikuar për të shmangur gabimet e vlerave globale
-@st.cache_data(ttl=1800)
-def get_cached_data():
-    return load_all_data()
+df_raw = load_all_data()
 
-
-# Mbushim variablin kryesor
-df_raw = get_cached_data()
-
-
-# 3. Fragmenti i rifreskimit pa krijuar thyerje sintakse
-@st.fragment(run_every=1800)
-def autorefresh_data_section():
-    # Ky funksion thjesht ekzekutohet në sfond çdo 30 minuta
-    # dhe detyron rifreskimin e cache-it pa bllokuar variablin df_raw
-    st.cache_data.clear()
-
-
-autorefresh_data_section()
-
-# Pjesa tjetër e leximit të Excel-it dhe lidhjeve sekondare
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     df_link = df_link[["KODI", "KATEG."]].rename(
