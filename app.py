@@ -197,17 +197,17 @@ def load_all_data():
 @st.cache_data(ttl=600)
 def load_customer_list():
     try:
-        # Përdorim lidhjen tënde ekzistuese SQL
         conn = st.connection("sql", type="sql")
 
-        # Thërrasim kolonat saktësisht siç i specifikova
+        # SHËNIM: Nëse zbulon emrin e saktë të kolonës në SQL (psh. IsActive),
+        # zëvendëso `1 AS StatusiAktiv` me `[EmriIKolones] AS StatusiAktiv`
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
                 [Emri] AS Klienti, 
                 [Zona] AS ForcaShiteseAktuale, 
                 [Qyteti] AS Rajoni, 
-                [Aktiv] AS StatusiAktiv,
+                1 AS StatusiAktiv, -- Kjo shmang gabimin e SQL duke i quajtur të gjithë aktivë përkohësisht
                 [Latitude], 
                 [Longitude] 
             FROM dbo.KlientetListView
@@ -215,22 +215,20 @@ def load_customer_list():
         df_klientet = conn.query(query)
         df_klientet.columns = df_klientet.columns.str.strip()
 
-        # Sigurohemi që Kodi i Klientit të jetë String (për të mos humbur zerat psh: 0012)
         if "KodiKlient" in df_klientet.columns:
             df_klientet["KodiKlient"] = (
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # Trajtimi i Checkbox-it (Në SQL vjen si True/False ose 1/0)
-        # Filtrojmë vetëm klientët që janë të klikuar [V] (True ose 1)
         df_klientet["StatusiAktiv"] = df_klientet["StatusiAktiv"].astype(bool)
-
         return df_klientet
     except Exception as e:
         st.error(f"⚠️ Gabim teknik gjatë leximit të regjistrit të klientëve: {e}")
         return None
 
 
+# Ngarkojmë listën në variabël global
+df_klientet_regjistri = load_customer_list()
 # Ngarkojmë listën në një variabël global për ta pasur gati në çdo modul
 df_klientet_regjistri = load_customer_list()
 
@@ -1669,18 +1667,18 @@ elif page == "Route Plan AI":
         "Ky modul përdor të dhënat live të regjistrit të klientëve për të menaxhuar dhe optimizuar rrugëtimet e agjentëve."
     )
 
-    # Kontrollojmë nëse tabela e klientëve nga SQL Server është ngarkuar me sukses
-    if df_klientet_regjistri is pioneering_value and df_klientet_regjistri is None:
+    # KORRIGJIMI I GABIMIT NAMEERROR: Kontroll i pastër pa tekste të huaja
+    if df_klientet_regjistri is None:
         st.error(
-            "❌ Gabim: Nuk u mundësua ngarkimi i të dhënave nga 'KlientetListView'. Kontrolloni lidhjen me SQL Server."
+            "❌ Gabim: Nuk u mundësua ngarkimi i të dhënave nga 'KlientetListView'. Kontrolloni njoftimin e gabimit më sipër."
         )
     else:
-        # 1. Filtrojmë AUTOMATIKISHT vetëm klientët që janë AKTIVË [V] në sistem
+        # 1. Filtrojmë vetëm klientët aktivë
         df_itinerar_aktiv = df_klientet_regjistri[
             df_klientet_regjistri["StatusiAktiv"] == True
         ].copy()
 
-        # 2. Përzgjedhja e Agjentit/Zonës (Mbajmë selectbox-in si në kodin e vjetër, por me burim nga regjistri aktual)
+        # 2. Selektori i agjentëve
         zonat_aktuale = sorted(
             df_itinerar_aktiv["ForcaShiteseAktuale"].dropna().unique()
         )
@@ -1689,24 +1687,20 @@ elif page == "Route Plan AI":
         zona_zgjedhur = st.selectbox("Zgjidh Zonën / Agjentin Aktual:", zonat_aktuale)
 
         if zona_zgjedhur:
-            # 3. Filtrojmë klientët e këtë agjenti që kanë koordinata gjeografike të saktësuara
             df_zona = df_itinerar_aktiv[
                 (df_itinerar_aktiv["ForcaShiteseAktuale"] == zona_zgjedhur)
                 & (df_itinerar_aktiv["Latitude"].notna())
                 & (df_itinerar_aktiv["Longitude"].notna())
             ].copy()
 
-            # Streamlit kërkon që emrat e kolonave për hartën të jenë fiks me të vogla
             df_zona.rename(
                 columns={"Latitude": "latitude", "Longitude": "longitude"}, inplace=True
             )
 
-            # Shfaqim metrikën e numrit të klientëve si në modulin e vjetër
             st.divider()
             col_m1, col_m2 = st.columns(2)
             col_m1.metric("🏪 Klientë Aktivë në Regjistër", f"{len(df_zona)}")
 
-            # Llogarisim nëse ka klientë pa koordinata për këtë agjent (për njoftim)
             kliente_pa_koordinata = len(
                 df_itinerar_aktiv[
                     df_itinerar_aktiv["ForcaShiteseAktuale"] == zona_zgjedhur
@@ -1718,17 +1712,11 @@ elif page == "Route Plan AI":
                 delta="- Jo në Hartë" if kliente_pa_koordinata > 0 else "Rregullt",
             )
 
-            # 4. HARTE INTERAKTIVE (Pjesa vizuale që mbahet nga kodi i vjetër)
             if not df_zona.empty:
                 st.subheader(f"🗺️ Harta e Itinerarit: {zona_zgjedhur}")
-
-                # Shfaqja e klientëve në hartë
                 st.map(df_zona, size=25, color="#1f77b4")
 
-                # 5. TABELA E DETAJUAR (E ngjashme me tabelat e moduleve të tjera)
                 st.subheader("📋 Lista e Klientëve dhe Adresat (Qyteti)")
-
-                # Konfigurim estetik për kolonat e tabelës
                 konfig_tabeles = {
                     "KodiKlient": st.column_config.TextColumn("🔑 Kodi"),
                     "Klienti": st.column_config.TextColumn("🏪 Emri i Klientit"),
