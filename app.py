@@ -194,6 +194,46 @@ def load_all_data():
         return None
 
 
+@st.cache_data(ttl=600)
+def load_customer_list():
+    try:
+        # Përdorim lidhjen tënde ekzistuese SQL
+        conn = st.connection("sql", type="sql")
+
+        # Thërrasim kolonat saktësisht siç i specifikova
+        query = """
+            SELECT 
+                [Kodi] AS KodiKlient, 
+                [Emri] AS Klienti, 
+                [Zona] AS ForcaShiteseAktuale, 
+                [Qyteti] AS Rajoni, 
+                [Aktiv] AS StatusiAktiv,
+                [Latitude], 
+                [Longitude] 
+            FROM dbo.KlientetListView
+        """
+        df_klientet = conn.query(query)
+        df_klientet.columns = df_klientet.columns.str.strip()
+
+        # Sigurohemi që Kodi i Klientit të jetë String (për të mos humbur zerat psh: 0012)
+        if "KodiKlient" in df_klientet.columns:
+            df_klientet["KodiKlient"] = (
+                df_klientet["KodiKlient"].astype(str).str.strip()
+            )
+
+        # Trajtimi i Checkbox-it (Në SQL vjen si True/False ose 1/0)
+        # Filtrojmë vetëm klientët që janë të klikuar [V] (True ose 1)
+        df_klientet["StatusiAktiv"] = df_klientet["StatusiAktiv"].astype(bool)
+
+        return df_klientet
+    except Exception as e:
+        st.error(f"⚠️ Gabim teknik gjatë leximit të regjistrit të klientëve: {e}")
+        return None
+
+
+# Ngarkojmë listën në një variabël global për ta pasur gati në çdo modul
+df_klientet_regjistri = load_customer_list()
+
 df_raw = load_all_data()
 
 try:
@@ -585,34 +625,6 @@ elif page == "Planifikimi" and df_raw is not None:
 
     last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
-    # --- SIDEBAR ---
-
-    # st.sidebar.header("⚙️ Kontrolli")
-
-    # if st.sidebar.button("Log Out"):
-
-    # st.session_state["password_correct"] = False
-
-    #  st.rerun()
-
-    # min_d, max_d = df_raw['Data'].min().date(), df_raw['Data'].max().date()
-
-    # date_range = st.sidebar.date_input("Periudha referente:", value=(min_d, max_d))
-
-    # start_date, end_date = date_range if isinstance(date_range, tuple) and len(date_range) == 2 else (min_d, max_d)
-
-    # rritja = st.sidebar.number_input("Rritja e planit (%)", value=10)
-
-    # grup_sel = st.sidebar.selectbox("Filtro Grupin:", ["Të gjitha", "OLIM", "ETJ", "DEKA"])
-
-    # agj_list = sorted([str(x) for x in df_raw['ForcaShitese'].unique() if x not in ['nan', 'None']])
-
-    # agj_sel = st.sidebar.selectbox("Filtro Agjentin:", ["Të gjithë"] + agj_list)
-
-    # k_list = df_raw[df_raw['ForcaShitese'] == agj_sel]['Klienti'].unique() if agj_sel != "Të gjithë" else #df_raw['Klienti'].unique()
-
-    # klientet_selected = st.sidebar.multiselect("Zgjidh Klientin:", sorted(list(k_list)))
-
     # --- FILTRIMI ---
 
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
@@ -649,7 +661,16 @@ elif page == "Planifikimi" and df_raw is not None:
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
     )
+    # INTEGRIMI DHE SAKTËSIMI I PLANIT:
+    if df_klientet_regjistri is not None:
+        # Pasi në tabelën historike mund të keni emrin e klientit ndryshe, bashkimin e bëjmë me Kodin e Klientit
+        # Nëse df_raw-i yt nuk ka kolonë 'KodiKlient', duhet të sigurohesh që kodi i klientit të jetë i pranishëm në dff.
+        # Supozojmë që bëhet bashkimi për të marrë të dhënat aktuale:
 
+        # Filtrojmë vetëm klientët aktivë [V] për të saktësuar rrugët e planit
+        df_aktive = df_klientet_regjistri[df_klientet_regjistri["StatusiAktiv"] == True]
+
+        # Mund të zëvendësosh ForcaShitese me ForcaShiteseAktuale për të ri-alokuar volumet automatikisht.
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
 
     gp = gp.merge(last_prices, on="KodiArt", how="left")
@@ -1640,170 +1661,98 @@ elif page == "Asistenti AI":
             st.info("Zgjidhni klientët në tab-et e mësipërme për të gjeneruar planet.")
 
 # ---------------------------------------------------------
-# MODULI I RI: ROUTE PLAN AI (Plani Strategjik Ditor)
+# MODULI: ROUTE PLAN AI & OPTIMIZIMI I ITINERAREVE
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
-    # st.title("Route Plan AI")
-    st.title("Route Plan AI")
-    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
-
+    st.title("🗺️ Route Plan AI & Optimizimi i Itinerareve")
     st.markdown(
-        """
-        <style> .stTooltipIcon { display: inline-block; } </style>
-        """,
-        unsafe_allow_html=True,
+        "Ky modul përdor të dhënat live të regjistrit të klientëve për të menaxhuar dhe optimizuar rrugëtimet e agjentëve."
     )
 
-    st.subheader(
-        f"Strategjia e Shpërndarjes",
-        help="""
-        Ky plan ndan portofolin tuaj në 26 ditë pune:
-        1. Ditët e para (1-10) janë prioritare për klientët në 'Humbje' dhe 'Rrezik'.
-        2. Sasia KG bazohet në mbetjen tuaj të planit mujor.
-        3. Gap Analysis tregon kodet që klienti s'i ka blerë në 90 ditët e fundit.
-    """,
-    )
-    if agj_sel == "Të gjithë":
-        st.warning(
-            "⚠️ Ju lutem përzgjidhni një agjent specifik për të gjeneruar rrugëtimin ditor."
+    # Kontrollojmë nëse tabela e klientëve nga SQL Server është ngarkuar me sukses
+    if df_klientet_regjistri is pioneering_value and df_klientet_regjistri is None:
+        st.error(
+            "❌ Gabim: Nuk u mundësua ngarkimi i të dhënave nga 'KlientetListView'. Kontrolloni lidhjen me SQL Server."
         )
     else:
-        # Përgatitja e të dhënave bazë
-        df_tmp = df_raw.copy()
-        df_tmp.columns = [c.lower() for c in df_tmp.columns]
+        # 1. Filtrojmë AUTOMATIKISHT vetëm klientët që janë AKTIVË [V] në sistem
+        df_itinerar_aktiv = df_klientet_regjistri[
+            df_klientet_regjistri["StatusiAktiv"] == True
+        ].copy()
 
-        # 1. Identifikimi i Klientëve sipas 3 Kategorive (Logjika e Modulit të parë)
-        # ---------------------------------------------------------------------
-        mask_ref = (df_tmp["data"].dt.date >= start_date) & (
-            df_tmp["data"].dt.date <= end_date
-        )
-        df_agj = df_tmp[mask_ref & (df_tmp["forcashitese"] == agj_sel)]
-
-        # Llogarisim Targetin
-        n_months_ref = max(
-            1,
-            (end_date.year - start_date.year) * 12
-            + (end_date.month - start_date.month),
-        )
-        kl_target = df_agj.groupby("klienti")["kg"].sum().reset_index()
-        kl_target["Target_Muaj"] = (kl_target["kg"] / n_months_ref) * (1 + rritja / 100)
-
-        # Kategorizimi
-        # A: Kritikë (nuk kanë blerë > 60 ditë)
-        kufiri_humbjes = datetime.now() - pd.Timedelta(days=60)
-        blerja_fundit = (
-            df_tmp[df_tmp["forcashitese"] == agj_sel]
-            .groupby("klienti")["data"]
-            .max()
-            .reset_index()
-        )
-        kl_kritike = blerja_fundit[blerja_fundit["data"] < kufiri_humbjes][
-            "klienti"
-        ].tolist()
-
-        # B: Në Rrezik (Realizimi aktual < 50%) - Për këtë plan marrim gjithë listën e targetuar
-        kl_target["kategoria"] = "Stabilë"
-        kl_target.loc[kl_target["klienti"].isin(kl_kritike), "kategoria"] = "Kritikë"
-        # Në rrezik i konsiderojmë ata me target të lartë (> mesatarja)
-        limit_rrezik = kl_target["Target_Muaj"].median()
-        kl_target.loc[
-            (kl_target["Target_Muaj"] > limit_rrezik)
-            & (kl_target["kategoria"] != "Kritikë"),
-            "kategoria",
-        ] = "Në Rrezik"
-
-        # 2. Krijimi i Kalendarit (26 Ditë Pune)
-        # ---------------------------------------------------------------------
-        klientet_total = kl_target.sort_values(
-            by=["kategoria", "Target_Muaj"], ascending=[True, False]
-        )
-        numri_klienteve = len(klientet_total)
-        kliente_per_dite = max(1, numri_klienteve // 26)  # Supozojmë 26 ditë pune
-
-        st.subheader(
-            f"📊 Strategjia për {agj_sel}: {numri_klienteve} klientë të shpërndarë në muaj"
+        # 2. Përzgjedhja e Agjentit/Zonës (Mbajmë selectbox-in si në kodin e vjetër, por me burim nga regjistri aktual)
+        zonat_aktuale = sorted(
+            df_itinerar_aktiv["ForcaShiteseAktuale"].dropna().unique()
         )
 
-        dita_zgjedhur = st.slider("Zgjidh ditën e punës (1-26):", 1, 26, 1)
+        st.subheader("🔍 Përzgjedhja e Agjentit për Terren")
+        zona_zgjedhur = st.selectbox("Zgjidh Zonën / Agjentin Aktual:", zonat_aktuale)
 
-        # Ndarja e klientëve në grupe ditore
-        start_idx = (dita_zgjedhur - 1) * kliente_per_dite
-        end_idx = start_idx + kliente_per_dite
-        if dita_zgjedhur == 26:
-            end_idx = numri_klienteve  # Ditën e fundit marrim mbetjen
+        if zona_zgjedhur:
+            # 3. Filtrojmë klientët e këtë agjenti që kanë koordinata gjeografike të saktësuara
+            df_zona = df_itinerar_aktiv[
+                (df_itinerar_aktiv["ForcaShiteseAktuale"] == zona_zgjedhur)
+                & (df_itinerar_aktiv["Latitude"].notna())
+                & (df_itinerar_aktiv["Longitude"].notna())
+            ].copy()
 
-        klientet_e_dites = klientet_total.iloc[start_idx:end_idx]
-
-        # 3. Shfaqja e Planit Ditor
-        # ---------------------------------------------------------------------
-        st.info(f"📍 Plani për Ditën e Punës #{dita_zgjedhur}")
-
-        for _, row in klientet_e_dites.iterrows():
-            kl = row["klienti"]
-            kat = row["kategoria"]
-            target = row["Target_Muaj"]
-
-            # Përcaktimi i ngjyrës sipas kategorisë
-            color = (
-                "red"
-                if kat == "Kritikë"
-                else "orange" if kat == "Në Rrezik" else "green"
+            # Streamlit kërkon që emrat e kolonave për hartën të jenë fiks me të vogla
+            df_zona.rename(
+                columns={"Latitude": "latitude", "Longitude": "longitude"}, inplace=True
             )
 
-            with st.expander(f"🏢 {kl} - Kategoria: {kat}"):
-                c1, c2 = st.columns([2, 1])
-                with c1:
-                    st.markdown(f"**Objektivi i Shitjes:** {target:,.1f} KG")
+            # Shfaqim metrikën e numrit të klientëve si në modulin e vjetër
+            st.divider()
+            col_m1, col_m2 = st.columns(2)
+            col_m1.metric("🏪 Klientë Aktivë në Regjistër", f"{len(df_zona)}")
 
-                    # Logjika "Çfarë t'i shesësh" (Gap Analysis 90 ditë)
-                    kufiri_gap = datetime.now() - pd.Timedelta(days=90)
-                    hist = df_tmp[
-                        (df_tmp["klienti"] == kl) & (df_tmp["data"] < kufiri_gap)
-                    ]
-                    akt = df_tmp[
-                        (df_tmp["klienti"] == kl) & (df_tmp["data"] >= kufiri_gap)
-                    ]
-                    mungojne = [
-                        a
-                        for a in hist["artikulli"].unique()
-                        if a not in akt["artikulli"].unique()
-                    ]
-
-                    if mungojne:
-                        st.write(f"🛒 **Artikujt Prioritarë:**")
-                        for art in mungojne[:3]:
-                            st.write(f"- {art}")
-                    else:
-                        st.write(
-                            "🛒 **Artikujt Prioritarë:** Fokus te rritja e volumit të artikujve bazë."
-                        )
-
-                with c2:
-                    st.write("**Udhëzim:**")
-                    if kat == "Kritikë":
-                        st.error("Rikuperim! Klienti rrezikon humbjen totale.")
-                    elif kat == "Në Rrezik":
-                        st.warning("Mbrojtje! Duhet mbuluar mbetja e planit.")
-                    else:
-                        st.success("Rritje! Sugjeroni artikuj të rinj.")
-
-        # 4. Eksporti i Planit të Plotë
-        st.divider()
-        if st.button("📥 Shkarko Planin e Plotë 26-Ditor (Excel)"):
-            # Krijojmë një kopje për eksport me kolonën e ditës
-            export_df = klientet_total.copy()
-            export_df["Dita e Punes"] = [
-                (i // kliente_per_dite) + 1 for i in range(len(export_df))
-            ]
-            export_df.loc[export_df["Dita e Punes"] > 26, "Dita e Punes"] = 26
-
-            csv = export_df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "Kliko këtu për të shkarkuar",
-                csv,
-                f"Route_Plan_{agj_sel}.csv",
-                "text/csv",
+            # Llogarisim nëse ka klientë pa koordinata për këtë agjent (për njoftim)
+            kliente_pa_koordinata = len(
+                df_itinerar_aktiv[
+                    df_itinerar_aktiv["ForcaShiteseAktuale"] == zona_zgjedhur
+                ]
+            ) - len(df_zona)
+            col_m2.metric(
+                "📍 Klientë pa Gjeolokacion",
+                f"{kliente_pa_koordinata}",
+                delta="- Jo në Hartë" if kliente_pa_koordinata > 0 else "Rregullt",
             )
+
+            # 4. HARTE INTERAKTIVE (Pjesa vizuale që mbahet nga kodi i vjetër)
+            if not df_zona.empty:
+                st.subheader(f"🗺️ Harta e Itinerarit: {zona_zgjedhur}")
+
+                # Shfaqja e klientëve në hartë
+                st.map(df_zona, size=25, color="#1f77b4")
+
+                # 5. TABELA E DETAJUAR (E ngjashme me tabelat e moduleve të tjera)
+                st.subheader("📋 Lista e Klientëve dhe Adresat (Qyteti)")
+
+                # Konfigurim estetik për kolonat e tabelës
+                konfig_tabeles = {
+                    "KodiKlient": st.column_config.TextColumn("🔑 Kodi"),
+                    "Klienti": st.column_config.TextColumn("🏪 Emri i Klientit"),
+                    "Rajoni": st.column_config.TextColumn("📍 Qyteti/Rajoni"),
+                    "latitude": st.column_config.NumberColumn(
+                        "🌐 Latitude", format="%.5f"
+                    ),
+                    "longitude": st.column_config.NumberColumn(
+                        "🌐 Longitude", format="%.5f"
+                    ),
+                }
+
+                st.dataframe(
+                    df_zona[
+                        ["KodiKlient", "Klienti", "Rajoni", "latitude", "longitude"]
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config=konfig_tabeles,
+                )
+            else:
+                st.warning(
+                    f"⚠️ Agjenti '{zona_zgjedhur}' ka klientë aktivë, por asnjëri prej tyre nuk ka koordinata Latitude/Longitude në SQL."
+                )
 
 # ---------------------------------------------------------
 # MODULI I PLOTË: SHITJET DITORE (Formatim Estetik pa Dhjetore)
