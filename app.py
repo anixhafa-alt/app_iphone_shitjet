@@ -2132,8 +2132,8 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             # ---------------------------------------------------------
 
             # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
-            st.subheader("Analiza Korelative")
             st.divider()
+            st.subheader("Analiza Korelative")
             df_baze = (
                 df_filtri.groupby("VitiMuaji")
                 .agg(
