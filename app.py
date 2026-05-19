@@ -341,12 +341,12 @@ def merr_librarine_permanente():
 
 
 # =========================================================
-# FUNKSIONI I PËRDITËSUAR: MODULI I PLANIFIKIMIT STRUKTURAL
+# MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
 # region ==================================================
 def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
     st.markdown(
-        "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar në mix-in e ri të shitjeve nga **Periudha B**."
+        "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
     )
 
     df_proc = df_baze_sales.copy()
@@ -361,7 +361,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
     max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
 
-    # --- SHTESA 1: LIBRARIA E RUAJTJES PËR MODULIN E RI ---
+    # --- LIBRARIA E RUAJTJES PËR MODULIN E RI ---
     if "libraria_modulit_ri" not in st.session_state:
         st.session_state["libraria_modulit_ri"] = {
             "Zgjedhje Manuale (Pa Ruajtje)": None
@@ -376,12 +376,11 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
         c_l1, c_l2 = st.columns([2, 1])
         with c_l1:
             zgjedhje_plani = st.selectbox(
-                "Thirr konfigurin të ruajtur më parë:",
+                "Thirr konfigurim të ruajtur më parë:",
                 options=list(lib_ri.keys()),
                 key="sel_lib_ri_key",
             )
 
-        # Nëse përdoruesi zgjedh një plan të ruajtur, përditësojmë session_state
         if (
             zgjedhje_plani != "Zgjedhje Manuale (Pa Ruajtje)"
             and lib_ri[zgjedhje_plani] is not None
@@ -402,7 +401,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 
         if st.button("➕ Ruaj Konfigurimin", use_container_width=True):
             if txt_emri_ri.strip() != "":
-                # Ruajmë vlerat aktuale që janë në ekran
                 lib_ri[txt_emri_ri] = {
                     "a_start": st.session_state.get("pl_range_a", (min_d, max_d))[0],
                     "a_end": st.session_state.get("pl_range_a", (min_d, max_d))[1],
@@ -415,7 +413,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             else:
                 st.error("Ju lutem vendosni një emër përpara se ta ruani.")
 
-    # Inicializimi i vlerave të inputeve nëse nuk ekzistojnë
+    # Inicializimi i vlerave nëse nuk ekzistojnë në session_state
     if "p_a_start" not in st.session_state:
         st.session_state["p_a_start"] = min_d
     if "p_a_end" not in st.session_state:
@@ -476,7 +474,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             "🚀 Gjenero Planin Struktural të Avancuar", use_container_width=True
         ):
 
-            # Filtrojmë të dhënat bazë sipas Agjentit nëse ka përzgjedhje
             if agjentet_zgjedhur:
                 df_proc = df_proc[df_proc["ForcaShitese"].isin(agjentet_zgjedhur)]
 
@@ -529,10 +526,12 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             )
             df_mix_B = df_mix_B[["kat", "KodiArt", "Artikulli", "Pesha_Artikullit"]]
 
-            # FAZA 3: Kombinimi Matematik i Planit dhe Aplikimi i % së rritjes
+            # 🔥 FILTRI KRITIK: Mbajmë VETËM artikujt që kanë pasur shitje reale (peshë > 0) në Periudhën B
+            df_mix_B = df_mix_B[df_mix_B["Pesha_Artikullit"] > 0]
+
+            # FAZA 3: Kombinimi Matematik i Planit (inner join siguron që mbeten vetëm artikujt e filtruar mësipër)
             df_plani = pd.merge(df_klient_A, df_mix_B, on="kat", how="inner")
 
-            # Faktorizimi i rritjes (psh: 10% u bëhet 1.10)
             faktor_rritje = 1 + (rritja_p / 100.0)
             df_plani["Plani_KG"] = (
                 df_plani["Mesatare_KG_Kategori"]
@@ -540,7 +539,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 * faktor_rritje
             )
 
-            # Konvertimi në Copa
+            # Konvertimi në Copa sipas peshës nominale
             try:
                 df_peshat = df_proc[["KodiArt", "KG/SKU"]].drop_duplicates()
                 df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
@@ -551,8 +550,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 df_plani["Plani_Cope"] = 0
 
             # --- KRIJIMI I TABELAVE TË NDARA (KATEGORI DHE ARTIKUJ) ---
-
-            # Tabela 1: Sipas Agjentëve dhe Kategorive
             df_agj_kategori = (
                 df_plani.groupby(["ForcaShitese", "kat"])[["Plani_KG", "Plani_Cope"]]
                 .sum()
@@ -565,7 +562,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 "Plani Target (Copa)",
             ]
 
-            # Tabela 2: Sipas Agjentëve dhe Artikujve Specifikë
             df_agj_artikuj = (
                 df_plani.groupby(["ForcaShitese", "kat", "KodiArt", "Artikulli"])[
                     ["Plani_KG", "Plani_Cope"]
@@ -583,7 +579,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             ]
 
             st.success(
-                f"✅ Plani i ri u kalkulua me sukses duke aplikuar + {rritja_p}% rritje!"
+                f"✅ Plani i ri struktural u kalkulua me sukses! Përfshihen vetëm artikujt aktivë të shitur në Periudhën B me +{rritja_p}% rritje."
             )
 
             # --- SHFAQJA NË TABS ---
@@ -616,10 +612,9 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 use_container_width=True,
             )
 
-            # --- SHTESA 3: PRODHIMI I RAFIKUT DHE PDF-it ---
+            # --- GJENERIMI I RAPORTIT PDF ---
             st.subheader("📄 Gjenerimi i Raportit PDF")
 
-            # Ndërtojmë strukturën HTML për raportin PDF profesional
             html_content = f"""
             <html>
             <head>
@@ -640,12 +635,13 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 <div class="meta-box">
                     <strong>Konfigurimi i Sistemit:</strong><br>
                     • Periudha A (Kapaciteti): {p_a[0].strftime('%d/%m/%Y')} - {p_a[1].strftime('%d/%m/%Y')}<br>
-                    • Periudha B (Mix-i i ri): {p_b[0].strftime('%d/%m/%Y')} - {p_b[1].strftime('%d/%m/%Y')}<br>
+                    • Periudha B (Filtri i Mix-it të Ri): {p_b[0].strftime('%d/%m/%Y')} - {p_b[1].strftime('%d/%m/%Y')}<br>
                     • Rritja e Aplikuar Target: <strong>+{rritja_p}%</strong><br>
+                    • Shënim Logjik: Përfshihen vetëm artikujt me performancë aktive në Periudhën B.<br>
                     • Data e Gjenerimit: {datetime.now().strftime('%d/%m/%Y %H:%M')}
                 </div>
 
-                <h2>1. Përmbledhja e Planeve sipas Agjentëve dhe Kategorive الرئيسية</h2>
+                <h2>1. Përmbledhja e Planeve sipas Agjentëve dhe Kategorive</h2>
                 <table>
                     <thead>
                         <tr>
@@ -658,9 +654,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                     <tbody>
             """
 
-            for _, row in df_agj_kategori.head(
-                150
-            ).iterrows():  # Vendosim një limit për faqet e para të PDF
+            for _, row in df_agj_kategori.head(200).iterrows():
                 html_content += f"""
                         <tr>
                             <td>{row['Agjenti']}</td>
@@ -673,15 +667,12 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             html_content += """
                     </tbody>
                 </table>
-                <p style="font-size:10px; color:gray;">*Tabela më lart tregon përmbledhjen ekzekutive sipas kategorive kryesore për agjentët.*</p>
                 <div class="footer">Sistemi i Menaxhimit të Planifikimit © AXION - DEKA SQL</div>
             </body>
             </html>
             """
 
-            # Konvertimi i HTML në PDF përmes WeasyPrint apo mjeti të disponueshëm
             try:
-                import io
                 from weasyprint import HTML
 
                 pdf_out = io.BytesIO()
@@ -696,7 +687,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 )
             except Exception as e:
                 st.info(
-                    "💡 Për të shkarkuar versionin PDF direkt në Streamlit Cloud, sigurohuni që keni shtuar 'weasyprint' te requirements.txt. Ndërkohë, mund të përdorni skedarin e plotë Excel mësipër për të gjitha analizat."
+                    "💡 Për të shkarkuar versionin PDF direkt në Streamlit Cloud, sigurohuni që keni shtuar 'weasyprint' te requirements.txt. Ndërkohë, skedari i plotë i detajuar Excel i mësipërm është gati për përdorim."
                 )
     else:
         st.info(
