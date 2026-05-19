@@ -2128,9 +2128,11 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU ME KONTROLL ABSOLUT MBI BOSHTET (PRIMAR & SEKONDAR)
+            # 5.5 GRAFIKU ME MULTI-BOSHTE DHE SHKALLË LOGARITMIKE OPTION
             # ---------------------------------------------------------
-            st.subheader("📈 Analiza Korelative")
+            st.subheader(
+                "📈 Analiza Korelative: Kontroll i Pavarur dhe Shkallëzim Inteligjent"
+            )
 
             # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
             df_baze = (
@@ -2175,19 +2177,18 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
             )
 
-            # --- PANEL KONTROLLI I DYFISHTË PËR BOSHTET ---
-            # st.markdown("### 🎛️ Konfiguro Boshtet e Grafikut")
+            # --- PANEL KONTROLLI I ZGJERUAR ---
+            st.markdown("### 🎛️ Konfiguro Boshtet dhe Shkallëzimin")
 
-            # Krijojmë opsionet standarde për të dy kutitë
             opsionet_serive = {
                 "Klientë Aktivë": {
                     "kolona": "Kliente_Aktive",
                     "emri": "🏪 Klientë Aktivë",
                     "ngjyra": "#1f77b4",
                 },
-                "Agjentë Aktivë": {
+                "Agjentë në Terren": {
                     "kolona": "Nr_Agjenteve",
-                    "emri": "👤 Agjentë Aktivë",
+                    "emri": "👤 Agjentë në Terren",
                     "ngjyra": "#aec7e8",
                 },
                 "Sasia Totale (KG)": {
@@ -2210,25 +2211,30 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             col_b1, col_b2 = st.columns(2)
 
             with col_b1:
-                # st.markdown("**📊 Boshti Primar (Majtas - Shfaqet si Shtylla):**")
+                st.markdown("**📊 Boshti Primar (Majtas - Shtylla):**")
                 primar_zgjedhur = st.multiselect(
-                    label="Zgjidh seritë për boshtin e majtë:",
+                    label="Zgjidh seritë e majta:",
                     options=list(opsionet_serive.keys()),
-                    default=["Klientë Aktivë"],  # Default i pastër
+                    default=["Klientë Aktivë"],
                     label_visibility="collapsed",
                 )
 
             with col_b2:
-                # st.markdown("**📈 Boshti Sekondar (Djathtas - Shfaqet si Linja):**")
+                st.markdown("**📈 Boshti Sekondar (Djathtas - Linja):**")
                 sekondar_zgjedhur = st.multiselect(
-                    label="Zgjidh seritë për boshtin e djathtë:",
+                    label="Zgjidh seritë e djathta:",
                     options=list(opsionet_serive.keys()),
-                    default=[
-                        "Sasia Totale (KG)",
-                        "Agjentë Aktivë",
-                    ],  # Default i zgjedhur
+                    default=["Sasia Totale (KG)", "Agjentë në Terren"],
                     label_visibility="collapsed",
                 )
+
+            # --- ZGJIDHJA E SFIDËS: BUTONI PËR SHKALLËN LOGARITMIKE ---
+            st.divider()
+            perdor_log = st.checkbox(
+                "🔬 **Aktivizo Shkallën Logaritmike (Logarithmic Scale)**",
+                value=False,
+                help="Përdoret kur keni vlera shumë të vogla (p.sh. 2 agjentë) dhe shumë të mëdha (p.sh. 100,000 kg) në të njëjtin grafik, që të dyja të bëhen plotësisht të dukshme në të njëjtin nivel vizual.",
+            )
 
             # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
             from plotly.subplots import make_subplots
@@ -2236,7 +2242,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
 
             fig_universal = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # 1. NDËRTIMI I SERIVE PËR BOSHTIN PRIMAR (SHTYLLA)
+            # 1. SERITË PËR BOSHTIN PRIMAR (MAJTAS)
             for kategoria in primar_zgjedhur:
                 info = opsionet_serive[kategoria]
                 fig_universal.add_trace(
@@ -2244,20 +2250,23 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                         x=df_grafiku["Muaji_Etiketa"],
                         y=df_grafiku[info["kolona"]],
                         name=f"{info['emri']} (Majtas)",
-                        text=df_grafiku[info["kolona"]].apply(
-                            lambda x: f"{x:,.0f}" if x > 1000 else f"{x}"
-                        ),
+                        text=(
+                            df_grafiku[info["kolona"]].apply(
+                                lambda x: f"{x:,.0f}" if x > 1000 else f"{x}"
+                            )
+                            if not perdor_log
+                            else None
+                        ),  # Heqim tekstin statik nëse është logaritmik që mos bëhet rrëmujë
                         textposition="outside",
                         marker_color=info["ngjyra"],
                         hovertemplate=f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>",
                     ),
-                    secondary_y=False,  # Shkon Majtas
+                    secondary_y=False,
                 )
 
-            # 2. NDËRTIMI I SERIVE PËR BOSHTIN SEKONDAR (LINJA)
+            # 2. SERITË PËR BOSHTIN SEKONDAR (DJATHTAS)
             for kategoria in sekondar_zgjedhur:
                 info = opsionet_serive[kategoria]
-                # Përcaktojmë stilin e vijës që të dallojnë nëse zgjidhen shumë
                 stili_vijes = "solid"
                 if "DEKA" in kategoria:
                     stili_vijes = "dash"
@@ -2276,25 +2285,27 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                         marker=dict(size=8),
                         hovertemplate=f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>",
                     ),
-                    secondary_y=True,  # Shkon Djathtas
+                    secondary_y=True,
                 )
 
-            # --- KONFIGURIMI ESTETIK ---
+            # --- KONFIGURIMI I TIPIT TË BOSHTIT (LINEAR APO LOGARITMIK) ---
+            lloji_boshtit = "log" if perdor_log else "linear"
+
             titulli_majtas = (
-                ", ".join(primar_zgjedhur)
-                if primar_zgjedhur
-                else "Boshti i Majtë (Bosh)"
+                ", ".join(primar_zgjedhur) if primar_zgjedhur else "Boshti i Majtë"
             )
             titulli_djathtas = (
                 ", ".join(sekondar_zgjedhur)
                 if sekondar_zgjedhur
-                else "Boshti i Djathtë (Bosh)"
+                else "Boshti i Djathtë"
             )
 
             fig_universal.update_layout(
                 xaxis_title=None,
-                yaxis_title=f"⬅️ {titulli_majtas}",
-                yaxis2_title=f"{titulli_djathtas} ➡️",
+                yaxis_title=f"⬅️ {titulli_majtas} "
+                + ("(Shkallë LOG)" if perdor_log else ""),
+                yaxis2_title=f"{titulli_djathtas} ➡️"
+                + ("(Shkallë LOG)" if perdor_log else ""),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=20, r=20, t=30, b=20),
@@ -2302,23 +2313,26 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
                 ),
-                barmode="group",  # Nëse zgjedh më shumë se një seri si Bar, i vendos krah për krah
+                barmode="group",
             )
 
-            # Rrjeta ndihmëse (GridLines) aktivizohet vetëm nëse ka diçka majtas
+            # Aplikojmë tipin e boshtit në të dy anët nëse çeku është aktiv
             fig_universal.update_yaxes(
+                type=lloji_boshtit,
                 showgrid=bool(primar_zgjedhur),
                 gridcolor="rgba(200,200,200,0.15)",
                 secondary_y=False,
             )
-            fig_universal.update_yaxes(showgrid=False, secondary_y=True)
+            fig_universal.update_yaxes(
+                type=lloji_boshtit, showgrid=False, secondary_y=True
+            )
 
             # Shfaqja e grafikut
             if primar_zgjedhur or sekondar_zgjedhur:
                 st.plotly_chart(fig_universal, use_container_width=True)
             else:
                 st.warning(
-                    "⚠️ Ju lutem zgjidhni të paktën një seri te boshti primar ose sekondar për të vizatuar grafikun."
+                    "⚠️ Ju lutem zgjidhni të paktën një seri për të vizatuar grafikun."
                 )
 
             # 6. Shfaqja e Tabelës Kryesore
