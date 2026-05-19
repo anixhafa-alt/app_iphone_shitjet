@@ -2130,7 +2130,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             # ---------------------------------------------------------
             # 5.5 GRAFIKU ME KONTROLL ABSOLUT MBI BOSHTET (PRIMAR & SEKONDAR)
             # ---------------------------------------------------------
-            st.subheader("📈 Analiza Korelative: Kontroll i Pavarur mbi Boshtet")
+            st.subheader("📈 Analiza Korelative")
 
             # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
             df_baze = (
@@ -2176,7 +2176,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # --- PANEL KONTROLLI I DYFISHTË PËR BOSHTET ---
-            st.markdown("### 🎛️ Konfiguro Boshtet e Grafikut")
+            # st.markdown("### 🎛️ Konfiguro Boshtet e Grafikut")
 
             # Krijojmë opsionet standarde për të dy kutitë
             opsionet_serive = {
@@ -2185,9 +2185,9 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     "emri": "🏪 Klientë Aktivë",
                     "ngjyra": "#1f77b4",
                 },
-                "Agjentë në Terren": {
+                "Agjentë Aktivë": {
                     "kolona": "Nr_Agjenteve",
-                    "emri": "👤 Agjentë në Terren",
+                    "emri": "👤 Agjentë Aktivë",
                     "ngjyra": "#aec7e8",
                 },
                 "Sasia Totale (KG)": {
@@ -2210,7 +2210,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             col_b1, col_b2 = st.columns(2)
 
             with col_b1:
-                st.markdown("**📊 Boshti Primar (Majtas - Shfaqet si Shtylla):**")
+                # st.markdown("**📊 Boshti Primar (Majtas - Shfaqet si Shtylla):**")
                 primar_zgjedhur = st.multiselect(
                     label="Zgjidh seritë për boshtin e majtë:",
                     options=list(opsionet_serive.keys()),
@@ -2219,13 +2219,13 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 )
 
             with col_b2:
-                st.markdown("**📈 Boshti Sekondar (Djathtas - Shfaqet si Linja):**")
+                # st.markdown("**📈 Boshti Sekondar (Djathtas - Shfaqet si Linja):**")
                 sekondar_zgjedhur = st.multiselect(
                     label="Zgjidh seritë për boshtin e djathtë:",
                     options=list(opsionet_serive.keys()),
                     default=[
                         "Sasia Totale (KG)",
-                        "Agjentë në Terren",
+                        "Agjentë Aktivë",
                     ],  # Default i zgjedhur
                     label_visibility="collapsed",
                 )
