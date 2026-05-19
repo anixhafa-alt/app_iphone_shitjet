@@ -2153,25 +2153,16 @@ opsioni = st.sidebar.radio(
     ["📈 Analiza e Shitjeve", "🎯 Moduli i Planifikimit të Shitjeve"]
 )
 
-# =========================================================================
-# 2. LOGJIKA E KONTROLLIT DHE SHFAQJES
-# =========================================================================
-if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
-    # Këtu thërrasim funksionin e ri që ndërtuam për planin
-    shfaq_modulin_planifikimit(df_sql) 
-    
-    # Kjo është pika kyçe! Ndalon Streamlit të lexojë më poshtë, 
-    # duke shmangur gabimet dhe duke mos ngarkuar grafikët e vjetër.
-    st.stop() 
-
-
-# =========================================================================
-# 3. KODI YT EKZISTUES (NUK PREKET ASNJË HAPËSIRË APO RRESHT)
-# =========================================================================
-# Lëre kodin tënd ekzistues të rrjedhë plotësisht i lirë direkt këtu poshtë,
-# pa e futur brenda ndonjë "if" apo "else" dhe pa i bërë zhvendosje (Tab).
-
-
+        # =========================================================================
+        # 2. LOGJIKA E KONTROLLIT DHE SHFAQJES
+        # =========================================================================
+            if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
+                # Këtu thërrasim funksionin e ri që ndërtuam për planin
+                shfaq_modulin_planifikimit(df_sql) 
+                
+                # Kjo është pika kyçe! Ndalon Streamlit të lexojë më poshtë, 
+                # duke shmangur gabimet dhe duke mos ngarkuar grafikët e vjetër.
+                st.stop() 
 
             # ---------------------------------------------------------
             # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
