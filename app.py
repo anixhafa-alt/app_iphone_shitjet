@@ -2128,14 +2128,14 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU: ECURIA E KLIENTËVE AKTIVË PËR ÇDO MUAJ
+            # 5.5 GRAFIKU: ECURIA E KLIENTËVE AKTIVË DHE VOLUMIT (KG)
             # ---------------------------------------------------------
-            st.subheader("📈 Ecuria e Klientëve Aktivë Muaj pas Muaji")
+            st.subheader("📈 Ecuria e Klientëve Aktivë dhe Volumit Muaj pas Muaji")
 
-            # Grupojmë të dhënat e filtruara sipas VitiMuaji dhe numërojmë klientët unikë
+            # Grupojmë të dhënat e filtruara sipas VitiMuaji për klientët unikë dhe totalin e KG
             df_grafiku = (
                 df_filtri.groupby("VitiMuaji")
-                .agg(Kliente_Aktive=("KodiKlient", "nunique"))
+                .agg(Kliente_Aktive=("KodiKlient", "nunique"), Sasia_KG=("kg", "sum"))
                 .reset_index()
             )
 
@@ -2144,37 +2144,68 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
             )
 
-            import plotly.express as px
+            # --- IMPORTIMET E NEVOJSHME PËR BOSHTIN DYTËSOR ---
+            from plotly.subplots import make_subplots
+            import plotly.graph_objects as go
 
-            # Krijojmë grafikun me kolona (Bar Chart)
-            fig_aktive = px.bar(
-                df_grafiku,
-                x="Muaji_Etiketa",
-                y="Kliente_Aktive",
-                text="Kliente_Aktive",  # Shfaq numrin sipër çdo kolone
-                labels={
-                    "Muaji_Etiketa": "Periudha",
-                    "Kliente_Aktive": "Klientë Aktivë",
-                },
-                color_discrete_sequence=["#1f77b4"],  # Ngjyrë blu standarde e këndshme
+            # 1. Krijojmë strukturën e subplot-it me bosht dytësor të aktivizuar (secondary_y=True)
+            fig_kombinuar = make_subplots(specs=[[{"secondary_y": True}]])
+
+            # 2. Shtojmë grafikun me kolona (Bar) për Klientët Aktivë në boshtin PARËSOR (Trandicional)
+            fig_kombinuar.add_trace(
+                go.Bar(
+                    x=df_grafiku["Muaji_Etiketa"],
+                    y=df_grafiku["Kliente_Aktive"],
+                    name="Klientë Aktivë",
+                    text=df_grafiku["Kliente_Aktive"],
+                    textposition="outside",
+                    marker_color="#1f77b4",
+                    hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
+                ),
+                secondary_y=False,  # Qëndron në boshtin e majtë
             )
 
-            # Konfigurimi estetik i grafikut
-            fig_aktive.update_traces(
-                textposition="outside",
-                hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
+            # 3. Shtojmë grafikun me linjë (Line) për Sasinë në KG në boshtin DYTËSOR (Djathtas)
+            fig_kombinuar.add_trace(
+                go.Scatter(
+                    x=df_grafiku["Muaji_Etiketa"],
+                    y=df_grafiku["Sasia_KG"],
+                    name="Sasia (KG)",
+                    mode="lines+markers+text",  # Linjë, pika dhe tekst sipër
+                    text=df_grafiku["Sasia_KG"].apply(
+                        lambda x: f"{x:,.0f}"
+                    ),  # Formatojmë tekstin e KG
+                    textposition="top center",
+                    line=dict(
+                        color="#FF7F0E", width=3
+                    ),  # Ngjyrë portokalli që të dallojë
+                    hovertemplate="<b>%{x}</b><br>Sasia: %{y:,.0f} kg<extra></extra>",
+                ),
+                secondary_y=True,  # Vendoset në boshtin e djathtë
             )
-            fig_aktive.update_layout(
+
+            # 4. Konfigurimi estetik i boshteve dhe dizajnit transparent
+            fig_kombinuar.update_layout(
                 xaxis_title=None,
-                yaxis_title="Numri i Klientëve Unique",
+                yaxis_title="Numri i Klientëve Unique (Kolonat)",
+                yaxis2_title="Sasia Totale në KG (Linja)",  # Titulli i boshtit të djathtë
                 paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",  # Sfondi i brendshëm transparent
-                margin=dict(l=20, r=20, t=20, b=20),
-                height=350,
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=20, r=20, t=30, b=20),
+                height=400,
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+                ),  # Legjenda horizontale lart
             )
 
-            # Shfaqja e grafikut në Streamlit
-            st.plotly_chart(fig_aktive, use_container_width=True)
+            # Sigurohemi që rrjeta (gridlines) e boshtit të djathtë mos përzjehet keq me të majtin
+            fig_kombinuar.update_yaxes(
+                showgrid=True, gridcolor="rgba(200,200,200,0.2)", secondary_y=False
+            )
+            fig_kombinuar.update_yaxes(showgrid=False, secondary_y=True)
+
+            # Shfaqja e grafikut të ri në Streamlit
+            st.plotly_chart(fig_kombinuar, use_container_width=True)
 
             # 6. Shfaqja e Tabelës Kryesore
             st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
