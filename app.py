@@ -2145,6 +2145,33 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 label="💰 Vlera në Konflikt",
                 value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
             )
+# =========================================================================
+# 1. KRIJIMI I MENUSË ANËSORE (SHTYPET VETËM NJË HERË NË KOD)
+# =========================================================================
+opsioni = st.sidebar.radio(
+    "📊 Menaxhimi i Aplikacionit", 
+    ["📈 Analiza e Shitjeve", "🎯 Moduli i Planifikimit të Shitjeve"]
+)
+
+# =========================================================================
+# 2. LOGJIKA E KONTROLLIT DHE SHFAQJES
+# =========================================================================
+if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
+    # Këtu thërrasim funksionin e ri që ndërtuam për planin
+    shfaq_modulin_planifikimit(df_sql) 
+    
+    # Kjo është pika kyçe! Ndalon Streamlit të lexojë më poshtë, 
+    # duke shmangur gabimet dhe duke mos ngarkuar grafikët e vjetër.
+    st.stop() 
+
+
+# =========================================================================
+# 3. KODI YT EKZISTUES (NUK PREKET ASNJË HAPËSIRË APO RRESHT)
+# =========================================================================
+# Lëre kodin tënd ekzistues të rrjedhë plotësisht i lirë direkt këtu poshtë,
+# pa e futur brenda ndonjë "if" apo "else" dhe pa i bërë zhvendosje (Tab).
+
+
 
             # ---------------------------------------------------------
             # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
