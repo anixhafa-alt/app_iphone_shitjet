@@ -6,10 +6,6 @@ import os
 import numpy as np
 import time
 
-# --- IMPORTIMI I MODULIT TË RI TË PLANIFIKIMIT ---
-# Ky rresht thërret funksionin nga skedari i ri 'plani_shitjeve.py'
-from plani_shitjeve import shfaq_modul_planifikimi_artikujve
-
 # =========================================================
 # 1. KONFIGURIMI I FAQES
 # region ==================================================
@@ -2457,26 +2453,21 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
 
         # endregion
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-from datetime import datetime
 
-
+# =========================================================
+# FUNKSIONI I RI: STRUKTURA DHE INTEGRIMI I MODULIT TË PLANIT
+# =========================================================
 def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
     st.markdown(
         "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar në mix-in e ri të shitjeve nga **Periudha B**."
     )
 
-    # 1. Ngarkimi i pastër i strukturës së plotë nga Exceli
     try:
         df_p = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
         df_k = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
         df_p.columns = df_p.columns.str.strip()
         df_k.columns = df_k.columns.str.strip()
-
-        # Unifikojmë strukturën nominale të artikujve dhe kategorive
         df_struktura_nominale = pd.merge(
             df_p, df_k, left_on="KATEG.", right_on="KOD KAT", how="left"
         )
@@ -2489,11 +2480,8 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
         )
         return
 
-    # Pasurojmë të dhënat e shitjeve direkte për këtë modul
     df_proc = df_baze_sales.copy()
     df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
-
-    # Ri-lidhim direkt që të jemi të sigurt për emërtimet zyrtare të kategorive
     df_proc = pd.merge(
         df_proc,
         df_struktura_nominale[["KODI", "EMRI KAT", "KG/SKU"]],
@@ -2508,7 +2496,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
     max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
 
-    # Paneli i përzgjedhjes së dy periudhave referente
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("📅 Periudha A (Kapaciteti i Klientit)")
@@ -2551,7 +2538,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 )
                 return
 
-            # FAZA 1: Volumi dhe Mesatarja e Klientit për Kategori në Periudhën A
             muaj_unike_A = df_A["VitiMuaji"].nunique()
             nr_muajve_A = muaj_unike_A if muaj_unike_A > 0 else 1
 
@@ -2563,7 +2549,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             df_klient_A["Mesatare_KG_Kategori"] = df_klient_A["kg"] / nr_muajve_A
             df_klient_A = df_klient_A.drop(columns=["kg"])
 
-            # FAZA 2: Mix-i i shitjeve të artikujve në Periudhën B
             tot_kat_B = (
                 df_B.groupby("EMRI KAT")["kg"]
                 .sum()
@@ -2587,13 +2572,11 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 ["EMRI KAT", "KodiArt", "Artikulli", "Pesha_Artikullit"]
             ]
 
-            # FAZA 3: Kombinimi Matematik i Planit
             df_plani = pd.merge(df_klient_A, df_mix_B, on="EMRI KAT", how="inner")
             df_plani["Plani_KG"] = (
                 df_plani["Mesatare_KG_Kategori"] * df_plani["Pesha_Artikullit"]
             )
 
-            # Konvertimi i KG në Copa sipas peshës nominale
             df_peshat = (
                 df_struktura_nominale[["KODI", "KG/SKU"]]
                 .drop_duplicates()
@@ -2604,7 +2587,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
             )
 
-            # Tabela Finale profesionale
             tabela_finale = (
                 df_plani[
                     [
@@ -2621,7 +2603,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 .reset_index(drop=True)
             )
 
-            # Afishimi i metrikave përmbledhëse
             st.success("✅ Plani i ri u kalkulua me sukses!")
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Plani (KG)", f"{tabela_finale['Plani_KG'].sum():,.1f} kg")
@@ -2634,7 +2615,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 
             st.dataframe(tabela_finale, use_container_width=True)
 
-            # Eksporti në Excel
             import io
 
             out = io.BytesIO()
@@ -2650,5 +2630,5 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             )
     else:
         st.info(
-            "💡 Përzgjedhni rrezen e plotë (Datë Fillimi - Datë Mbarimi) për të dyja periudhat më lart."
+            "💡 Përzgjedhni rrezen e plotë (Datë Fillimi - Datë Mbarimi) për të doja periudhat më lart."
         )
