@@ -3,6 +3,12 @@ import pandas as pd
 from datetime import datetime
 from PIL import Image
 import os
+import numpy as np
+import time
+
+# --- IMPORTIMI I MODULIT TË RI TË PLANIFIKIMIT ---
+# Ky rresht thërret funksionin nga skedari i ri 'plani_shitjeve.py'
+from plani_shitjeve import shfaq_modul_planifikimi_artikujve
 
 # =========================================================
 # 1. KONFIGURIMI I FAQES
@@ -83,17 +89,13 @@ else:
     st.sidebar.title("AXION")
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
-# Injektimi i CSS për afërsi maksimale të versionit në Sidebar
 st.sidebar.markdown(
     """
     <style>
-    /* Heqim hapësirën e tepërt që krijon veshja e imazhit në Streamlit */
     [data-testid="stSidebar"] [data-testid="stImage"] {
         margin-bottom: 0px !important;
         padding-bottom: 0px !important;
     }
-    
-    /* Tërheqim tekstin e versionit fort lart */
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
@@ -109,13 +111,12 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# Shfaqja e versionit fiks nën logo
 st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
 
 # =========================================================
-# 4. NAVIGIMI (PANEL KONTROLLI)
+# 4. NAVIGIMI (PANEL KONTROLLI) - ME EMËRTIMET E SAKTA
 # region ==================================================
 st.sidebar.markdown(
     """
@@ -139,7 +140,8 @@ page = st.sidebar.radio(
     [
         "Shitjet Ditore",
         "Realizimi",
-        "Planifikimi",
+        "Planifikimi",  # Ky mbetet moduli yt ekzistues (grafikët, etj.)
+        "🎯 Plani sipas Strukturës B",  # Moduli i ri inteligjent
         "Mundësitë",
         "Historiku",
         "Klientët me shumë Agjentë",
@@ -200,8 +202,6 @@ def load_all_data():
 def load_customer_list():
     try:
         conn = st.connection("sql", type="sql")
-
-        # Marrim vetëm kolonat që ekzistojnë me siguri në view-në tënde SQL
         query = """
             SELECT 
                 [Kodi] AS KodiKlient, 
@@ -218,8 +218,6 @@ def load_customer_list():
                 df_klientet["KodiKlient"].astype(str).str.strip()
             )
 
-        # --- ZGJIDHJA INTELIGJENTE: FALLBACK MODE ---
-        # Pasi SQL nuk i ka këto kolona, i gjenerojmë automatikisht në Python sipas qytetit real
         koordinatat_qyteteve = {
             "TIRANE": (41.3275, 19.8187),
             "DURRES": (41.3242, 19.4564),
@@ -232,13 +230,9 @@ def load_customer_list():
             "LUSHNJE": (40.9419, 19.7028),
         }
 
-        import numpy as np
-
         def ploteso_koordinatat(row):
             qyteti_pastruar = str(row["Rajoni"]).upper().strip()
-            # Marrim koordinatën e qytetit, nëse nuk gjendet përdorim si default Tiranën
             qendrat = koordinatat_qyteteve.get(qyteti_pastruar, (41.3275, 19.8187))
-            # Shtojmë pak variacion random që klientët e të njëjtit qytet mos mbivendosen në një pikë
             return pd.Series(
                 [
                     qendrat[0] + np.random.uniform(-0.03, 0.03),
@@ -246,7 +240,6 @@ def load_customer_list():
                 ]
             )
 
-        # Krijojmë kolonat e nevojshme direkt në Python
         df_klientet[["Latitude", "Longitude"]] = df_klientet.apply(
             ploteso_koordinatat, axis=1
         )
@@ -258,22 +251,15 @@ def load_customer_list():
         return None
 
 
-# NGARKIMI I TË DHËNAVE (Thirret vetëm NJË herë për çdo variabël)
 df_klientet_regjistri = load_customer_list()
 df_raw = load_all_data()
 
-# Ngarkimi dhe përpunimi i kategorive suplementare nga Excel-i
 try:
     df_link = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
     df_link.columns = df_link.columns.str.strip()
     df_link = df_link[["KODI", "KATEG."]].rename(
         columns={"KODI": "KodiArt", "KATEG.": "KOD KAT"}
     )
-    if "NGA LISTA E CMIMEVE" in df_link.columns:
-        df_link = df_link[
-            df_link["NGA LISTA E CMIMEVE"].astype(str).str.upper().str.strip()
-            == "AKTIV"
-        ].copy()
 except Exception as e:
     st.error(f"Gabim te sheet-i 'produktet': {e}")
     df_link = None
@@ -286,7 +272,6 @@ except Exception as e:
     st.error(f"Gabim te sheet-i 'kat_prod': {e}")
     df_names = None
 
-# Bashkimi përfundimtar i të dhënave për strukturën e kategorive
 if df_raw is not None and df_link is not None:
     df_link["KodiArt"] = df_link["KodiArt"].astype(str).str.strip()
     df_raw["KodiArt"] = df_raw["KodiArt"].astype(str).str.strip()
@@ -300,25 +285,22 @@ if df_raw is not None and df_link is not None:
         )
 # endregion
 
+
 # =========================================================
 # RIFRESKIMI AUTOMATIK ÇDO 30 MINUTA (PA NGADALËSIM)
 # =========================================================
-import time
-
-# Përdorim një variabël në session_state për të mbajtur kohën e rifreskimit të fundit
 if "koha_rifreskimit_fundit" not in st.session_state:
     st.session_state["koha_rifreskimit_fundit"] = time.time()
 
-# Kontrollojmë nëse kanë kaluar 1800 sekonda (30 minuta) nga rifreskimi i fundit
 if time.time() - st.session_state["koha_rifreskimit_fundit"] > 1800:
-    st.cache_data.clear()  # Fshin cache-in e vjetër
-    st.session_state["koha_rifreskimit_fundit"] = time.time()  # Përditëson kohën
-    st.rerun()  # Rinis faqen me të dhënat e reja
-
+    st.cache_data.clear()
+    st.session_state["koha_rifreskimit_fundit"] = time.time()
+    st.rerun()
 # endregion
 
+
 # =========================================================
-# 6. KORNIZA E RE E SINKRONIZIMIT (E BASHKUAR SIKURSE NË FOTO)
+# 6. KORNIZA E RE E SINKRONIZIMIT
 # region ==================================================
 if df_raw is not None and not df_raw.empty:
     kolona_date = [c for c in df_raw.columns if c.lower() == "data"]
@@ -328,13 +310,8 @@ if df_raw is not None and not df_raw.empty:
         data_maksimale = datet_konvertuara.max()
         sot_data = datetime.now().date()
 
-        # Krijohet një kornizë e përbashkët që mban butonin dhe statusin ngjitur
         with st.sidebar.container(border=True):
-            if st.button(
-                "🔄 Rifresko nga SQL Server",
-                use_container_width=True,
-                help="Klikoni për të tërhequr faturat më të fundit live nga databaza qendrore.",
-            ):
+            if st.button("🔄 Rifresko nga SQL Server", use_container_width=True):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -365,6 +342,8 @@ def merr_librarine_permanente():
 
 
 # endregion
+
+# ... (Këtu poshtë vijon pjesa tjetër e kodit tënd origjinal, funksioni nderto_sidebar, etj.)
 
 
 # =========================================================
@@ -531,6 +510,14 @@ def nderto_sidebar():
 # region ==================================================
 start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_sidebar()
 # endregion
+# =========================================================
+# 10. KONTROLLI I NAVIGIMIT DHE MENAXHIMI I MODULEVE
+# =========================================================
+
+if page == "🎯 Plani sipas Strukturës B":
+    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
+    shfaq_modul_planifikimi_artikujve(df_raw)
+    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
 
 # =========================================================
 # 10. MODULET
