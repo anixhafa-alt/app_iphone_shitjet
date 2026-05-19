@@ -2456,3 +2456,199 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 )
 
         # endregion
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime
+
+
+def shfaq_modul_planifikimi_artikujve(df_baze_sales):
+    st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
+    st.markdown(
+        "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar në mix-in e ri të shitjeve nga **Periudha B**."
+    )
+
+    # 1. Ngarkimi i pastër i strukturës së plotë nga Exceli
+    try:
+        df_p = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+        df_k = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+        df_p.columns = df_p.columns.str.strip()
+        df_k.columns = df_k.columns.str.strip()
+
+        # Unifikojmë strukturën nominale të artikujve dhe kategorive
+        df_struktura_nominale = pd.merge(
+            df_p, df_k, left_on="KATEG.", right_on="KOD KAT", how="left"
+        )
+        df_struktura_nominale["KODI"] = (
+            df_struktura_nominale["KODI"].astype(str).str.strip()
+        )
+    except Exception as e:
+        st.error(
+            f"❌ Gabim në leximin e strukturës së produkteve 'produkte+.xlsx': {e}"
+        )
+        return
+
+    # Pasurojmë të dhënat e shitjeve direkte për këtë modul
+    df_proc = df_baze_sales.copy()
+    df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
+
+    # Ri-lidhim direkt që të jemi të sigurt për emërtimet zyrtare të kategorive
+    df_proc = pd.merge(
+        df_proc,
+        df_struktura_nominale[["KODI", "EMRI KAT", "KG/SKU"]],
+        left_on="KodiArt",
+        right_on="KODI",
+        how="left",
+    )
+    df_proc["EMRI KAT"] = df_proc["EMRI KAT"].fillna("Pa Kategori")
+    df_proc["kg"] = df_proc["Sasia"] * df_proc["KG/SKU"].fillna(0)
+    df_proc["VitiMuaji"] = df_proc["Data"].dt.to_period("M")
+
+    min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
+    max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
+
+    # Paneli i përzgjedhjes së dy periudhave referente
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("📅 Periudha A (Kapaciteti i Klientit)")
+        p_a = st.date_input(
+            "Kufijtë e datave për Periudhën A:",
+            value=(min_d, max_d),
+            min_value=min_d,
+            max_value=max_d,
+            key="pl_range_a",
+        )
+    with c2:
+        st.subheader("📅 Periudha B (Struktura / Mix-i i Ri)")
+        p_b = st.date_input(
+            "Kufijtë e datave për Periudhën B:",
+            value=(min_d, max_d),
+            min_value=min_d,
+            max_value=max_d,
+            key="pl_range_b",
+        )
+
+    if (
+        isinstance(p_a, tuple)
+        and len(p_a) == 2
+        and isinstance(p_b, tuple)
+        and len(p_b) == 2
+    ):
+        if st.button("🚀 Gjenero Planin Struktural", use_container_width=True):
+            df_A = df_proc[
+                (df_proc["Data"] >= pd.to_datetime(p_a[0]))
+                & (df_proc["Data"] <= pd.to_datetime(p_a[1]))
+            ]
+            df_B = df_proc[
+                (df_proc["Data"] >= pd.to_datetime(p_b[0]))
+                & (df_proc["Data"] <= pd.to_datetime(p_b[1]))
+            ]
+
+            if df_A.empty or df_B.empty:
+                st.warning(
+                    "⚠️ Nuk u gjetën shitje në njërën prej periudhave të përzgjedhura. Ndryshoni datat."
+                )
+                return
+
+            # FAZA 1: Volumi dhe Mesatarja e Klientit për Kategori në Periudhën A
+            muaj_unike_A = df_A["VitiMuaji"].nunique()
+            nr_muajve_A = muaj_unike_A if muaj_unike_A > 0 else 1
+
+            df_klient_A = (
+                df_A.groupby(["KodiKlient", "Klienti", "EMRI KAT"])["kg"]
+                .sum()
+                .reset_index()
+            )
+            df_klient_A["Mesatare_KG_Kategori"] = df_klient_A["kg"] / nr_muajve_A
+            df_klient_A = df_klient_A.drop(columns=["kg"])
+
+            # FAZA 2: Mix-i i shitjeve të artikujve në Periudhën B
+            tot_kat_B = (
+                df_B.groupby("EMRI KAT")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "Tot_Kat_B"})
+            )
+            tot_art_B = (
+                df_B.groupby(["EMRI KAT", "KodiArt", "Artikulli"])["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "Tot_Art_B"})
+            )
+
+            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="EMRI KAT")
+            df_mix_B["Pesha_Artikullit"] = np.where(
+                df_mix_B["Tot_Kat_B"] > 0,
+                df_mix_B["Tot_Art_B"] / df_mix_B["Tot_Kat_B"],
+                0,
+            )
+            df_mix_B = df_mix_B[
+                ["EMRI KAT", "KodiArt", "Artikulli", "Pesha_Artikullit"]
+            ]
+
+            # FAZA 3: Kombinimi Matematik i Planit
+            df_plani = pd.merge(df_klient_A, df_mix_B, on="EMRI KAT", how="inner")
+            df_plani["Plani_KG"] = (
+                df_plani["Mesatare_KG_Kategori"] * df_plani["Pesha_Artikullit"]
+            )
+
+            # Konvertimi i KG në Copa sipas peshës nominale
+            df_peshat = (
+                df_struktura_nominale[["KODI", "KG/SKU"]]
+                .drop_duplicates()
+                .rename(columns={"KODI": "KodiArt"})
+            )
+            df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
+            df_plani["Plani_Cope"] = np.where(
+                df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
+            )
+
+            # Tabela Finale profesionale
+            tabela_finale = (
+                df_plani[
+                    [
+                        "KodiKlient",
+                        "Klienti",
+                        "EMRI KAT",
+                        "KodiArt",
+                        "Artikulli",
+                        "Plani_KG",
+                        "Plani_Cope",
+                    ]
+                ]
+                .sort_values(by=["Klienti", "EMRI KAT"])
+                .reset_index(drop=True)
+            )
+
+            # Afishimi i metrikave përmbledhëse
+            st.success("✅ Plani i ri u kalkulua me sukses!")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Plani (KG)", f"{tabela_finale['Plani_KG'].sum():,.1f} kg")
+            m2.metric(
+                "Total Plani (Copa)", f"{tabela_finale['Plani_Cope'].sum():,.0f} copë"
+            )
+            m3.metric(
+                "Klientë Unikë në Plan", f"{tabela_finale['KodiKlient'].nunique()}"
+            )
+
+            st.dataframe(tabela_finale, use_container_width=True)
+
+            # Eksporti në Excel
+            import io
+
+            out = io.BytesIO()
+            with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
+                tabela_finale.to_excel(wr, index=False, sheet_name="Plani_Struktural")
+
+            st.download_button(
+                label="📥 Shkarko Tabelën e Planit në Excel",
+                data=out.getvalue(),
+                file_name="plani_struktural_kliente_artikuj.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+    else:
+        st.info(
+            "💡 Përzgjedhni rrezen e plotë (Datë Fillimi - Datë Mbarimi) për të dyja periudhat më lart."
+        )
