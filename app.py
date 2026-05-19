@@ -2487,28 +2487,28 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     "🟢 Nuk u gjet asnjë kod klienti i furnizuar nga më shumë se një agjent për këtë periudhë."
                 )
 
-    # endregion
+        # endregion
 
-    # =========================================================================
-    # 1. NGARKIMI I STRUKTURËS NGA EXCEL
-    # =========================================================================
-    try:
-        df_produkte_excel = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
-        df_kat_prod_excel = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+        # =========================================================================
+        # 1. NGARKIMI I STRUKTURËS NGA EXCEL
+        # =========================================================================
+        try:
+            df_produkte_excel = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+            df_kat_prod_excel = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
 
-        # Bashkimi i strukturës së produkteve
-        df_struktura_artikujve = pd.merge(
-            df_produkte_excel,
-            df_kat_prod_excel,
-            left_on="KATEG.",
-            right_on="KOD KAT",
-            how="left",
-        )
-    except Exception as e:
-        st.error(
-            f"❌ Nuk u gjet ose nuk mund të lexohej skedari 'produkte+.xlsx'. Gabimi: {e}"
-        )
-        return
+            # Bashkimi i strukturës së produkteve
+            df_struktura_artikujve = pd.merge(
+                df_produkte_excel,
+                df_kat_prod_excel,
+                left_on="KATEG.",
+                right_on="KOD KAT",
+                how="left",
+            )
+        except Exception as e:
+            st.error(
+                f"❌ Nuk u gjet ose nuk mund të lexohej skedari 'produkte+.xlsx'. Gabimi: {e}"
+            )
+            return
 
     # Pasurimi i të dhënave të SQL-it
     df_sql["Data"] = pd.to_datetime(df_sql["Data"])
