@@ -2128,9 +2128,9 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU PLOTËSISHT DINAMIK: RREGULLIMI I BOSHTEVE (KORREKT)
+            # 5.5 GRAFIKU ME KONTROLL ABSOLUT MBI BOSHTET (PRIMAR & SEKONDAR)
             # ---------------------------------------------------------
-            st.subheader("📈 Analiza Korelative: Kontroll Dinamik mbi të gjitha Seritë")
+            st.subheader("📈 Analiza Korelative: Kontroll i Pavarur mbi Boshtet")
 
             # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
             df_baze = (
@@ -2164,7 +2164,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 .rename(columns={"kg": "KG_Olim"})
             )
 
-            # Bashkojmë të dhënat në një DataFrame të vetëm
+            # Bashkojmë të gjitha të dhënat në një DataFrame të vetëm
             df_grafiku = pd.merge(df_baze, df_total_kg, on="VitiMuaji", how="left")
             df_grafiku = pd.merge(df_grafiku, df_deka_kg, on="VitiMuaji", how="left")
             df_grafiku = pd.merge(df_grafiku, df_olim_kg, on="VitiMuaji", how="left")
@@ -2175,144 +2175,151 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
             )
 
-            # --- SELEKTORI DINAMIK PËR TË 5 SERITË ---
-            st.markdown(
-                "**🎯 Kliko mbi kuti për të shtuar ose hequr cilëndo nga të 5 seritë në grafik:**"
-            )
-            serite_e_zgjedhura = st.multiselect(
-                label="Filtro Seritë e Grafikut:",
-                options=[
-                    "🏪 Klientë Aktivë (Shtylla - Majtas)",
-                    "👤 Agjentë në Terren (Linjë - Djathtas)",
-                    "📦 Sasia Totale (KG - Djathtas)",
-                    "🔴 Sasia DEKA (KG - Djathtas)",
-                    "🟡 Sasia OLIM (KG - Djathtas)",
-                ],
-                default=[
-                    "🏪 Klientë Aktivë (Shtylla - Majtas)",
-                    "👤 Agjentë në Terren (Linjë - Djathtas)",
-                    "📦 Sasia Totale (KG - Djathtas)",
-                ],
-                label_visibility="collapsed",
-            )
+            # --- PANEL KONTROLLI I DYFISHTË PËR BOSHTET ---
+            st.markdown("### 🎛️ Konfiguro Boshtet e Grafikut")
+
+            # Krijojmë opsionet standarde për të dy kutitë
+            opsionet_serive = {
+                "Klientë Aktivë": {
+                    "kolona": "Kliente_Aktive",
+                    "emri": "🏪 Klientë Aktivë",
+                    "ngjyra": "#1f77b4",
+                },
+                "Agjentë në Terren": {
+                    "kolona": "Nr_Agjenteve",
+                    "emri": "👤 Agjentë në Terren",
+                    "ngjyra": "#aec7e8",
+                },
+                "Sasia Totale (KG)": {
+                    "kolona": "KG_Total",
+                    "emri": "📦 Sasia Totale (KG)",
+                    "ngjyra": "#2ca02c",
+                },
+                "Sasia DEKA (KG)": {
+                    "kolona": "KG_Deka",
+                    "emri": "🔴 Sasia DEKA (KG)",
+                    "ngjyra": "#d62728",
+                },
+                "Sasia OLIM (KG)": {
+                    "kolona": "KG_Olim",
+                    "emri": "🟡 Sasia OLIM (KG)",
+                    "ngjyra": "#ffbb78",
+                },
+            }
+
+            col_b1, col_b2 = st.columns(2)
+
+            with col_b1:
+                st.markdown("**📊 Boshti Primar (Majtas - Shfaqet si Shtylla):**")
+                primar_zgjedhur = st.multiselect(
+                    label="Zgjidh seritë për boshtin e majtë:",
+                    options=list(opsionet_serive.keys()),
+                    default=["Klientë Aktivë"],  # Default i pastër
+                    label_visibility="collapsed",
+                )
+
+            with col_b2:
+                st.markdown("**📈 Boshti Sekondar (Djathtas - Shfaqet si Linja):**")
+                sekondar_zgjedhur = st.multiselect(
+                    label="Zgjidh seritë për boshtin e djathtë:",
+                    options=list(opsionet_serive.keys()),
+                    default=[
+                        "Sasia Totale (KG)",
+                        "Agjentë në Terren",
+                    ],  # Default i zgjedhur
+                    label_visibility="collapsed",
+                )
 
             # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
             from plotly.subplots import make_subplots
             import plotly.graph_objects as go
 
-            fig_dinamik = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_universal = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # --- BOSHTI I MAJTË (PRIMARY Y) ---
-            # 1. Klientët Aktivë (Si Shtylla)
-            if "🏪 Klientë Aktivë (Shtylla - Majtas)" in serite_e_zgjedhura:
-                fig_dinamik.add_trace(
+            # 1. NDËRTIMI I SERIVE PËR BOSHTIN PRIMAR (SHTYLLA)
+            for kategoria in primar_zgjedhur:
+                info = opsionet_serive[kategoria]
+                fig_universal.add_trace(
                     go.Bar(
                         x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku["Kliente_Aktive"],
-                        name="🏪 Klientë Aktivë",
-                        text=df_grafiku["Kliente_Aktive"],
+                        y=df_grafiku[info["kolona"]],
+                        name=f"{info['emri']} (Majtas)",
+                        text=df_grafiku[info["kolona"]].apply(
+                            lambda x: f"{x:,.0f}" if x > 1000 else f"{x}"
+                        ),
                         textposition="outside",
-                        marker_color="#1f77b4",
-                        hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
+                        marker_color=info["ngjyra"],
+                        hovertemplate=f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>",
                     ),
-                    secondary_y=False,  # QËNDRON MAJTAS
+                    secondary_y=False,  # Shkon Majtas
                 )
 
-            # --- BOSHTI I DJATHTË (SECONDARY Y) ---
-            # 2. Agjentët në Terren (Kthehet në LINJË që të mos shtypet nga Klientët)
-            if "👤 Agjentë në Terren (Linjë - Djathtas)" in serite_e_zgjedhura:
-                fig_dinamik.add_trace(
+            # 2. NDËRTIMI I SERIVE PËR BOSHTIN SEKONDAR (LINJA)
+            for kategoria in sekondar_zgjedhur:
+                info = opsionet_serive[kategoria]
+                # Përcaktojmë stilin e vijës që të dallojnë nëse zgjidhen shumë
+                stili_vijes = "solid"
+                if "DEKA" in kategoria:
+                    stili_vijes = "dash"
+                elif "OLIM" in kategoria:
+                    stili_vijes = "dashdot"
+                elif "Agjentë" in kategoria:
+                    stili_vijes = "dot"
+
+                fig_universal.add_trace(
                     go.Scatter(
                         x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku["Nr_Agjenteve"],
-                        name="👤 Agjentë në Terren",
-                        mode="lines+markers+text",
-                        text=df_grafiku["Nr_Agjenteve"],
-                        textposition="top right",
-                        line=dict(color="#aec7e8", width=3, dash="dot"),
+                        y=df_grafiku[info["kolona"]],
+                        name=f"{info['emri']} (Djathtas)",
+                        mode="lines+markers",
+                        line=dict(color=info["ngjyra"], width=3, dash=stili_vijes),
                         marker=dict(size=8),
-                        hovertemplate="<b>%{x}</b><br>Agjentë Unikë: %{y}<extra></extra>",
+                        hovertemplate=f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>",
                     ),
-                    secondary_y=True,  # SHKON DJATHAS
-                )
-
-            # 3. Sasia Totale KG
-            if "📦 Sasia Totale (KG - Djathtas)" in serite_e_zgjedhura:
-                fig_dinamik.add_trace(
-                    go.Scatter(
-                        x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku["KG_Total"],
-                        name="📦 Sasia Totale (KG)",
-                        mode="lines+markers",
-                        line=dict(color="#2ca02c", width=3, dash="solid"),
-                        hovertemplate="<b>%{x}</b><br>Sasia Totale: %{y:,.0f} kg<extra></extra>",
-                    ),
-                    secondary_y=True,  # SHKON DJATHAS
-                )
-
-            # 4. Sasia vetëm DEKA
-            if "🔴 Sasia DEKA (KG - Djathtas)" in serite_e_zgjedhura:
-                fig_dinamik.add_trace(
-                    go.Scatter(
-                        x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku["KG_Deka"],
-                        name="🔴 Sasia DEKA (KG)",
-                        mode="lines+markers",
-                        line=dict(color="#d62728", width=2, dash="dash"),
-                        hovertemplate="<b>%{x}</b><br>Sasia DEKA: %{y:,.0f} kg<extra></extra>",
-                    ),
-                    secondary_y=True,  # SHKON DJATHAS
-                )
-
-            # 5. Sasia vetëm OLIM
-            if "🟡 Sasia OLIM (KG - Djathtas)" in serite_e_zgjedhura:
-                fig_dinamik.add_trace(
-                    go.Scatter(
-                        x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku["KG_Olim"],
-                        name="🟡 Sasia OLIM (KG)",
-                        mode="lines+markers",
-                        line=dict(color="#ffbb78", width=2, dash="dashdot"),
-                        hovertemplate="<b>%{x}</b><br>Sasia OLIM: %{y:,.0f} kg<extra></extra>",
-                    ),
-                    secondary_y=True,  # SHKON DJATHAS
+                    secondary_y=True,  # Shkon Djathtas
                 )
 
             # --- KONFIGURIMI ESTETIK ---
-            ka_numra = "🏪 Klientë Aktivë (Shtylla - Majtas)" in serite_e_zgjedhura
-            ka_djathtas = (
-                "👤 Agjentë në Terren (Linjë - Djathtas)" in serite_e_zgjedhura
-                or "📦 Sasia Totale (KG - Djathtas)" in serite_e_zgjedhura
-                or "🔴 Sasia DEKA (KG - Djathtas)" in serite_e_zgjedhura
-                or "🟡 Sasia OLIM (KG - Djathtas)" in serite_e_zgjedhura
+            titulli_majtas = (
+                ", ".join(primar_zgjedhur)
+                if primar_zgjedhur
+                else "Boshti i Majtë (Bosh)"
+            )
+            titulli_djathtas = (
+                ", ".join(sekondar_zgjedhur)
+                if sekondar_zgjedhur
+                else "Boshti i Djathtë (Bosh)"
             )
 
-            fig_dinamik.update_layout(
+            fig_universal.update_layout(
                 xaxis_title=None,
-                yaxis_title=(
-                    "Numri i Klientëve Unique (Majtas)" if ka_numra else "Numri (Fikur)"
-                ),
-                yaxis2_title=(
-                    "Metrikat sekondare: Agjentët & KG (Djathtas)"
-                    if ka_djathtas
-                    else "Boshti Sekondar (Fikur)"
-                ),
+                yaxis_title=f"⬅️ {titulli_majtas}",
+                yaxis2_title=f"{titulli_djathtas} ➡️",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=20, r=20, t=30, b=20),
-                height=450,
+                height=480,
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
                 ),
+                barmode="group",  # Nëse zgjedh më shumë se një seri si Bar, i vendos krah për krah
             )
 
-            fig_dinamik.update_yaxes(
-                showgrid=ka_numra, gridcolor="rgba(200,200,200,0.15)", secondary_y=False
+            # Rrjeta ndihmëse (GridLines) aktivizohet vetëm nëse ka diçka majtas
+            fig_universal.update_yaxes(
+                showgrid=bool(primar_zgjedhur),
+                gridcolor="rgba(200,200,200,0.15)",
+                secondary_y=False,
             )
-            fig_dinamik.update_yaxes(showgrid=False, secondary_y=True)
+            fig_universal.update_yaxes(showgrid=False, secondary_y=True)
 
-            # Shfaqja e grafikut të rregulluar
-            st.plotly_chart(fig_dinamik, use_container_width=True)
+            # Shfaqja e grafikut
+            if primar_zgjedhur or sekondar_zgjedhur:
+                st.plotly_chart(fig_universal, use_container_width=True)
+            else:
+                st.warning(
+                    "⚠️ Ju lutem zgjidhni të paktën një seri te boshti primar ose sekondar për të vizatuar grafikun."
+                )
 
             # 6. Shfaqja e Tabelës Kryesore
             st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
