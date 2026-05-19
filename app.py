@@ -2469,3 +2469,233 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 )
 
 # endregion
+
+
+opsioni = st.sidebar.radio("Navigimi", ["Analiza e Shitjeve", "Moduli i Planifikimit"])
+
+if opsioni == "Analiza e Shitjeve":
+    # Kodi ekzistues me grafikun dinamik që rregulluam më parë
+    shfaq_analizen_ekzistuese()
+elif opsioni == "Moduli i Planifikimit":
+    # Thirrja e funksionit të ri që të dërgova më lart
+    shfaq_modulin_planifikimit(df_sql_origjinale)
+
+    import streamlit as st
+import pandas as pd
+import numpy as np
+
+
+def shfaq_modulin_planifikimit(df_sql):
+    st.title("🎯 Moduli i Planifikimit të Shitjeve")
+    st.markdown(
+        "Ndërto planin e ri të shitjeve duke kombinuar kapacitetin e klientit (Periudha A) me strukturën e produktit (Periudha B)."
+    )
+
+    # =========================================================================
+    # 1. NGARKIMI I STRUKTURËS NGA EXCEL
+    # =========================================================================
+    try:
+        df_produkte_excel = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
+        df_kat_prod_excel = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
+
+        # Bashkimi i strukturës së produkteve
+        df_struktura_artikujve = pd.merge(
+            df_produkte_excel,
+            df_kat_prod_excel,
+            left_on="KATEG.",
+            right_on="KOD KAT",
+            how="left",
+        )
+    except Exception as e:
+        st.error(
+            f"❌ Nuk u gjet ose nuk mund të lexohej skedari 'produkte+.xlsx'. Gabimi: {e}"
+        )
+        return
+
+    # Pasurimi i të dhënave të SQL-it
+    df_sql["Data"] = pd.to_datetime(df_sql["Data"])
+    df_shitjet_plote = pd.merge(
+        df_sql, df_struktura_artikujve, left_on="KodiArt", right_on="KODI", how="left"
+    )
+    # Llogaritja e KG
+    df_shitjet_plote["kg"] = df_shitjet_plote["Sasia"] * df_shitjet_plote["KG/SKU"]
+    df_shitjet_plote["VitiMuaji"] = df_shitjet_plote["Data"].dt.to_period("M")
+
+    # Gjejmë datat minimale dhe maksimale në dataset për kufizimet e filtrave
+    min_data = df_sql["Data"].min().date()
+    max_data = df_sql["Data"].max().date()
+
+    # =========================================================================
+    # 2. PANEL KONTROLLI PËR PERIUDHAT A DHE B
+    # =========================================================================
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("📅 Periudha A (Kapaciteti i Klientit)")
+        data_a = st.date_input(
+            "Zgjidh rrezen e datave për Periudhën A:",
+            value=(min_data, max_data),
+            min_value=min_data,
+            max_value=max_data,
+            key="per_a",
+        )
+
+    with col2:
+        st.subheader("📅 Periudha B (Struktura e Artikujve / Mix-i)")
+        data_b = st.date_input(
+            "Zgjidh rrezen e datave për Periudhën B:",
+            value=(min_data, max_data),
+            min_value=min_data,
+            max_value=max_data,
+            key="per_b",
+        )
+
+    # Sigurohemi që përdoruesi ka zgjedhur fillimin dhe fundin e të dyja periudhave
+    if (
+        isinstance(data_a, tuple)
+        and len(data_a) == 2
+        and isinstance(data_b, tuple)
+        and len(data_b) == 2
+    ):
+        data_nisjes_A, data_fundit_A = pd.to_datetime(data_a[0]), pd.to_datetime(
+            data_a[1]
+        )
+        data_nisjes_B, data_fundit_B = pd.to_datetime(data_b[0]), pd.to_datetime(
+            data_b[1]
+        )
+
+        # Butoni për të nisur kalkulimin
+        if st.button("🚀 Gjenero Planin e Ri të Shitjeve", use_container_width=True):
+
+            # Filtrimi i të dhënave
+            df_A = df_shitjet_plote[
+                (df_shitjet_plote["Data"] >= data_nisjes_A)
+                & (df_shitjet_plote["Data"] <= data_fundit_A)
+            ]
+            df_B = df_shitjet_plote[
+                (df_shitjet_plote["Data"] >= data_nisjes_B)
+                & (df_shitjet_plote["Data"] <= data_fundit_B)
+            ]
+
+            if df_A.empty or df_B.empty:
+                st.warning(
+                    "⚠️ Njëra nga periudhat e zgjedhura nuk ka të dhëna shitjesh. Ju lutem kontrolloni datat."
+                )
+                return
+
+            # -----------------------------------------------------------------
+            # LLOGARITJA FAZA 1: Mesatarja e Kategorisë për Klient (Periudha A)
+            # -----------------------------------------------------------------
+            nr_muajve_A = (
+                df_A["VitiMuaji"].nunique() if df_A["VitiMuaji"].nunique() > 0 else 1
+            )
+
+            df_klient_kat_A = (
+                df_A.groupby(["KodiKlient", "Klienti", "EMRI KAT"])["kg"]
+                .sum()
+                .reset_index()
+            )
+            df_klient_kat_A["Mesatare_KG_Kategori"] = (
+                df_klient_kat_A["kg"] / nr_muajve_A
+            )
+            df_klient_kat_A = df_klient_kat_A.drop(columns=["kg"])
+
+            # -----------------------------------------------------------------
+            # LLOGARITJA FAZA 2: Mix-i i Artikujve brenda Kategorisë (Periudha B)
+            # -----------------------------------------------------------------
+            tot_kat_B = (
+                df_B.groupby("EMRI KAT")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "Tot_Kat_B"})
+            )
+            tot_art_B = (
+                df_B.groupby(["EMRI KAT", "KodiArt", "Artikulli"])["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "Tot_Art_B"})
+            )
+
+            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="EMRI KAT")
+            df_mix_B["Pesha_Artikullit"] = df_mix_B["Tot_Art_B"] / df_mix_B["Tot_Kat_B"]
+            df_mix_B = df_mix_B[
+                ["EMRI KAT", "KodiArt", "Artikulli", "Pesha_Artikullit"]
+            ]
+
+            # -----------------------------------------------------------------
+            # LLOGARITJA FAZA 3: Bashkimi dhe Gjenerimi i Planit Final
+            # -----------------------------------------------------------------
+            df_plani_gjeneruar = pd.merge(
+                df_klient_kat_A, df_mix_B, on="EMRI KAT", how="inner"
+            )
+            df_plani_gjeneruar["Plani_KG"] = (
+                df_plani_gjeneruar["Mesatare_KG_Kategori"]
+                * df_plani_gjeneruar["Pesha_Artikullit"]
+            )
+
+            # Kthimi në Copa
+            df_peshat_unike = df_shitjet_plote[["KodiArt", "KG/SKU"]].drop_duplicates()
+            df_plani_gjeneruar = pd.merge(
+                df_plani_gjeneruar, df_peshat_unike, on="KodiArt", how="left"
+            )
+
+            # Parandalojmë pjesëtimin me zero nëse ndonjë peshë është 0
+            df_plani_gjeneruar["Plani_Cope"] = np.where(
+                df_plani_gjeneruar["KG/SKU"] > 0,
+                df_plani_gjeneruar["Plani_KG"] / df_plani_gjeneruar["KG/SKU"],
+                0,
+            )
+
+            # Tabela finale e pastruar
+            tabela_plani_final = df_plani_gjeneruar[
+                [
+                    "KodiKlient",
+                    "Klienti",
+                    "EMRI KAT",
+                    "KodiArt",
+                    "Artikulli",
+                    "Plani_KG",
+                    "Plani_Cope",
+                ]
+            ].sort_values(by=["Klienti", "EMRI KAT"])
+
+            # =========================================================================
+            # 3. SHFAQJA E REZULTATEVE DHE SHKARKIMI
+            # =========================================================================
+            st.success("✅ Plani u gjenerua me sukses!")
+
+            # Shfaqim disa metrika kryesore të planit të ri
+            tot_plani_kg = tabela_plani_final["Plani_KG"].sum()
+            tot_plani_cope = tabela_plani_final["Plani_Cope"].sum()
+            kliente_unike = tabela_plani_final["KodiKlient"].nunique()
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Plani (KG)", f"{tot_plani_kg:,.0f} kg")
+            m2.metric("Total Plani (Copa)", f"{tot_plani_cope:,.0f} copë")
+            m3.metric("Klientë në Plan", f"{kliente_unike}")
+
+            # Shfaqim tabelën në Streamlit
+            st.dataframe(tabela_plani_final, use_container_width=True)
+
+            # Mundësi shkarkimi në Excel për agjentët
+            @st.cache_data
+            def convert_df_to_excel(df):
+                import io
+
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                    df.to_excel(writer, index=False, sheet_name="Plani_Gjeneruar")
+                return output.getvalue()
+
+            excel_data = convert_df_to_excel(tabela_plani_final)
+            st.download_button(
+                label="📥 Shkarko Planin në formatin Excel",
+                data=excel_data,
+                file_name="plani_shitjeve_gjeneruar.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+    else:
+        st.info(
+            "💡 Ju lutem zgjidhni rrezen e datave (Data Nisjes dhe Data e Fundit) për të dyja periudhat më lart."
+        )
