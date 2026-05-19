@@ -2126,12 +2126,14 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 label="💰 Vlera në Konflikt",
                 value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
             )
-            st.divider()
+
             # ---------------------------------------------------------
             # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
             # ---------------------------------------------------------
 
             # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
+            st.subheader("Analiza Korelative")
+            st.divider()
             df_baze = (
                 df_filtri.groupby("VitiMuaji")
                 .agg(
