@@ -5,3 +5,4 @@ sqlalchemy
 openpyxl
 plotly
 xlsxwriter
+weasyprint
