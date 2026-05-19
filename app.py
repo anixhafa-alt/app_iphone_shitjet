@@ -107,7 +107,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown('<p class="version-text"> .   v.1.1.0</p>', unsafe_allow_html=True)
+st.sidebar.markdown('<p class="version-text">     v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
 
