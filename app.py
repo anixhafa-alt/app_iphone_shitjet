@@ -2509,7 +2509,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             st.error(
                 f"❌ Nuk u gjet ose nuk mund të lexohej skedari 'produkte+.xlsx'. Gabimi: {e}"
             )
-            return
+        return
 
     # Pasurimi i të dhënave të SQL-it
     df_sql["Data"] = pd.to_datetime(df_sql["Data"])
