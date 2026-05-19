@@ -2128,7 +2128,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU PLOTËSISHT DINAMIK: 5 SERI TË ZGJEDHSHME
+            # 5.5 GRAFIKU PLOTËSISHT DINAMIK: RREGULLIMI I BOSHTEVE (KORREKT)
             # ---------------------------------------------------------
             st.subheader("📈 Analiza Korelative: Kontroll Dinamik mbi të gjitha Seritë")
 
@@ -2182,17 +2182,16 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             serite_e_zgjedhura = st.multiselect(
                 label="Filtro Seritë e Grafikut:",
                 options=[
-                    "🏪 Klientë Aktivë",
-                    "👤 Agjentë në Terren",
-                    "📦 Sasia Totale (KG)",
-                    "🔴 Sasia DEKA (KG)",
-                    "🟡 Sasia OLIM (KG)",
+                    "🏪 Klientë Aktivë (Shtylla - Majtas)",
+                    "👤 Agjentë në Terren (Linjë - Djathtas)",
+                    "📦 Sasia Totale (KG - Djathtas)",
+                    "🔴 Sasia DEKA (KG - Djathtas)",
+                    "🟡 Sasia OLIM (KG - Djathtas)",
                 ],
-                # Si default po lëmë aktive vetëm 3 seritë kryesore që grafiku të hapet i pastër, por përdoruesi mund t'i ndryshojë si të dojë
                 default=[
-                    "🏪 Klientë Aktivë",
-                    "👤 Agjentë në Terren",
-                    "📦 Sasia Totale (KG)",
+                    "🏪 Klientë Aktivë (Shtylla - Majtas)",
+                    "👤 Agjentë në Terren (Linjë - Djathtas)",
+                    "📦 Sasia Totale (KG - Djathtas)",
                 ],
                 label_visibility="collapsed",
             )
@@ -2203,10 +2202,9 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
 
             fig_dinamik = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # --- KONTROLLI DINAMIK I KOLONAVE (BOSHTI I MAJTË - NUMRI) ---
-
-            # 1. Klientët Aktivë
-            if "🏪 Klientë Aktivë" in serite_e_zgjedhura:
+            # --- BOSHTI I MAJTË (PRIMARY Y) ---
+            # 1. Klientët Aktivë (Si Shtylla)
+            if "🏪 Klientë Aktivë (Shtylla - Majtas)" in serite_e_zgjedhura:
                 fig_dinamik.add_trace(
                     go.Bar(
                         x=df_grafiku["Muaji_Etiketa"],
@@ -2217,28 +2215,29 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                         marker_color="#1f77b4",
                         hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
                     ),
-                    secondary_y=False,
+                    secondary_y=False,  # QËNDRON MAJTAS
                 )
 
-            # 2. Agjentët në Terren
-            if "👤 Agjentë në Terren" in serite_e_zgjedhura:
+            # --- BOSHTI I DJATHTË (SECONDARY Y) ---
+            # 2. Agjentët në Terren (Kthehet në LINJË që të mos shtypet nga Klientët)
+            if "👤 Agjentë në Terren (Linjë - Djathtas)" in serite_e_zgjedhura:
                 fig_dinamik.add_trace(
-                    go.Bar(
+                    go.Scatter(
                         x=df_grafiku["Muaji_Etiketa"],
                         y=df_grafiku["Nr_Agjenteve"],
                         name="👤 Agjentë në Terren",
+                        mode="lines+markers+text",
                         text=df_grafiku["Nr_Agjenteve"],
-                        textposition="inside",
-                        marker_color="#aec7e8",
+                        textposition="top right",
+                        line=dict(color="#aec7e8", width=3, dash="dot"),
+                        marker=dict(size=8),
                         hovertemplate="<b>%{x}</b><br>Agjentë Unikë: %{y}<extra></extra>",
                     ),
-                    secondary_y=False,
+                    secondary_y=True,  # SHKON DJATHAS
                 )
 
-            # --- KONTROLLI DINAMIK I LINJAVE (BOSHTI I DJATHTË - KG) ---
-
             # 3. Sasia Totale KG
-            if "📦 Sasia Totale (KG)" in serite_e_zgjedhura:
+            if "📦 Sasia Totale (KG - Djathtas)" in serite_e_zgjedhura:
                 fig_dinamik.add_trace(
                     go.Scatter(
                         x=df_grafiku["Muaji_Etiketa"],
@@ -2248,11 +2247,11 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                         line=dict(color="#2ca02c", width=3, dash="solid"),
                         hovertemplate="<b>%{x}</b><br>Sasia Totale: %{y:,.0f} kg<extra></extra>",
                     ),
-                    secondary_y=True,
+                    secondary_y=True,  # SHKON DJATHAS
                 )
 
             # 4. Sasia vetëm DEKA
-            if "🔴 Sasia DEKA (KG)" in serite_e_zgjedhura:
+            if "🔴 Sasia DEKA (KG - Djathtas)" in serite_e_zgjedhura:
                 fig_dinamik.add_trace(
                     go.Scatter(
                         x=df_grafiku["Muaji_Etiketa"],
@@ -2262,42 +2261,41 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                         line=dict(color="#d62728", width=2, dash="dash"),
                         hovertemplate="<b>%{x}</b><br>Sasia DEKA: %{y:,.0f} kg<extra></extra>",
                     ),
-                    secondary_y=True,
+                    secondary_y=True,  # SHKON DJATHAS
                 )
 
             # 5. Sasia vetëm OLIM
-            if "🟡 Sasia OLIM (KG)" in serite_e_zgjedhura:
+            if "🟡 Sasia OLIM (KG - Djathtas)" in serite_e_zgjedhura:
                 fig_dinamik.add_trace(
                     go.Scatter(
                         x=df_grafiku["Muaji_Etiketa"],
                         y=df_grafiku["KG_Olim"],
                         name="🟡 Sasia OLIM (KG)",
                         mode="lines+markers",
-                        line=dict(color="#ffbb78", width=2, dash="dot"),
+                        line=dict(color="#ffbb78", width=2, dash="dashdot"),
                         hovertemplate="<b>%{x}</b><br>Sasia OLIM: %{y:,.0f} kg<extra></extra>",
                     ),
-                    secondary_y=True,
+                    secondary_y=True,  # SHKON DJATHAS
                 )
 
             # --- KONFIGURIMI ESTETIK ---
-            # Kontrollojmë dinamikisht titujt e boshteve në bazë të përzgjedhjeve
-            ka_numra = (
-                "🏪 Klientë Aktivë" in serite_e_zgjedhura
-                or "👤 Agjentë në Terren" in serite_e_zgjedhura
-            )
-            ka_kg = (
-                "📦 Sasia Totale (KG)" in serite_e_zgjedhura
-                or "🔴 Sasia DEKA (KG)" in serite_e_zgjedhura
-                or "🟡 Sasia OLIM (KG)" in serite_e_zgjedhura
+            ka_numra = "🏪 Klientë Aktivë (Shtylla - Majtas)" in serite_e_zgjedhura
+            ka_djathtas = (
+                "👤 Agjentë në Terren (Linjë - Djathtas)" in serite_e_zgjedhura
+                or "📦 Sasia Totale (KG - Djathtas)" in serite_e_zgjedhura
+                or "🔴 Sasia DEKA (KG - Djathtas)" in serite_e_zgjedhura
+                or "🟡 Sasia OLIM (KG - Djathtas)" in serite_e_zgjedhura
             )
 
             fig_dinamik.update_layout(
                 xaxis_title=None,
                 yaxis_title=(
-                    "Numri (Klientë & Agjentë)" if ka_numra else "Numri (Fikur)"
+                    "Numri i Klientëve Unique (Majtas)" if ka_numra else "Numri (Fikur)"
                 ),
                 yaxis2_title=(
-                    "Volumi në KG (Boshti Djathtas)" if ka_kg else "Volumi (Fikur)"
+                    "Metrikat sekondare: Agjentët & KG (Djathtas)"
+                    if ka_djathtas
+                    else "Boshti Sekondar (Fikur)"
                 ),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
@@ -2306,16 +2304,14 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
                 ),
-                barmode="group",
             )
 
-            # Menaxhimi i rrjetave ndihmëse (Grid) sipas aktivizimit
             fig_dinamik.update_yaxes(
                 showgrid=ka_numra, gridcolor="rgba(200,200,200,0.15)", secondary_y=False
             )
             fig_dinamik.update_yaxes(showgrid=False, secondary_y=True)
 
-            # Shfaqja e grafikut
+            # Shfaqja e grafikut të rregulluar
             st.plotly_chart(fig_dinamik, use_container_width=True)
 
             # 6. Shfaqja e Tabelës Kryesore
