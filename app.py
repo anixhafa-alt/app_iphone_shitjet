@@ -2128,7 +2128,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU ME MULTI-BOSHTE DHE SHKALLË LOGARITMIKE OPTION
+            # 5.5 GRAFIKU AVANCUAR ME MULTI-BOSHTE DHE 3 LLOJE SHKALLËZIMI
             # ---------------------------------------------------------
             st.subheader(
                 "📈 Analiza Korelative: Kontroll i Pavarur dhe Shkallëzim Inteligjent"
@@ -2172,6 +2172,9 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             df_grafiku = pd.merge(df_grafiku, df_olim_kg, on="VitiMuaji", how="left")
             df_grafiku.fillna(0, inplace=True)
 
+            # Renditim të dhënat sipas muajit që llogaritjet e përqindjes të jenë kronologjike
+            df_grafiku = df_grafiku.sort_values(by="VitiMuaji").reset_index(drop=True)
+
             # Kthejmë periudhën në etiketë në shqip
             df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
@@ -2211,7 +2214,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             col_b1, col_b2 = st.columns(2)
 
             with col_b1:
-                st.markdown("**📊 Boshti Primar (Majtas - Shtylla):**")
+                st.markdown("**📊 Boshti Primar (Majtas):**")
                 primar_zgjedhur = st.multiselect(
                     label="Zgjidh seritë e majta:",
                     options=list(opsionet_serive.keys()),
@@ -2220,7 +2223,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 )
 
             with col_b2:
-                st.markdown("**📈 Boshti Sekondar (Djathtas - Linja):**")
+                st.markdown("**📈 Boshti Sekondar (Djathtas):**")
                 sekondar_zgjedhur = st.multiselect(
                     label="Zgjidh seritë e djathta:",
                     options=list(opsionet_serive.keys()),
@@ -2228,43 +2231,83 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     label_visibility="collapsed",
                 )
 
-            # --- ZGJIDHJA E SFIDËS: BUTONI PËR SHKALLËN LOGARITMIKE ---
+            # --- MULTI-OPSIONI I RI PËR LLOJIN E SHKALLËZIMIT ---
             st.divider()
-            perdor_log = st.checkbox(
-                "🔬 **Aktivizo Shkallën Logaritmike (Logarithmic Scale)**",
-                value=False,
-                help="Përdoret kur keni vlera shumë të vogla (p.sh. 2 agjentë) dhe shumë të mëdha (p.sh. 100,000 kg) në të njëjtin grafik, që të dyja të bëhen plotësisht të dukshme në të njëjtin nivel vizual.",
+            lloji_shkallezimit = st.radio(
+                "🔬 **Zgjidh Metodën e Shkallëzimit të Grafikut:**",
+                options=[
+                    "Vlera Absolute (Shkallë Lineare standarde)",
+                    "Vlera Absolute (Shkallë Logaritmike - për diferenca të mëdha)",
+                    "Normalizim në % (Çdo seri nistet nga 100% te muaji i parë)",
+                ],
+                index=0,
+                horizontal=True,
             )
+
+            # Përcaktojmë variablat bazuar te zgjedhja e përdoruesit
+            perdor_log = "Logaritmike" in lloji_shkallezimit
+            perdor_pct = "Normalizim" in lloji_shkallezimit
+
+            # --- LOGJIKA E NORMALIZIMIT NË % ---
+            df_vizualizimi = df_grafiku.copy()
+            if perdor_pct and len(df_vizualizimi) > 0:
+                # Marrim vlerat e rreshtit të parë (muaji bazë)
+                rreshti_pare = df_vizualizimi.iloc[0]
+
+                for kategoria, info in opsionet_serive.items():
+                    vlera_baze = rreshti_pare[info["kolona"]]
+                    if vlera_baze > 0:
+                        # Llogarisim përqindjen relative (Vlera / Vlera_Baze * 100)
+                        df_vizualizimi[info["kolona"]] = (
+                            df_vizualizimi[info["kolona"]] / vlera_baze
+                        ) * 100
+                    else:
+                        df_vizualizimi[info["kolona"]] = (
+                            100.0  # Mbrojtje ndaj pjesëtimit me 0
+                        )
 
             # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
             from plotly.subplots import make_subplots
             import plotly.graph_objects as go
 
-            fig_universal = make_subplots(specs=[[{"secondary_y": True}]])
+            # Nëse përdorim normalizimin në %, nuk na duhen dy boshte të ndara pasi të gjitha nisin nga 100%
+            fig_universal = make_subplots(specs=[[{"secondary_y": not perdor_pct}]])
 
-            # 1. SERITË PËR BOSHTIN PRIMAR (MAJTAS)
+            # 1. SERITË PËR BOSHTIN PRIMAR
             for kategoria in primar_zgjedhur:
                 info = opsionet_serive[kategoria]
+
+                # Nëse është normalizim në %, shfaqim vlerën origjinale absolute te hover-i për qartësi
+                custom_hover = (
+                    f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.1f}}%<br>Vlera Reale: %{{customdata:,.0f}}<extra></extra>"
+                    if perdor_pct
+                    else f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>"
+                )
+
                 fig_universal.add_trace(
                     go.Bar(
-                        x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku[info["kolona"]],
-                        name=f"{info['emri']} (Majtas)",
+                        x=df_vizualizimi["Muaji_Etiketa"],
+                        y=df_vizualizimi[info["kolona"]],
+                        customdata=df_grafiku[
+                            info["kolona"]
+                        ],  # Mban të dhënat origjinale pa u ndikuar nga %
+                        name=f"{info['emri']}"
+                        + (" (% )" if perdor_pct else " (Majtas)"),
                         text=(
-                            df_grafiku[info["kolona"]].apply(
+                            df_vizualizimi[info["kolona"]].apply(
                                 lambda x: f"{x:,.0f}" if x > 1000 else f"{x}"
                             )
-                            if not perdor_log
+                            if (not perdor_log and not perdor_pct)
                             else None
-                        ),  # Heqim tekstin statik nëse është logaritmik që mos bëhet rrëmujë
+                        ),
                         textposition="outside",
                         marker_color=info["ngjyra"],
-                        hovertemplate=f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>",
+                        hovertemplate=custom_hover,
                     ),
                     secondary_y=False,
                 )
 
-            # 2. SERITË PËR BOSHTIN SEKONDAR (DJATHTAS)
+            # 2. SERITË PËR BOSHTIN SEKONDAR (Vizatohen vetëm në boshtin e djathtë NËSE nuk është aktiv % dhe nëse janë zgjedhur)
             for kategoria in sekondar_zgjedhur:
                 info = opsionet_serive[kategoria]
                 stili_vijes = "solid"
@@ -2275,37 +2318,54 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 elif "Agjentë" in kategoria:
                     stili_vijes = "dot"
 
+                custom_hover = (
+                    f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.1f}}%<br>Vlera Reale: %{{customdata:,.0f}}<extra></extra>"
+                    if perdor_pct
+                    else f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>"
+                )
+
                 fig_universal.add_trace(
                     go.Scatter(
-                        x=df_grafiku["Muaji_Etiketa"],
-                        y=df_grafiku[info["kolona"]],
-                        name=f"{info['emri']} (Djathtas)",
+                        x=df_vizualizimi["Muaji_Etiketa"],
+                        y=df_vizualizimi[info["kolona"]],
+                        customdata=df_grafiku[
+                            info["kolona"]
+                        ],  # Mban të dhënat origjinale
+                        name=f"{info['emri']}"
+                        + (" (% )" if perdor_pct else " (Djathtas)"),
                         mode="lines+markers",
                         line=dict(color=info["ngjyra"], width=3, dash=stili_vijes),
                         marker=dict(size=8),
-                        hovertemplate=f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>",
+                        hovertemplate=custom_hover,
                     ),
-                    secondary_y=True,
+                    secondary_y=not perdor_pct,  # Nëse është Normalizim %, detyrohet të shkojë në boshtin e vetëm të majtë
                 )
 
-            # --- KONFIGURIMI I TIPIT TË BOSHTIT (LINEAR APO LOGARITMIK) ---
+            # --- KONFIGURIMI I TIPIT TË BOSHTIT ---
             lloji_boshtit = "log" if perdor_log else "linear"
 
-            titulli_majtas = (
-                ", ".join(primar_zgjedhur) if primar_zgjedhur else "Boshti i Majtë"
-            )
-            titulli_djathtas = (
-                ", ".join(sekondar_zgjedhur)
-                if sekondar_zgjedhur
-                else "Boshti i Djathtë"
-            )
+            # Ndryshojmë titujt e boshteve sipas logjikës së zgjedhur
+            if perdor_pct:
+                titulli_majtas = "Ecuria Relative (%) - Nisja nga 100%"
+                titulli_djathtas = ""
+            else:
+                titulli_majtas = (
+                    ", ".join(primar_zgjedhur) if primar_zgjedhur else "Boshti i Majtë"
+                )
+                if perdor_log:
+                    titulli_majtas += " (Shkallë LOG)"
+                titulli_djathtas = (
+                    ", ".join(sekondar_zgjedhur)
+                    if sekondar_zgjedhur
+                    else "Boshti i Djathtë"
+                )
+                if perdor_log:
+                    titulli_djathtas += " (Shkallë LOG)"
 
             fig_universal.update_layout(
                 xaxis_title=None,
-                yaxis_title=f"⬅️ {titulli_majtas} "
-                + ("(Shkallë LOG)" if perdor_log else ""),
-                yaxis2_title=f"{titulli_djathtas} ➡️"
-                + ("(Shkallë LOG)" if perdor_log else ""),
+                yaxis_title=f"⬅️ {titulli_majtas}",
+                yaxis2_title=f"{titulli_djathtas} ➡️" if not perdor_pct else None,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=20, r=20, t=30, b=20),
@@ -2316,18 +2376,19 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 barmode="group",
             )
 
-            # Aplikojmë tipin e boshtit në të dy anët nëse çeku është aktiv
+            # Aplikojmë rregullat e boshteve vertikale
             fig_universal.update_yaxes(
                 type=lloji_boshtit,
-                showgrid=bool(primar_zgjedhur),
+                showgrid=bool(primar_zgjedhur or perdor_pct),
                 gridcolor="rgba(200,200,200,0.15)",
                 secondary_y=False,
             )
-            fig_universal.update_yaxes(
-                type=lloji_boshtit, showgrid=False, secondary_y=True
-            )
+            if not perdor_pct:
+                fig_universal.update_yaxes(
+                    type=lloji_boshtit, showgrid=False, secondary_y=True
+                )
 
-            # Shfaqja e grafikut
+            # Shfaqja e grafikut final universal
             if primar_zgjedhur or sekondar_zgjedhur:
                 st.plotly_chart(fig_universal, use_container_width=True)
             else:
