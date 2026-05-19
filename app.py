@@ -2128,7 +2128,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU AVANCUAR: ECURIA E KLIENTËVE, AGJENTËVE DHE VOLUMIT (KG)
+            # 5.5 GRAFIKU DINAMIK: ECURIA E KLIENTËVE, AGJENTËVE DHE VOLUMIT (KG)
             # ---------------------------------------------------------
             st.subheader(
                 "📈 Analiza Korelative: Klientët, Agjentët dhe Volumi sipas Grupeve"
@@ -2166,28 +2166,38 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 .rename(columns={"kg": "KG_Olim"})
             )
 
-            # Bashkojmë të gjitha të dhënat në një DataFrame të vetëm për grafikun
+            # Bashkojmë të dhënat në një DataFrame të vetëm
             df_grafiku = pd.merge(df_baze, df_total_kg, on="VitiMuaji", how="left")
             df_grafiku = pd.merge(df_grafiku, df_deka_kg, on="VitiMuaji", how="left")
             df_grafiku = pd.merge(df_grafiku, df_olim_kg, on="VitiMuaji", how="left")
-
-            # Mbushim vlerat NaN me 0 nëse në ndonjë muaj nuk ka pasur shitje për një grup
             df_grafiku.fillna(0, inplace=True)
 
-            # Kthejmë periudhën në etiketë në shqip (shfaqet në boshtin X)
+            # Kthejmë periudhën në etiketë në shqip
             df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
+            )
+
+            # --- SELEKTORI DINAMIK PËR BRANDET / SASITË ---
+            st.markdown(
+                "**🎯 Zgjidh cilat seri të volumit (KG) dëshiron të shfaqësh në linjë:**"
+            )
+            serite_e_zgjedhura = st.multiselect(
+                label="Filtro Seritë e KG:",
+                options=["Sasia Totale", "Sasia DEKA", "Sasia OLIM"],
+                default=[
+                    "Sasia Totale"
+                ],  # Si default shfaqet vetëm sasia totale që grafiku të jetë i pastër
+                label_visibility="collapsed",
             )
 
             # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
             from plotly.subplots import make_subplots
             import plotly.graph_objects as go
 
-            # Krijojmë strukturën me bosht dytësor
-            fig_avancuar = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_dinamik = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # SERIA 1: Numri i Klientëve Aktivë (Kollonë - Boshti i Majtë)
-            fig_avancuar.add_trace(
+            # SERIA VETËM: Numri i Klientëve Aktivë (Kollonë - Boshti i Majtë) - Gjithmonë Aktiv
+            fig_dinamik.add_trace(
                 go.Bar(
                     x=df_grafiku["Muaji_Etiketa"],
                     y=df_grafiku["Kliente_Aktive"],
@@ -2200,8 +2210,8 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 secondary_y=False,
             )
 
-            # SERIA 2: Numri i Agjentëve (Kollonë - Boshti i Majtë)
-            fig_avancuar.add_trace(
+            # SERIA VETËM: Numri i Agjentëve (Kollonë - Boshti i Majtë) - Gjithmonë Aktiv
+            fig_dinamik.add_trace(
                 go.Bar(
                     x=df_grafiku["Muaji_Etiketa"],
                     y=df_grafiku["Nr_Agjenteve"],
@@ -2214,74 +2224,73 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 secondary_y=False,
             )
 
-            # SERIA 3: Sasia Totale KG (Linjë - Boshti i Djathtë)
-            fig_avancuar.add_trace(
-                go.Scatter(
-                    x=df_grafiku["Muaji_Etiketa"],
-                    y=df_grafiku["KG_Total"],
-                    name="📦 Sasia Totale (KG)",
-                    mode="lines+markers",
-                    line=dict(
-                        color="#2ca02c", width=3, dash="solid"
-                    ),  # Linjë e trashë e plotë jeshile
-                    hovertemplate="<b>%{x}</b><br>Sasia Totale: %{y:,.0f} kg<extra></extra>",
-                ),
-                secondary_y=True,
-            )
+            # --- KONTROLLI DINAMIK I LINJAVE (BOSHTI I DJATHTË) ---
 
-            # SERIA 4: Sasia vetëm DEKA (Linjë - Boshti i Djathtë)
-            fig_avancuar.add_trace(
-                go.Scatter(
-                    x=df_grafiku["Muaji_Etiketa"],
-                    y=df_grafiku["KG_Deka"],
-                    name="🔴 Sasia DEKA (KG)",
-                    mode="lines+markers",
-                    line=dict(
-                        color="#d62728", width=2, dash="dash"
-                    ),  # Linjë e ndërprerë e kuqe
-                    hovertemplate="<b>%{x}</b><br>Sasia DEKA: %{y:,.0f} kg<extra></extra>",
-                ),
-                secondary_y=True,
-            )
+            if "Sasia Totale" in serite_e_zgjedhura:
+                fig_dinamik.add_trace(
+                    go.Scatter(
+                        x=df_grafiku["Muaji_Etiketa"],
+                        y=df_grafiku["KG_Total"],
+                        name="📦 Sasia Totale (KG)",
+                        mode="lines+markers",
+                        line=dict(color="#2ca02c", width=3, dash="solid"),
+                        hovertemplate="<b>%{x}</b><br>Sasia Totale: %{y:,.0f} kg<extra></extra>",
+                    ),
+                    secondary_y=True,
+                )
 
-            # SERIA 5: Sasia vetëm OLIM (Linjë - Boshti i Djathtë)
-            fig_avancuar.add_trace(
-                go.Scatter(
-                    x=df_grafiku["Muaji_Etiketa"],
-                    y=df_grafiku["KG_Olim"],
-                    name="🟡 Sasia OLIM (KG)",
-                    mode="lines+markers",
-                    line=dict(
-                        color="#ffbb78", width=2, dash="dot"
-                    ),  # Linjë me pika e verdhë/portokalli
-                    hovertemplate="<b>%{x}</b><br>Sasia OLIM: %{y:,.0f} kg<extra></extra>",
-                ),
-                secondary_y=True,
-            )
+            if "Sasia DEKA" in serite_e_zgjedhura:
+                fig_dinamik.add_trace(
+                    go.Scatter(
+                        x=df_grafiku["Muaji_Etiketa"],
+                        y=df_grafiku["KG_Deka"],
+                        name="🔴 Sasia DEKA (KG)",
+                        mode="lines+markers",
+                        line=dict(color="#d62728", width=2, dash="dash"),
+                        hovertemplate="<b>%{x}</b><br>Sasia DEKA: %{y:,.0f} kg<extra></extra>",
+                    ),
+                    secondary_y=True,
+                )
 
-            # --- KONFIGURIMI ESTETIK DHE FORMATIMI ---
-            fig_avancuar.update_layout(
+            if "Sasia OLIM" in serite_e_zgjedhura:
+                fig_dinamik.add_trace(
+                    go.Scatter(
+                        x=df_grafiku["Muaji_Etiketa"],
+                        y=df_grafiku["KG_Olim"],
+                        name="🟡 Sasia OLIM (KG)",
+                        mode="lines+markers",
+                        line=dict(color="#ffbb78", width=2, dash="dot"),
+                        hovertemplate="<b>%{x}</b><br>Sasia OLIM: %{y:,.0f} kg<extra></extra>",
+                    ),
+                    secondary_y=True,
+                )
+
+            # --- KONFIGURIMI ESTETIK ---
+            fig_dinamik.update_layout(
                 xaxis_title=None,
                 yaxis_title="Numri (Klientë & Agjentë)",
-                yaxis2_title="Volumi në KG (Total / DEKA / OLIM)",
+                yaxis2_title=(
+                    "Volumi në KG (Boshti Djathtas)"
+                    if serite_e_zgjedhura
+                    else "Volumi (Nuk u zgjodh asnjë seri)"
+                ),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=20, r=20, t=30, b=20),
                 height=450,
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
-                ),  # Legjenda e vendosur në qendër lart në mënyrë horizontale
-                barmode="group",  # Vendos kolonat e klientëve dhe agjentëve krah për krah
+                ),
+                barmode="group",
             )
 
-            # Menaxhimi i rrjetës ndihmëse (Grid) që grafiku të jetë i pastër
-            fig_avancuar.update_yaxes(
+            fig_dinamik.update_yaxes(
                 showgrid=True, gridcolor="rgba(200,200,200,0.15)", secondary_y=False
             )
-            fig_avancuar.update_yaxes(showgrid=False, secondary_y=True)
+            fig_dinamik.update_yaxes(showgrid=False, secondary_y=True)
 
-            # Shfaqja e grafikut të ri shumë-dimensional
-            st.plotly_chart(fig_avancuar, use_container_width=True)
+            # Shfaqja e grafikut
+            st.plotly_chart(fig_dinamik, use_container_width=True)
 
             # 6. Shfaqja e Tabelës Kryesore
             st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
