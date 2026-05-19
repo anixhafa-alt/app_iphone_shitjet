@@ -2344,28 +2344,9 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             # --- KONFIGURIMI I TIPIT TË BOSHTIT ---
             lloji_boshtit = "log" if perdor_log else "linear"
 
-            # Ndryshojmë titujt e boshteve sipas logjikës së zgjedhur
-            if perdor_pct:
-                titulli_majtas = "Ecuria Relative (%) - Nisja nga 100%"
-                titulli_djathtas = ""
-            else:
-                titulli_majtas = (
-                    ", ".join(primar_zgjedhur) if primar_zgjedhur else "Boshti i Majtë"
-                )
-                if perdor_log:
-                    titulli_majtas += " (Shkallë LOG)"
-                titulli_djathtas = (
-                    ", ".join(sekondar_zgjedhur)
-                    if sekondar_zgjedhur
-                    else "Boshti i Djathtë"
-                )
-                if perdor_log:
-                    titulli_djathtas += " (Shkallë LOG)"
-
+            # 1. Konfigurimi i Layout-it Bazë (pa përfshirë titujt e boshteve këtu)
             fig_universal.update_layout(
                 xaxis_title=None,
-                yaxis_title=f"⬅️ {titulli_majtas}",
-                yaxis2_title=f"{titulli_djathtas} ➡️" if not perdor_pct else None,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=20, r=20, t=30, b=20),
@@ -2376,17 +2357,44 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 barmode="group",
             )
 
-            # Aplikojmë rregullat e boshteve vertikale
-            fig_universal.update_yaxes(
-                type=lloji_boshtit,
-                showgrid=bool(primar_zgjedhur or perdor_pct),
-                gridcolor="rgba(200,200,200,0.15)",
-                secondary_y=False,
-            )
-            if not perdor_pct:
+            # 2. Përditësimi i Boshteve në mënyrë të sigurt (Dinamike)
+            if perdor_pct:
+                # Nëse është % ka vetëm një bosht (Y1)
                 fig_universal.update_yaxes(
-                    type=lloji_boshtit, showgrid=False, secondary_y=True
+                    title_text="⬅️ Ecuria Relative (%) - Nisja nga 100%",
+                    type=lloji_boshtit,
+                    showgrid=bool(primar_zgjedhur),
+                    gridcolor="rgba(200,200,200,0.15)",
+                    secondary_y=False,
                 )
+            else:
+                # Nëse janë vlerat absolute, përditësojmë Boshtin 1 (Majtas)
+                titulli_majtas = (
+                    ", ".join(primar_zgjedhur) if primar_zgjedhur else "Boshti i Majtë"
+                )
+                if perdor_log:
+                    titulli_majtas += " (Shkallë LOG)"
+
+                fig_universal.update_yaxes(
+                    title_text=f"⬅️ {titulli_majtas}",
+                    type=lloji_boshtit,
+                    showgrid=bool(primar_zgjedhur),
+                    gridcolor="rgba(200,200,200,0.15)",
+                    secondary_y=False,
+                )
+
+                # Përditësojmë Boshtin 2 (Djathtas) vetëm nëse ka seritë e zgjedhura
+                if sekondar_zgjedhur:
+                    titulli_djathtas = ", ".join(sekondar_zgjedhur)
+                    if perdor_log:
+                        titulli_djathtas += " (Shkallë LOG)"
+
+                    fig_universal.update_yaxes(
+                        title_text=f"{titulli_djathtas} ➡️",
+                        type=lloji_boshtit,
+                        showgrid=False,
+                        secondary_y=True,
+                    )
 
             # Shfaqja e grafikut final universal
             if primar_zgjedhur or sekondar_zgjedhur:
