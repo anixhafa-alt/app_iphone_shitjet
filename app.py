@@ -117,6 +117,25 @@ st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=Tru
 # =========================================================
 # 4. NAVIGIMI (PANEL KONTROLLI)
 # region ==================================================
+# --- SHTIMI I MENUSË ANËSORE ---
+def shfaq_modulin_planifikimit(df_sql):
+    st.title("🎯 Moduli i Planifikimit të Shitjeve")
+    st.markdown(
+        "Ndërto planin e ri të shitjeve duke kombinuar kapacitetin e klientit (Periudha A) me strukturën e produktit (Periudha B)."
+    )
+
+
+opsioni = st.sidebar.radio(
+    "📊 Menaxhimi i Aplikacionit",
+    ["📈 Analiza e Shitjeve (Ekzistuese)", "🎯 Moduli i Planifikimit të Shitjeve"],
+)
+
+if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
+    # Thërrasim funksionin e ri të planit (Kodin që të dërgova në përgjigjen e kaluar)
+    # Shënim: Sigurohu që funksioni 'shfaq_modulin_planifikimit' të jetë i deklaruar më lart ose i importuar
+    shfaq_modulin_planifikimit(df_sql)
+
+
 st.sidebar.markdown(
     """
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
@@ -2468,28 +2487,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     "🟢 Nuk u gjet asnjë kod klienti i furnizuar nga më shumë se një agjent për këtë periudhë."
                 )
 
-# endregion
-
-
-opsioni = st.sidebar.radio("Navigimi", ["Analiza e Shitjeve", "Moduli i Planifikimit"])
-
-if opsioni == "Analiza e Shitjeve":
-    # Kodi ekzistues me grafikun dinamik që rregulluam më parë
-    shfaq_analizen_ekzistuese()
-elif opsioni == "Moduli i Planifikimit":
-    # Thirrja e funksionit të ri që të dërgova më lart
-    shfaq_modulin_planifikimit(df_sql_origjinale)
-
-    import streamlit as st
-import pandas as pd
-import numpy as np
-
-
-def shfaq_modulin_planifikimit(df_sql):
-    st.title("🎯 Moduli i Planifikimit të Shitjeve")
-    st.markdown(
-        "Ndërto planin e ri të shitjeve duke kombinuar kapacitetin e klientit (Periudha A) me strukturën e produktit (Periudha B)."
-    )
+    # endregion
 
     # =========================================================================
     # 1. NGARKIMI I STRUKTURËS NGA EXCEL
