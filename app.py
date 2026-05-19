@@ -96,8 +96,8 @@ st.sidebar.markdown(
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
         color: #566573 !important;
-        text-align: left;
-        margin-top: -30px !important;
+        text-align: 10px left;
+        margin-top: -55px !important;
         margin-bottom: 20px !important;
         letter-spacing: 1px;
         font-weight: 500;
