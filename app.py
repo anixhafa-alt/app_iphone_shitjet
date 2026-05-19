@@ -2126,7 +2126,7 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 label="💰 Vlera në Konflikt",
                 value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
             )
-
+st.divider()
             # ---------------------------------------------------------
             # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
             # ---------------------------------------------------------
