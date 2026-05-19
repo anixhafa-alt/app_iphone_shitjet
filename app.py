@@ -97,7 +97,7 @@ st.sidebar.markdown(
         font-size: 12px !important;
         color: #566573 !important;
         text-align: left;
-        margin-top: -150px !important;
+        margin-top: -110px !important;
         margin-bottom: 20px !important;
         letter-spacing: 1px;
         font-weight: 500;
