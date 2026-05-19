@@ -349,39 +349,20 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
         "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar në mix-in e ri të shitjeve nga **Periudha B**."
     )
 
-    try:
-        df_p = pd.read_excel("produkte+.xlsx", sheet_name="produktet")
-        df_k = pd.read_excel("produkte+.xlsx", sheet_name="kat_prod")
-        df_p.columns = df_p.columns.str.strip()
-        df_k.columns = df_k.columns.str.strip()
-        df_struktura_nominale = pd.merge(
-            df_p, df_k, left_on="KATEG.", right_on="KOD KAT", how="left"
-        )
-        df_struktura_nominale["KODI"] = (
-            df_struktura_nominale["KODI"].astype(str).str.strip()
-        )
-    except Exception as e:
-        st.error(
-            f"❌ Gabim në leximin e strukturës së produkteve 'produkte+.xlsx': {e}"
-        )
-        return
-
+    # Meqenëse df_raw i ka të gatshme kolonat 'kat' dhe 'kg' nga fillimi i app.py, punojmë direkt me to
     df_proc = df_baze_sales.copy()
+
+    # Sigurohemi që kolonat kyçe të mos kenë hapësira dhe të jenë string
     df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
-    df_proc = pd.merge(
-        df_proc,
-        df_struktura_nominale[["KODI", "EMRI KAT", "KG/SKU"]],
-        left_on="KodiArt",
-        right_on="KODI",
-        how="left",
-    )
-    df_proc["EMRI KAT"] = df_proc["EMRI KAT"].fillna("Pa Kategori")
-    df_proc["kg"] = df_proc["Sasia"] * df_proc["KG/SKU"].fillna(0)
+    df_proc["KodiKlient"] = df_proc["KodiKlient"].astype(str).str.strip()
+    df_proc["kat"] = df_proc["kat"].fillna("Pa Kategori")
     df_proc["VitiMuaji"] = df_proc["Data"].dt.to_period("M")
 
+    # Gjejmë datat kufizuese live nga të dhëna
     min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
     max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
 
+    # Paneli i përzgjedhjes së dy periudhave referente
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("📅 Periudha A (Kapaciteti i Klientit)")
@@ -424,71 +405,75 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 )
                 return
 
+            # FAZA 1: Volumi dhe Mesatarja e Klientit për Kategori ('kat') në Periudhën A
             muaj_unike_A = df_A["VitiMuaji"].nunique()
             nr_muajve_A = muaj_unike_A if muaj_unike_A > 0 else 1
 
             df_klient_A = (
-                df_A.groupby(["KodiKlient", "Klienti", "EMRI KAT"])["kg"]
-                .sum()
-                .reset_index()
+                df_A.groupby(["KodiKlient", "Klienti", "kat"])["kg"].sum().reset_index()
             )
             df_klient_A["Mesatare_KG_Kategori"] = df_klient_A["kg"] / nr_muajve_A
             df_klient_A = df_klient_A.drop(columns=["kg"])
 
+            # FAZA 2: Mix-i i shitjeve të artikujve në Periudhën B brenda kategorisë ('kat')
             tot_kat_B = (
-                df_B.groupby("EMRI KAT")["kg"]
+                df_B.groupby("kat")["kg"]
                 .sum()
                 .reset_index()
                 .rename(columns={"kg": "Tot_Kat_B"})
             )
             tot_art_B = (
-                df_B.groupby(["EMRI KAT", "KodiArt", "Artikulli"])["kg"]
+                df_B.groupby(["kat", "KodiArt", "Artikulli"])["kg"]
                 .sum()
                 .reset_index()
                 .rename(columns={"kg": "Tot_Art_B"})
             )
 
-            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="EMRI KAT")
+            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="kat")
             df_mix_B["Pesha_Artikullit"] = np.where(
                 df_mix_B["Tot_Kat_B"] > 0,
                 df_mix_B["Tot_Art_B"] / df_mix_B["Tot_Kat_B"],
                 0,
             )
-            df_mix_B = df_mix_B[
-                ["EMRI KAT", "KodiArt", "Artikulli", "Pesha_Artikullit"]
-            ]
+            df_mix_B = df_mix_B[["kat", "KodiArt", "Artikulli", "Pesha_Artikullit"]]
 
-            df_plani = pd.merge(df_klient_A, df_mix_B, on="EMRI KAT", how="inner")
+            # FAZA 3: Kombinimi Matematik i Planit final
+            df_plani = pd.merge(df_klient_A, df_mix_B, on="kat", how="inner")
             df_plani["Plani_KG"] = (
                 df_plani["Mesatare_KG_Kategori"] * df_plani["Pesha_Artikullit"]
             )
 
-            df_peshat = (
-                df_struktura_nominale[["KODI", "KG/SKU"]]
-                .drop_duplicates()
-                .rename(columns={"KODI": "KodiArt"})
-            )
-            df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
-            df_plani["Plani_Cope"] = np.where(
-                df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
-            )
+            # Konvertimi i KG në Copa sipas peshës nominale duke përdorur kolonën ekzistuese KG/SKU
+            try:
+                df_peshat = df_proc[["KodiArt", "KG/SKU"]].drop_duplicates()
+                df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
+                df_plani["Plani_Cope"] = np.where(
+                    df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
+                )
+            except Exception:
+                df_plani["Plani_Cope"] = (
+                    0  # Nëse s'gjendet kolona e peshës, vendoset 0 për siguri
+                )
 
+            # Tabela Finale e strukturuar pastër
             tabela_finale = (
                 df_plani[
                     [
                         "KodiKlient",
                         "Klienti",
-                        "EMRI KAT",
+                        "kat",
                         "KodiArt",
                         "Artikulli",
                         "Plani_KG",
                         "Plani_Cope",
                     ]
                 ]
-                .sort_values(by=["Klienti", "EMRI KAT"])
+                .rename(columns={"kat": "Kategoria"})
+                .sort_values(by=["Klienti", "Kategoria"])
                 .reset_index(drop=True)
             )
 
+            # Afishimi i metrikave përmbledhëse
             st.success("✅ Plani i ri u kalkulua me sukses!")
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Plani (KG)", f"{tabela_finale['Plani_KG'].sum():,.1f} kg")
@@ -501,6 +486,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 
             st.dataframe(tabela_finale, use_container_width=True)
 
+            # Eksporti direkt në Excel pa bllokuar memorien
             import io
 
             out = io.BytesIO()
