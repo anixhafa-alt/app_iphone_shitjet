@@ -96,7 +96,7 @@ st.sidebar.markdown(
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
         color: #566573 !important;
-        text-align: "   " left;
+        text-align: left;
         margin-top: -60px !important;
         margin-bottom: 20px !important;
         letter-spacing: 1px;
@@ -107,7 +107,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=True)
+st.sidebar.markdown('<p class="version-text">    v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
 
