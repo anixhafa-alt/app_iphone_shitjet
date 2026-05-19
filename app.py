@@ -2341,15 +2341,215 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     secondary_y=not perdor_pct,  # Nëse është Normalizim %, detyrohet të shkojë në boshtin e vetëm të majtë
                 )
 
+            # ---------------------------------------------------------
+            # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
+            # ---------------------------------------------------------
+
+            # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
+            df_baze = (
+                df_filtri.groupby("VitiMuaji")
+                .agg(
+                    Kliente_Aktive=("KodiKlient", "nunique"),
+                    Nr_Agjenteve=("ForcaShitese", "nunique"),
+                )
+                .reset_index()
+            )
+
+            # 2. Agregimi për sasinë totale, vetëm DEKA dhe vetëm OLIM
+            df_total_kg = (
+                df_filtri.groupby("VitiMuaji")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "KG_Total"})
+            )
+            df_deka_kg = (
+                df_filtri[df_filtri["Grup_Filtri"] == "DEKA"]
+                .groupby("VitiMuaji")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "KG_Deka"})
+            )
+            df_olim_kg = (
+                df_filtri[df_filtri["Grup_Filtri"] == "OLIM"]
+                .groupby("VitiMuaji")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "KG_Olim"})
+            )
+
+            # Bashkojmë të gjitha të dhënat në një DataFrame të vetëm
+            df_grafiku = pd.merge(df_baze, df_total_kg, on="VitiMuaji", how="left")
+            df_grafiku = pd.merge(df_grafiku, df_deka_kg, on="VitiMuaji", how="left")
+            df_grafiku = pd.merge(df_grafiku, df_olim_kg, on="VitiMuaji", how="left")
+            df_grafiku.fillna(0, inplace=True)
+
+            # Renditim të dhënat sipas muajit
+            df_grafiku = df_grafiku.sort_values(by="VitiMuaji").reset_index(drop=True)
+
+            # Kthejmë periudhën në etiketë në shqip
+            df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
+                lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
+            )
+
+            # --- PANEL KONTROLLI I DYFISHTË (I PASTRUAR NGA TEKSTET) ---
+            # Ndryshuar emërtimi në 'Agjentë Aktivë'
+            opsionet_serive = {
+                "Klientë Aktivë": {
+                    "kolona": "Kliente_Aktive",
+                    "emri": "🏪 Klientë Aktivë",
+                    "ngjyra": "#1f77b4",
+                },
+                "Agjentë Aktivë": {
+                    "kolona": "Nr_Agjenteve",
+                    "emri": "👤 Agjentë Aktivë",
+                    "ngjyra": "#aec7e8",
+                },
+                "Sasia Totale (KG)": {
+                    "kolona": "KG_Total",
+                    "emri": "📦 Sasia Totale (KG)",
+                    "ngjyra": "#2ca02c",
+                },
+                "Sasia DEKA (KG)": {
+                    "kolona": "KG_Deka",
+                    "emri": "🔴 Sasia DEKA (KG)",
+                    "ngjyra": "#d62728",
+                },
+                "Sasia OLIM (KG)": {
+                    "kolona": "KG_Olim",
+                    "emri": "🟡 Sasia OLIM (KG)",
+                    "ngjyra": "#ffbb78",
+                },
+            }
+
+            col_b1, col_b2 = st.columns(2)
+
+            with col_b1:
+                primar_zgjedhur = st.multiselect(
+                    label="Zgjidh seritë e majta:",
+                    options=list(opsionet_serive.keys()),
+                    default=[
+                        "Agjentë Aktivë"
+                    ],  # Vendosur si default i ri sipas screenshot-it tënd
+                    label_visibility="collapsed",
+                )
+
+            with col_b2:
+                sekondar_zgjedhur = st.multiselect(
+                    label="Zgjidh seritë e djathta:",
+                    options=list(opsionet_serive.keys()),
+                    default=[
+                        "Sasia Totale (KG)"
+                    ],  # Vendosur si default i ri sipas screenshot-it tënd
+                    label_visibility="collapsed",
+                )
+
+            # --- MULTI-OPSIONI I SHKALLËZIMIT (I PASTRUAR NGA DIVIDER DHE TITULLI) ---
+            lloji_shkallezimit = st.radio(
+                label="Lloji i Shkallëzimit:",
+                options=[
+                    "Vlera Absolute (Shkallë Lineare standarde)",
+                    "Vlera Absolute (Shkallë Logaritmike - për diferenca të mëdha)",
+                    "Normalizim në % (Çdo seri nistet nga 100% te muaji i parë)",
+                ],
+                index=0,
+                horizontal=True,
+                label_visibility="collapsed",  # Fsheh titullin e radio button-it
+            )
+
+            perdor_log = "Logaritmike" in lloji_shkallezimit
+            perdor_pct = "Normalizim" in lloji_shkallezimit
+
+            # --- LOGJIKA E NORMALIZIMIT NË % ---
+            df_vizualizimi = df_grafiku.copy()
+            if perdor_pct and len(df_vizualizimi) > 0:
+                rreshti_pare = df_vizualizimi.iloc[0]
+                for kategoria, info in opsionet_serive.items():
+                    vlera_baze = rreshti_pare[info["kolona"]]
+                    if vlera_baze > 0:
+                        df_vizualizimi[info["kolona"]] = (
+                            df_vizualizimi[info["kolona"]] / vlera_baze
+                        ) * 100
+                    else:
+                        df_vizualizimi[info["kolona"]] = 100.0
+
+            # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
+            from plotly.subplots import make_subplots
+            import plotly.graph_objects as go
+
+            fig_universal = make_subplots(specs=[[{"secondary_y": not perdor_pct}]])
+
+            # 1. SERITË PËR BOSHTIN PRIMAR (MAJTAS)
+            for kategoria in primar_zgjedhur:
+                info = opsionet_serive[kategoria]
+                custom_hover = (
+                    f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.1f}}%<br>Vlera Reale: %{{customdata:,.0f}}<extra></extra>"
+                    if perdor_pct
+                    else f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>"
+                )
+
+                fig_universal.add_trace(
+                    go.Bar(
+                        x=df_vizualizimi["Muaji_Etiketa"],
+                        y=df_vizualizimi[info["kolona"]],
+                        customdata=df_grafiku[info["kolona"]],
+                        name=f"{info['emri']}"
+                        + (" (% )" if perdor_pct else " (Majtas)"),
+                        text=(
+                            df_vizualizimi[info["kolona"]].apply(
+                                lambda x: f"{x:,.0f}" if x > 1000 else f"{x}"
+                            )
+                            if (not perdor_log and not perdor_pct)
+                            else None
+                        ),
+                        textposition="outside",
+                        marker_color=info["ngjyra"],
+                        hovertemplate=custom_hover,
+                    ),
+                    secondary_y=False,
+                )
+
+            # 2. SERITË PËR BOSHTIN SEKONDAR (DJATHTAS)
+            for kategoria in sekondar_zgjedhur:
+                info = opsionet_serive[kategoria]
+                stili_vijes = "solid"
+                if "DEKA" in kategoria:
+                    stili_vijes = "dash"
+                elif "OLIM" in kategoria:
+                    stili_vijes = "dashdot"
+                elif "Aktivë" in kategoria or "Agjentë" in kategoria:
+                    stili_vijes = "dot"
+
+                custom_hover = (
+                    f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.1f}}%<br>Vlera Reale: %{{customdata:,.0f}}<extra></extra>"
+                    if perdor_pct
+                    else f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>"
+                )
+
+                fig_universal.add_trace(
+                    go.Scatter(
+                        x=df_vizualizimi["Muaji_Etiketa"],
+                        y=df_vizualizimi[info["kolona"]],
+                        customdata=df_grafiku[info["kolona"]],
+                        name=f"{info['emri']}"
+                        + (" (% )" if perdor_pct else " (Djathtas)"),
+                        mode="lines+markers",
+                        line=dict(color=info["ngjyra"], width=3, dash=stili_vijes),
+                        marker=dict(size=8),
+                        hovertemplate=custom_hover,
+                    ),
+                    secondary_y=not perdor_pct,
+                )
+
             # --- KONFIGURIMI I TIPIT TË BOSHTIT ---
             lloji_boshtit = "log" if perdor_log else "linear"
 
-            # 1. Konfigurimi i Layout-it Bazë (pa përfshirë titujt e boshteve këtu)
             fig_universal.update_layout(
                 xaxis_title=None,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=20, r=20, t=30, b=20),
+                margin=dict(
+                    l=20, r=20, t=10, b=20
+                ),  # Ulur marzhi lart pasi hoqëm titujt
                 height=480,
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
@@ -2357,46 +2557,35 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 barmode="group",
             )
 
-            # 2. Përditësimi i Boshteve në mënyrë të sigurt (Dinamike)
+            # Përditësimi i boshteve dhe emërtimeve anësore
             if perdor_pct:
-                # Nëse është % ka vetëm një bosht (Y1)
                 fig_universal.update_yaxes(
-                    title_text="⬅️ Ecuria Relative (%) - Nisja nga 100%",
+                    title_text="Ecuria Relative (%)",
                     type=lloji_boshtit,
                     showgrid=bool(primar_zgjedhur),
                     gridcolor="rgba(200,200,200,0.15)",
                     secondary_y=False,
                 )
             else:
-                # Nëse janë vlerat absolute, përditësojmë Boshtin 1 (Majtas)
-                titulli_majtas = (
-                    ", ".join(primar_zgjedhur) if primar_zgjedhur else "Boshti i Majtë"
-                )
-                if perdor_log:
-                    titulli_majtas += " (Shkallë LOG)"
-
+                titulli_majtas = ", ".join(primar_zgjedhur) if primar_zgjedhur else ""
                 fig_universal.update_yaxes(
-                    title_text=f"⬅️ {titulli_majtas}",
+                    title_text=titulli_majtas,
                     type=lloji_boshtit,
                     showgrid=bool(primar_zgjedhur),
                     gridcolor="rgba(200,200,200,0.15)",
                     secondary_y=False,
                 )
 
-                # Përditësojmë Boshtin 2 (Djathtas) vetëm nëse ka seritë e zgjedhura
                 if sekondar_zgjedhur:
                     titulli_djathtas = ", ".join(sekondar_zgjedhur)
-                    if perdor_log:
-                        titulli_djathtas += " (Shkallë LOG)"
-
                     fig_universal.update_yaxes(
-                        title_text=f"{titulli_djathtas} ➡️",
+                        title_text=titulli_djathtas,
                         type=lloji_boshtit,
                         showgrid=False,
                         secondary_y=True,
                     )
 
-            # Shfaqja e grafikut final universal
+            # Shfaqja e grafikut final
             if primar_zgjedhur or sekondar_zgjedhur:
                 st.plotly_chart(fig_universal, use_container_width=True)
             else:
