@@ -125,15 +125,16 @@ def shfaq_modulin_planifikimit(df_sql):
     )
 
 
+# Sigurohu që asnjëra nga këto linja të mos ketë hapësirë bosh në fillim:
+
 opsioni = st.sidebar.radio(
     "📊 Menaxhimi i Aplikacionit",
-    ["📈 Analiza e Shitjeve (Ekzistuese)", "🎯 Moduli i Planifikimit të Shitjeve"],
+    ["📈 Analiza e Shitjeve", "🎯 Moduli i Planifikimit të Shitjeve"],
 )
 
 if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
-    # Thërrasim funksionin e ri të planit (Kodin që të dërgova në përgjigjen e kaluar)
-    # Shënim: Sigurohu që funksioni 'shfaq_modulin_planifikimit' të jetë i deklaruar më lart ose i importuar
     shfaq_modulin_planifikimit(df_sql)
+    st.stop()
 
 
 st.sidebar.markdown(
@@ -2145,16 +2146,6 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 label="💰 Vlera në Konflikt",
                 value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
             )
-# Sigurohu që asnjëra nga këto linja të mos ketë hapësirë bosh në fillim:
-
-opsioni = st.sidebar.radio(
-    "📊 Menaxhimi i Aplikacionit", 
-    ["📈 Analiza e Shitjeve", "🎯 Moduli i Planifikimit të Shitjeve"]
-)
-
-if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
-    shfaq_modulin_planifikimit(df_sql)
-    st.stop()
 
             # ---------------------------------------------------------
             # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
