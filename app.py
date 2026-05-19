@@ -117,26 +117,6 @@ st.sidebar.markdown('<p class="version-text">v.1.1.0</p>', unsafe_allow_html=Tru
 # =========================================================
 # 4. NAVIGIMI (PANEL KONTROLLI)
 # region ==================================================
-# --- SHTIMI I MENUSË ANËSORE ---
-def shfaq_modulin_planifikimit(df_sql):
-    st.title("🎯 Moduli i Planifikimit të Shitjeve")
-    st.markdown(
-        "Ndërto planin e ri të shitjeve duke kombinuar kapacitetin e klientit (Periudha A) me strukturën e produktit (Periudha B)."
-    )
-
-
-# Sigurohu që asnjëra nga këto linja të mos ketë hapësirë bosh në fillim:
-
-opsioni = st.sidebar.radio(
-    "📊 Menaxhimi i Aplikacionit",
-    ["📈 Analiza e Shitjeve", "🎯 Moduli i Planifikimit të Shitjeve"],
-)
-
-if opsioni == "🎯 Moduli i Planifikimit të Shitjeve":
-    shfaq_modulin_planifikimit(df_sql)
-    st.stop()
-
-
 st.sidebar.markdown(
     """
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
