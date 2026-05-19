@@ -2128,84 +2128,160 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
             )
 
             # ---------------------------------------------------------
-            # 5.5 GRAFIKU: ECURIA E KLIENTËVE AKTIVË DHE VOLUMIT (KG)
+            # 5.5 GRAFIKU AVANCUAR: ECURIA E KLIENTËVE, AGJENTËVE DHE VOLUMIT (KG)
             # ---------------------------------------------------------
-            st.subheader("📈 Ecuria e Klientëve Aktivë dhe Volumit Muaj pas Muaji")
+            st.subheader(
+                "📈 Analiza Korelative: Klientët, Agjentët dhe Volumi sipas Grupeve"
+            )
 
-            # Grupojmë të dhënat e filtruara sipas VitiMuaji për klientët unikë dhe totalin e KG
-            df_grafiku = (
+            # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
+            df_baze = (
                 df_filtri.groupby("VitiMuaji")
-                .agg(Kliente_Aktive=("KodiKlient", "nunique"), Sasia_KG=("kg", "sum"))
+                .agg(
+                    Kliente_Aktive=("KodiKlient", "nunique"),
+                    Nr_Agjenteve=("ForcaShitese", "nunique"),
+                )
                 .reset_index()
             )
 
-            # Kthejmë VitiMuaji në string dhe krijojmë etiketën në shqip
+            # 2. Agregimi për sasinë totale, vetëm DEKA dhe vetëm OLIM
+            df_total_kg = (
+                df_filtri.groupby("VitiMuaji")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "KG_Total"})
+            )
+            df_deka_kg = (
+                df_filtri[df_filtri["Grup_Filtri"] == "DEKA"]
+                .groupby("VitiMuaji")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "KG_Deka"})
+            )
+            df_olim_kg = (
+                df_filtri[df_filtri["Grup_Filtri"] == "OLIM"]
+                .groupby("VitiMuaji")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "KG_Olim"})
+            )
+
+            # Bashkojmë të gjitha të dhënat në një DataFrame të vetëm për grafikun
+            df_grafiku = pd.merge(df_baze, df_total_kg, on="VitiMuaji", how="left")
+            df_grafiku = pd.merge(df_grafiku, df_deka_kg, on="VitiMuaji", how="left")
+            df_grafiku = pd.merge(df_grafiku, df_olim_kg, on="VitiMuaji", how="left")
+
+            # Mbushim vlerat NaN me 0 nëse në ndonjë muaj nuk ka pasur shitje për një grup
+            df_grafiku.fillna(0, inplace=True)
+
+            # Kthejmë periudhën në etiketë në shqip (shfaqet në boshtin X)
             df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
                 lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
             )
 
-            # --- IMPORTIMET E NEVOJSHME PËR BOSHTIN DYTËSOR ---
+            # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
             from plotly.subplots import make_subplots
             import plotly.graph_objects as go
 
-            # 1. Krijojmë strukturën e subplot-it me bosht dytësor të aktivizuar (secondary_y=True)
-            fig_kombinuar = make_subplots(specs=[[{"secondary_y": True}]])
+            # Krijojmë strukturën me bosht dytësor
+            fig_avancuar = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # 2. Shtojmë grafikun me kolona (Bar) për Klientët Aktivë në boshtin PARËSOR (Trandicional)
-            fig_kombinuar.add_trace(
+            # SERIA 1: Numri i Klientëve Aktivë (Kollonë - Boshti i Majtë)
+            fig_avancuar.add_trace(
                 go.Bar(
                     x=df_grafiku["Muaji_Etiketa"],
                     y=df_grafiku["Kliente_Aktive"],
-                    name="Klientë Aktivë",
+                    name="🏪 Klientë Aktivë",
                     text=df_grafiku["Kliente_Aktive"],
                     textposition="outside",
                     marker_color="#1f77b4",
                     hovertemplate="<b>%{x}</b><br>Klientë Aktivë: %{y}<extra></extra>",
                 ),
-                secondary_y=False,  # Qëndron në boshtin e majtë
+                secondary_y=False,
             )
 
-            # 3. Shtojmë grafikun me linjë (Line) për Sasinë në KG në boshtin DYTËSOR (Djathtas)
-            fig_kombinuar.add_trace(
+            # SERIA 2: Numri i Agjentëve (Kollonë - Boshti i Majtë)
+            fig_avancuar.add_trace(
+                go.Bar(
+                    x=df_grafiku["Muaji_Etiketa"],
+                    y=df_grafiku["Nr_Agjenteve"],
+                    name="👤 Agjentë në Terren",
+                    text=df_grafiku["Nr_Agjenteve"],
+                    textposition="inside",
+                    marker_color="#aec7e8",
+                    hovertemplate="<b>%{x}</b><br>Agjentë Unikë: %{y}<extra></extra>",
+                ),
+                secondary_y=False,
+            )
+
+            # SERIA 3: Sasia Totale KG (Linjë - Boshti i Djathtë)
+            fig_avancuar.add_trace(
                 go.Scatter(
                     x=df_grafiku["Muaji_Etiketa"],
-                    y=df_grafiku["Sasia_KG"],
-                    name="Sasia (KG)",
-                    mode="lines+markers+text",  # Linjë, pika dhe tekst sipër
-                    text=df_grafiku["Sasia_KG"].apply(
-                        lambda x: f"{x:,.0f}"
-                    ),  # Formatojmë tekstin e KG
-                    textposition="top center",
+                    y=df_grafiku["KG_Total"],
+                    name="📦 Sasia Totale (KG)",
+                    mode="lines+markers",
                     line=dict(
-                        color="#FF7F0E", width=3
-                    ),  # Ngjyrë portokalli që të dallojë
-                    hovertemplate="<b>%{x}</b><br>Sasia: %{y:,.0f} kg<extra></extra>",
+                        color="#2ca02c", width=3, dash="solid"
+                    ),  # Linjë e trashë e plotë jeshile
+                    hovertemplate="<b>%{x}</b><br>Sasia Totale: %{y:,.0f} kg<extra></extra>",
                 ),
-                secondary_y=True,  # Vendoset në boshtin e djathtë
+                secondary_y=True,
             )
 
-            # 4. Konfigurimi estetik i boshteve dhe dizajnit transparent
-            fig_kombinuar.update_layout(
+            # SERIA 4: Sasia vetëm DEKA (Linjë - Boshti i Djathtë)
+            fig_avancuar.add_trace(
+                go.Scatter(
+                    x=df_grafiku["Muaji_Etiketa"],
+                    y=df_grafiku["KG_Deka"],
+                    name="🔴 Sasia DEKA (KG)",
+                    mode="lines+markers",
+                    line=dict(
+                        color="#d62728", width=2, dash="dash"
+                    ),  # Linjë e ndërprerë e kuqe
+                    hovertemplate="<b>%{x}</b><br>Sasia DEKA: %{y:,.0f} kg<extra></extra>",
+                ),
+                secondary_y=True,
+            )
+
+            # SERIA 5: Sasia vetëm OLIM (Linjë - Boshti i Djathtë)
+            fig_avancuar.add_trace(
+                go.Scatter(
+                    x=df_grafiku["Muaji_Etiketa"],
+                    y=df_grafiku["KG_Olim"],
+                    name="🟡 Sasia OLIM (KG)",
+                    mode="lines+markers",
+                    line=dict(
+                        color="#ffbb78", width=2, dash="dot"
+                    ),  # Linjë me pika e verdhë/portokalli
+                    hovertemplate="<b>%{x}</b><br>Sasia OLIM: %{y:,.0f} kg<extra></extra>",
+                ),
+                secondary_y=True,
+            )
+
+            # --- KONFIGURIMI ESTETIK DHE FORMATIMI ---
+            fig_avancuar.update_layout(
                 xaxis_title=None,
-                yaxis_title="Numri i Klientëve Unique (Kolonat)",
-                yaxis2_title="Sasia Totale në KG (Linja)",  # Titulli i boshtit të djathtë
+                yaxis_title="Numri (Klientë & Agjentë)",
+                yaxis2_title="Volumi në KG (Total / DEKA / OLIM)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=20, r=20, t=30, b=20),
-                height=400,
+                height=450,
                 legend=dict(
-                    orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-                ),  # Legjenda horizontale lart
+                    orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
+                ),  # Legjenda e vendosur në qendër lart në mënyrë horizontale
+                barmode="group",  # Vendos kolonat e klientëve dhe agjentëve krah për krah
             )
 
-            # Sigurohemi që rrjeta (gridlines) e boshtit të djathtë mos përzjehet keq me të majtin
-            fig_kombinuar.update_yaxes(
-                showgrid=True, gridcolor="rgba(200,200,200,0.2)", secondary_y=False
+            # Menaxhimi i rrjetës ndihmëse (Grid) që grafiku të jetë i pastër
+            fig_avancuar.update_yaxes(
+                showgrid=True, gridcolor="rgba(200,200,200,0.15)", secondary_y=False
             )
-            fig_kombinuar.update_yaxes(showgrid=False, secondary_y=True)
+            fig_avancuar.update_yaxes(showgrid=False, secondary_y=True)
 
-            # Shfaqja e grafikut të ri në Streamlit
-            st.plotly_chart(fig_kombinuar, use_container_width=True)
+            # Shfaqja e grafikut të ri shumë-dimensional
+            st.plotly_chart(fig_avancuar, use_container_width=True)
 
             # 6. Shfaqja e Tabelës Kryesore
             st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
