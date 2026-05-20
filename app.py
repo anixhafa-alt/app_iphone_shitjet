@@ -71,7 +71,7 @@ if not check_password():
 # =========================================================
 # 3. LOGO DHE CSS I VERSIONIT (STILI AXION)+versioni
 # region ==================================================
-EMRI_FOTOS = "logo.png"
+EMRI_FOTOS = "logo.svg"
 
 if os.path.exists(EMRI_FOTOS):
     try:
