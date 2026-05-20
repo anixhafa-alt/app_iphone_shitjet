@@ -75,45 +75,27 @@ EMRI_FOTOS = "logo.png"
 
 if os.path.exists(EMRI_FOTOS):
     try:
-        logo_origjinale = Image.open(EMRI_FOTOS)
-
-        # RREGULLIMI PËR QARTËSI (Përdorim vlerë pak më të madhe që të mos humbë pikselat)
-        gjeresia_target = 300
-        lartesia_target = int(
-            (gjeresia_target / logo_origjinale.width) * logo_origjinale.height
-        )
-
-        # Rihapja dhe zbutja me LANCZOS (Kodi që funksionoi më pastër)
-        logo_axion = logo_origjinale.resize(
-            (gjeresia_target, lartesia_target), Image.Resampling.LANCZOS
-        )
-
-        # E shfaqim duke lejuar container-in ta mbajë të plotë
+        logo_axion = Image.open(EMRI_FOTOS)
         st.sidebar.image(logo_axion, use_container_width=True)
-
     except Exception as e:
         st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
 else:
     st.sidebar.title("AXION")
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
-# Injektimi i CSS për afërsi maksimale të versionit në Sidebar
 st.sidebar.markdown(
     """
     <style>
-    /* Heqim hapësirën e tepërt që krijon veshja e imazhit në Streamlit */
     [data-testid="stSidebar"] [data-testid="stImage"] {
         margin-bottom: 0px !important;
         padding-bottom: 0px !important;
     }
-    
-    /* Tërheqim tekstin e versionit fort lart */
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
         color: #566573 !important;
-        text-align: center;
-        margin-top: -45px !important;
+        text-align: right;
+        margin-top: -110px !important;
         margin-bottom: 20px !important;
         letter-spacing: 1px;
         font-weight: 500;
@@ -123,8 +105,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# Shfaqja e versionit fiks nën logo
-st.sidebar.markdown('<p class="version-text">v.1.1.1</p>', unsafe_allow_html=True)
+st.sidebar.markdown('<p class="version-text"> v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
 # =========================================================
