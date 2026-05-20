@@ -2451,13 +2451,6 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.markdown(
         "Konverton shitjet mesatare të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
     )
-
-
-if page == "🎯 Plani sipas Strukturës B":
-    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
-    shfaq_modul_planifikimi_artikujve(df_raw)
-    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
-
     df_proc = df_baze_sales.copy()
     df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
     df_proc["KodiKlient"] = df_proc["KodiKlient"].astype(str).str.strip()
@@ -2805,3 +2798,7 @@ if page == "🎯 Plani sipas Strukturës B":
 
 
 # endregion
+if page == "🎯 Plani sipas Strukturës B":
+    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
+    shfaq_modul_planifikimi_artikujve(df_raw)
+    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
