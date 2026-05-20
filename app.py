@@ -500,12 +500,9 @@ def nderto_sidebar():
 # region ==================================================
 start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_sidebar()
 # endregion
-# =========================================================
-# 10. KONTROLLI I NAVIGIMIT DHE MENAXHIMI I MODULEVE
-# =========================================================
 
 # =========================================================
-# 11. MODULET
+# 10. MODULET
 # region ==================================================
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
