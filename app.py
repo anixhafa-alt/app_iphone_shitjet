@@ -7,7 +7,6 @@ import numpy as np
 import time
 
 # =========================================================
-# 1. KONFIGURIMI I FAQES
 # region ==================================================
 st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide")
 
@@ -106,7 +105,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown('<p class="version-text">     v.1.1.0</p>', unsafe_allow_html=True)
+st.sidebar.markdown('<p class="version-text"> v.1.1.1</p>', unsafe_allow_html=True)
 # endregion
 
 # =========================================================
