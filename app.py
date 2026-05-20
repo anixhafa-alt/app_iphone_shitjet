@@ -2440,12 +2440,12 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                     "🟢 Nuk u gjet asnjë kod klienti i furnizuar nga më shumë se një agjent për këtë periudhë."
                 )
 
-        # endregion
-
-
-# =========================================================
+# ---------------------------------------------------------
 # MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
-# region ==================================================
+# ---------------------------------------------------------
+
+
+# 1. HAPI I PARË: Deklarojmë funksionin në mënyrë që Python ta njohë
 def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
     st.markdown(
@@ -2797,5 +2797,9 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
         )
 
 
-# endregion
+# 2. HAPI I DYTË: Kushti "if" vendoset VETËM pasi funksioni është krijuar plotësisht më lart!
+if page == "🎯 Plani sipas Strukturës B":
+    shfaq_modul_planifikimi_artikujve(df_raw)
+    st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
+# endregion
