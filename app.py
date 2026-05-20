@@ -69,48 +69,44 @@ if not check_password():
 # endregion
 
 # =========================================================
-# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)+versioni
+# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
 # region ==================================================
+import base64
+
 EMRI_FOTOS = "logo.png"
 
 if os.path.exists(EMRI_FOTOS):
     try:
-        logo_origjinale = Image.open(EMRI_FOTOS)
+        # Lexojmë skedarin PNG dhe e kthejmë në formatin Base64 (stringë kodi)
+        with open(EMRI_FOTOS, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
 
-        # RREGULLIMI PËR QARTËSI (Anti-aliasing me cilësi maksimale)
-        # Përcaktojmë një gjerësi standarde për sidebar (pajtohet me v.1.1.1 e logos)
-        gjeresia_target = 280
-        lartesia_target = int(
-            (gjeresia_target / logo_origjinale.width) * logo_origjinale.height
+        # E shfaqim përmes HTML të pastër pa e lënë Streamlit Cloud ta kompresojë ose ta bëjë grainy
+        st.sidebar.markdown(
+            f"""
+            <div style="width: 100%; text-align: center; padding: 10px 0;">
+                <img src="data:image/png;base64,{encoded_string}" 
+                     style="width: 100%; max-width: 240px; height: auto; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;">
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-
-        # Përdorim Resampling LANCZOS që eliminon pamjen grainy
-        logo_axion = logo_origjinale.resize(
-            (gjeresia_target, lartesia_target), Image.Resampling.LANCZOS
-        )
-
-        # E shfaqim pa e sforcuar me container_width nëse nuk është e nevojshme
-        st.sidebar.image(logo_axion, use_container_width=False)
-
     except Exception as e:
         st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
 else:
     st.sidebar.title("AXION")
     st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
+# Injektimi i CSS për afërsi maksimale të versionit në Sidebar
 st.sidebar.markdown(
     """
     <style>
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        margin-bottom: 0px !important;
-        padding-bottom: 0px !important;
-    }
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
         color: #566573 !important;
-        text-align: right;
-        margin-top: -110px !important;
+        text-align: center;
+        margin-top: -5px !important; /* Tërheq tekstin e versionit fiks nën logo */
         margin-bottom: 20px !important;
         letter-spacing: 1px;
         font-weight: 500;
@@ -120,7 +116,8 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown('<p class="version-text"> v.1.1.1</p>', unsafe_allow_html=True)
+# Shfaqja e versionit fiks nën logo
+st.sidebar.markdown('<p class="version-text">v.1.1.1</p>', unsafe_allow_html=True)
 # endregion
 
 # =========================================================
