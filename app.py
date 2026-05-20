@@ -284,7 +284,7 @@ if df_raw is not None and df_link is not None:
 
 # =========================================================
 # RIFRESKIMI AUTOMATIK ÇDO 30 MINUTA (PA NGADALËSIM)
-# =========================================================
+# region ==================================================
 if "koha_rifreskimit_fundit" not in st.session_state:
     st.session_state["koha_rifreskimit_fundit"] = time.time()
 
@@ -335,364 +335,6 @@ if df_raw is not None and not df_raw.empty:
 @st.cache_resource
 def merr_librarine_permanente():
     return {"Zgjedhje Manuale (Pa Ruajtje)": None}
-
-
-# endregion
-
-
-# =========================================================
-# MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
-# region ==================================================
-def shfaq_modul_planifikimi_artikujve(df_baze_sales):
-    st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
-    st.markdown(
-        "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
-    )
-
-    df_proc = df_baze_sales.copy()
-    df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
-    df_proc["KodiKlient"] = df_proc["KodiKlient"].astype(str).str.strip()
-    df_proc["ForcaShitese"] = (
-        df_proc["ForcaShitese"].fillna("Pa Agjent").astype(str).str.strip()
-    )
-    df_proc["kat"] = df_proc["kat"].fillna("Pa Kategori")
-    df_proc["VitiMuaji"] = df_proc["Data"].dt.to_period("M")
-
-    min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
-    max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
-
-    # --- LIBRARIA E RUAJTJES PËR MODULIN E RI ---
-    if "libraria_modulit_ri" not in st.session_state:
-        st.session_state["libraria_modulit_ri"] = {
-            "Zgjedhje Manuale (Pa Ruajtje)": None
-        }
-
-    lib_ri = st.session_state["libraria_modulit_ri"]
-
-    # --- KONTROLLI I NGARKIMIT TË PLANIT TË RUAJTUR ---
-    with st.expander(
-        "💾 Thirr ose Ruaj një Konfigurim të Planit (Periudha A, B dhe % Rritje)"
-    ):
-        c_l1, c_l2 = st.columns([2, 1])
-        with c_l1:
-            zgjedhje_plani = st.selectbox(
-                "Thirr konfigurim të ruajtur më parë:",
-                options=list(lib_ri.keys()),
-                key="sel_lib_ri_key",
-            )
-
-        if (
-            zgjedhje_plani != "Zgjedhje Manuale (Pa Ruajtje)"
-            and lib_ri[zgjedhje_plani] is not None
-        ):
-            konfig = lib_ri[zgjedhje_plani]
-            st.session_state["p_a_start"] = konfig["a_start"]
-            st.session_state["p_a_end"] = konfig["a_end"]
-            st.session_state["p_b_start"] = konfig["b_start"]
-            st.session_state["p_b_end"] = konfig["b_end"]
-            st.session_state["rritja_modul_ri"] = konfig["rritja"]
-
-        st.divider()
-        st.markdown("**Ruaj Konfigurimin Aktual:**")
-        txt_emri_ri = st.text_input(
-            "Vendos një emër për këtë konfigurim (psh: Plani Sezonit Vjeshtë):",
-            key="emri_konfig_ri",
-        )
-
-        if st.button("➕ Ruaj Konfigurimin", use_container_width=True):
-            if txt_emri_ri.strip() != "":
-                lib_ri[txt_emri_ri] = {
-                    "a_start": st.session_state.get("pl_range_a", (min_d, max_d))[0],
-                    "a_end": st.session_state.get("pl_range_a", (min_d, max_d))[1],
-                    "b_start": st.session_state.get("pl_range_b", (min_d, max_d))[0],
-                    "b_end": st.session_state.get("pl_range_b", (min_d, max_d))[1],
-                    "rritja": st.session_state.get("rritja_modul_ri", 0.0),
-                }
-                st.success(f"✅ Konfigurimi '{txt_emri_ri}' u ruajt me sukses!")
-                st.rerun()
-            else:
-                st.error("Ju lutem vendosni një emër përpara se ta ruani.")
-
-    # Inicializimi i vlerave nëse nuk ekzistojnë në session_state
-    if "p_a_start" not in st.session_state:
-        st.session_state["p_a_start"] = min_d
-    if "p_a_end" not in st.session_state:
-        st.session_state["p_a_end"] = max_d
-    if "p_b_start" not in st.session_state:
-        st.session_state["p_b_start"] = min_d
-    if "p_b_end" not in st.session_state:
-        st.session_state["p_b_end"] = max_d
-    if "rritja_modul_ri" not in st.session_state:
-        st.session_state["rritja_modul_ri"] = 0.0
-
-    # --- INPUTET E PERIUDHAVE DHE % SË RRITJES ---
-    st.subheader("⚙️ Parametrat e Gjenerimit")
-    col_a, col_b, col_c = st.columns(3)
-
-    with col_a:
-        st.markdown("##### 📅 Periudha A (Kapaciteti)")
-        p_a = st.date_input(
-            "Rreza e datave për Periudhën A:",
-            value=(st.session_state["p_a_start"], st.session_state["p_a_end"]),
-            min_value=min_d,
-            max_value=max_d,
-            key="pl_range_a",
-        )
-    with col_b:
-        st.markdown("##### 📅 Periudha B (Mix-i i Ri)")
-        p_b = st.date_input(
-            "Rreza e datave për Periudhën B:",
-            value=(st.session_state["p_b_start"], st.session_state["p_b_end"]),
-            min_value=min_d,
-            max_value=max_d,
-            key="pl_range_b",
-        )
-    with col_c:
-        st.markdown("##### 📈 % e Rritjes së Planit")
-        rritja_p = st.number_input(
-            "Vendos përqindjen e rritjes target:",
-            value=st.session_state["rritja_modul_ri"],
-            step=1.0,
-            key="rritja_modul_ri",
-        )
-
-    # --- FILTRIMI SIPAS AGJENTËVE ---
-    st.subheader("👤 Filtrimi i Agjentëve")
-    lista_agjenteve = sorted(df_proc["ForcaShitese"].unique())
-    agjentet_zgjedhur = st.multiselect(
-        "Zgjidh agjentët që dëshiron të përfshish në plan (Lëre bosh për të gjithë):",
-        options=lista_agjenteve,
-    )
-
-    if (
-        isinstance(p_a, tuple)
-        and len(p_a) == 2
-        and isinstance(p_b, tuple)
-        and len(p_b) == 2
-    ):
-        if st.button(
-            "🚀 Gjenero Planin Struktural të Avancuar", use_container_width=True
-        ):
-
-            if agjentet_zgjedhur:
-                df_proc = df_proc[df_proc["ForcaShitese"].isin(agjentet_zgjedhur)]
-
-            df_A = df_proc[
-                (df_proc["Data"] >= pd.to_datetime(p_a[0]))
-                & (df_proc["Data"] <= pd.to_datetime(p_a[1]))
-            ]
-            df_B = df_proc[
-                (df_proc["Data"] >= pd.to_datetime(p_b[0]))
-                & (df_proc["Data"] <= pd.to_datetime(p_b[1]))
-            ]
-
-            if df_A.empty or df_B.empty:
-                st.warning(
-                    "⚠️ Nuk u gjetën shitje në njërën prej periudhave të përzgjedhura. Ndryshoni datat."
-                )
-                return
-
-            # FAZA 1: Mesatarja e Klientit dhe Agjentit për Kategori në Periudhën A
-            muaj_unike_A = df_A["VitiMuaji"].nunique()
-            nr_muajve_A = muaj_unike_A if muaj_unike_A > 0 else 1
-
-            df_klient_A = (
-                df_A.groupby(["ForcaShitese", "KodiKlient", "Klienti", "kat"])["kg"]
-                .sum()
-                .reset_index()
-            )
-            df_klient_A["Mesatare_KG_Kategori"] = df_klient_A["kg"] / nr_muajve_A
-            df_klient_A = df_klient_A.drop(columns=["kg"])
-
-            # FAZA 2: Mix-i i shitjeve të artikujve në Periudhën B brenda kategorisë
-            tot_kat_B = (
-                df_B.groupby("kat")["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "Tot_Kat_B"})
-            )
-            tot_art_B = (
-                df_B.groupby(["kat", "KodiArt", "Artikulli"])["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "Tot_Art_B"})
-            )
-
-            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="kat")
-            df_mix_B["Pesha_Artikullit"] = np.where(
-                df_mix_B["Tot_Kat_B"] > 0,
-                df_mix_B["Tot_Art_B"] / df_mix_B["Tot_Kat_B"],
-                0,
-            )
-            df_mix_B = df_mix_B[["kat", "KodiArt", "Artikulli", "Pesha_Artikullit"]]
-
-            # 🔥 FILTRI KRITIK: Mbajmë VETËM artikujt që kanë pasur shitje reale (peshë > 0) në Periudhën B
-            df_mix_B = df_mix_B[df_mix_B["Pesha_Artikullit"] > 0]
-
-            # FAZA 3: Kombinimi Matematik i Planit (inner join siguron që mbeten vetëm artikujt e filtruar mësipër)
-            df_plani = pd.merge(df_klient_A, df_mix_B, on="kat", how="inner")
-
-            faktor_rritje = 1 + (rritja_p / 100.0)
-            df_plani["Plani_KG"] = (
-                df_plani["Mesatare_KG_Kategori"]
-                * df_plani["Pesha_Artikullit"]
-                * faktor_rritje
-            )
-
-            # Konvertimi në Copa sipas peshës nominale
-            try:
-                df_peshat = df_proc[["KodiArt", "KG/SKU"]].drop_duplicates()
-                df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
-                df_plani["Plani_Cope"] = np.where(
-                    df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
-                )
-            except Exception:
-                df_plani["Plani_Cope"] = 0
-
-            # --- KRIJIMI I TABELAVE TË NDARA (KATEGORI DHE ARTIKUJ) ---
-            df_agj_kategori = (
-                df_plani.groupby(["ForcaShitese", "kat"])[["Plani_KG", "Plani_Cope"]]
-                .sum()
-                .reset_index()
-            )
-            df_agj_kategori.columns = [
-                "Agjenti",
-                "Kategoria",
-                "Plani Target (KG)",
-                "Plani Target (Copa)",
-            ]
-
-            df_agj_artikuj = (
-                df_plani.groupby(["ForcaShitese", "kat", "KodiArt", "Artikulli"])[
-                    ["Plani_KG", "Plani_Cope"]
-                ]
-                .sum()
-                .reset_index()
-            )
-            df_agj_artikuj.columns = [
-                "Agjenti",
-                "Kategoria",
-                "Kodi Art.",
-                "Artikulli",
-                "Plani Target (KG)",
-                "Plani Target (Copa)",
-            ]
-
-            st.success(
-                f"✅ Plani i ri struktural u kalkulua me sukses! Përfshihen vetëm artikujt aktivë të shitur në Periudhën B me +{rritja_p}% rritje."
-            )
-
-            # --- SHFAQJA NË TABS ---
-            tab1, tab2 = st.tabs(
-                ["📊 Përmbledhja sipas Kategorive", "📦 Detajet sipas Artikujve"]
-            )
-
-            with tab1:
-                st.dataframe(df_agj_kategori, use_container_width=True)
-            with tab2:
-                st.dataframe(df_agj_artikuj, use_container_width=True)
-
-            # --- EKSPORTI NË EXCEL (Multi-Sheet) ---
-            import io
-
-            out_xl = io.BytesIO()
-            with pd.ExcelWriter(out_xl, engine="xlsxwriter") as wr:
-                df_agj_kategori.to_excel(
-                    wr, index=False, sheet_name="Plani_sipas_Kategorive"
-                )
-                df_agj_artikuj.to_excel(
-                    wr, index=False, sheet_name="Plani_sipas_Artikujve"
-                )
-
-            st.download_button(
-                label="📥 Shkarko të dyja tabelat në Excel",
-                data=out_xl.getvalue(),
-                file_name="plani_struktural_agjente.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-
-            # --- GJENERIMI I RAPORTIT PDF ---
-            st.subheader("📄 Gjenerimi i Raportit PDF")
-
-            html_content = f"""
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; color: #333; margin: 20px; }}
-                    h1 {{ text-align: center; color: #1f4e78; font-size: 24px; }}
-                    h2 {{ color: #2e74b5; border-bottom: 2px solid #2e74b5; padding-bottom: 5px; font-size: 16px; margin-top: 30px; }}
-                    .meta-box {{ background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 12px; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
-                    th {{ background-color: #1f4e78; color: white; padding: 6px; text-align: left; border: 1px solid #ddd; }}
-                    td {{ padding: 5px; border: 1px solid #ddd; text-align: left; }}
-                    .num {{ text-align: right; }}
-                    .footer {{ text-align: center; font-size: 10px; color: #7f7f7f; margin-top: 40px; }}
-                </style>
-            </head>
-            <body>
-                <h1>RAPORTI I PLANIFIKIMIT STRUKTURAL STRATEGJIK</h1>
-                <div class="meta-box">
-                    <strong>Konfigurimi i Sistemit:</strong><br>
-                    • Periudha A (Kapaciteti): {p_a[0].strftime('%d/%m/%Y')} - {p_a[1].strftime('%d/%m/%Y')}<br>
-                    • Periudha B (Filtri i Mix-it të Ri): {p_b[0].strftime('%d/%m/%Y')} - {p_b[1].strftime('%d/%m/%Y')}<br>
-                    • Rritja e Aplikuar Target: <strong>+{rritja_p}%</strong><br>
-                    • Shënim Logjik: Përfshihen vetëm artikujt me performancë aktive në Periudhën B.<br>
-                    • Data e Gjenerimit: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-                </div>
-
-                <h2>1. Përmbledhja e Planeve sipas Agjentëve dhe Kategorive</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Agjenti</th>
-                            <th>Kategoria</th>
-                            <th class="num">Plani Target (KG)</th>
-                            <th class="num">Plani Target (Copa)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            """
-
-            for _, row in df_agj_kategori.head(200).iterrows():
-                html_content += f"""
-                        <tr>
-                            <td>{row['Agjenti']}</td>
-                            <td>{row['Kategoria']}</td>
-                            <td class="num">{row['Plani Target (KG)']:,.1f}</td>
-                            <td class="num">{row['Plani Target (Copa)']:,.0f}</td>
-                        </tr>
-                """
-
-            html_content += """
-                    </tbody>
-                </table>
-                <div class="footer">Sistemi i Menaxhimit të Planifikimit © AXION - DEKA SQL</div>
-            </body>
-            </html>
-            """
-
-            try:
-                from weasyprint import HTML
-
-                pdf_out = io.BytesIO()
-                HTML(string=html_content).write_pdf(pdf_out)
-
-                st.download_button(
-                    label="📕 Shkarko Raportin Ekzekutiv në format PDF",
-                    data=pdf_out.getvalue(),
-                    file_name="raporti_plani_struktural.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-            except Exception as e:
-                st.info(
-                    "💡 Për të shkarkuar versionin PDF direkt në Streamlit Cloud, sigurohuni që keni shtuar 'weasyprint' te requirements.txt. Ndërkohë, skedari i plotë i detajuar Excel i mësipërm është gati për përdorim."
-                )
-    else:
-        st.info(
-            "💡 Ju lutem përzgjedhni rrezen e plotë të datave për të dyja periudhat që të aktivizohet butoni i kalkulimit."
-        )
 
 
 # endregion
@@ -865,11 +507,6 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # =========================================================
 # 10. KONTROLLI I NAVIGIMIT DHE MENAXHIMI I MODULEVE
 # =========================================================
-
-if page == "🎯 Plani sipas Strukturës B":
-    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
-    shfaq_modul_planifikimi_artikujve(df_raw)
-    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
 
 # =========================================================
 # 10. MODULET
@@ -2808,3 +2445,365 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
                 )
 
         # endregion
+
+
+# =========================================================
+# MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
+# region ==================================================
+def shfaq_modul_planifikimi_artikujve(df_baze_sales):
+    st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
+    st.markdown(
+        "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
+    )
+
+    df_proc = df_baze_sales.copy()
+    df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
+    df_proc["KodiKlient"] = df_proc["KodiKlient"].astype(str).str.strip()
+    df_proc["ForcaShitese"] = (
+        df_proc["ForcaShitese"].fillna("Pa Agjent").astype(str).str.strip()
+    )
+    df_proc["kat"] = df_proc["kat"].fillna("Pa Kategori")
+    df_proc["VitiMuaji"] = df_proc["Data"].dt.to_period("M")
+
+    min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
+    max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
+
+    # --- LIBRARIA E RUAJTJES PËR MODULIN E RI ---
+    if "libraria_modulit_ri" not in st.session_state:
+        st.session_state["libraria_modulit_ri"] = {
+            "Zgjedhje Manuale (Pa Ruajtje)": None
+        }
+
+    lib_ri = st.session_state["libraria_modulit_ri"]
+
+    # --- KONTROLLI I NGARKIMIT TË PLANIT TË RUAJTUR ---
+    with st.expander(
+        "💾 Thirr ose Ruaj një Konfigurim të Planit (Periudha A, B dhe % Rritje)"
+    ):
+        c_l1, c_l2 = st.columns([2, 1])
+        with c_l1:
+            zgjedhje_plani = st.selectbox(
+                "Thirr konfigurim të ruajtur më parë:",
+                options=list(lib_ri.keys()),
+                key="sel_lib_ri_key",
+            )
+
+        if (
+            zgjedhje_plani != "Zgjedhje Manuale (Pa Ruajtje)"
+            and lib_ri[zgjedhje_plani] is not None
+        ):
+            konfig = lib_ri[zgjedhje_plani]
+            st.session_state["p_a_start"] = konfig["a_start"]
+            st.session_state["p_a_end"] = konfig["a_end"]
+            st.session_state["p_b_start"] = konfig["b_start"]
+            st.session_state["p_b_end"] = konfig["b_end"]
+            st.session_state["rritja_modul_ri"] = konfig["rritja"]
+
+        st.divider()
+        st.markdown("**Ruaj Konfigurimin Aktual:**")
+        txt_emri_ri = st.text_input(
+            "Vendos një emër për këtë konfigurim (psh: Plani Sezonit Vjeshtë):",
+            key="emri_konfig_ri",
+        )
+
+        if st.button("➕ Ruaj Konfigurimin", use_container_width=True):
+            if txt_emri_ri.strip() != "":
+                lib_ri[txt_emri_ri] = {
+                    "a_start": st.session_state.get("pl_range_a", (min_d, max_d))[0],
+                    "a_end": st.session_state.get("pl_range_a", (min_d, max_d))[1],
+                    "b_start": st.session_state.get("pl_range_b", (min_d, max_d))[0],
+                    "b_end": st.session_state.get("pl_range_b", (min_d, max_d))[1],
+                    "rritja": st.session_state.get("rritja_modul_ri", 0.0),
+                }
+                st.success(f"✅ Konfigurimi '{txt_emri_ri}' u ruajt me sukses!")
+                st.rerun()
+            else:
+                st.error("Ju lutem vendosni një emër përpara se ta ruani.")
+
+    # Inicializimi i vlerave nëse nuk ekzistojnë në session_state
+    if "p_a_start" not in st.session_state:
+        st.session_state["p_a_start"] = min_d
+    if "p_a_end" not in st.session_state:
+        st.session_state["p_a_end"] = max_d
+    if "p_b_start" not in st.session_state:
+        st.session_state["p_b_start"] = min_d
+    if "p_b_end" not in st.session_state:
+        st.session_state["p_b_end"] = max_d
+    if "rritja_modul_ri" not in st.session_state:
+        st.session_state["rritja_modul_ri"] = 0.0
+
+    # --- INPUTET E PERIUDHAVE DHE % SË RRITJES ---
+    st.subheader("⚙️ Parametrat e Gjenerimit")
+    col_a, col_b, col_c = st.columns(3)
+
+    with col_a:
+        st.markdown("##### 📅 Periudha A (Kapaciteti)")
+        p_a = st.date_input(
+            "Rreza e datave për Periudhën A:",
+            value=(st.session_state["p_a_start"], st.session_state["p_a_end"]),
+            min_value=min_d,
+            max_value=max_d,
+            key="pl_range_a",
+        )
+    with col_b:
+        st.markdown("##### 📅 Periudha B (Mix-i i Ri)")
+        p_b = st.date_input(
+            "Rreza e datave për Periudhën B:",
+            value=(st.session_state["p_b_start"], st.session_state["p_b_end"]),
+            min_value=min_d,
+            max_value=max_d,
+            key="pl_range_b",
+        )
+    with col_c:
+        st.markdown("##### 📈 % e Rritjes së Planit")
+        rritja_p = st.number_input(
+            "Vendos përqindjen e rritjes target:",
+            value=st.session_state["rritja_modul_ri"],
+            step=1.0,
+            key="rritja_modul_ri",
+        )
+
+    # --- FILTRIMI SIPAS AGJENTËVE ---
+    st.subheader("👤 Filtrimi i Agjentëve")
+    lista_agjenteve = sorted(df_proc["ForcaShitese"].unique())
+    agjentet_zgjedhur = st.multiselect(
+        "Zgjidh agjentët që dëshiron të përfshish në plan (Lëre bosh për të gjithë):",
+        options=lista_agjenteve,
+    )
+
+    if (
+        isinstance(p_a, tuple)
+        and len(p_a) == 2
+        and isinstance(p_b, tuple)
+        and len(p_b) == 2
+    ):
+        if st.button(
+            "🚀 Gjenero Planin Struktural të Avancuar", use_container_width=True
+        ):
+
+            if agjentet_zgjedhur:
+                df_proc = df_proc[df_proc["ForcaShitese"].isin(agjentet_zgjedhur)]
+
+            df_A = df_proc[
+                (df_proc["Data"] >= pd.to_datetime(p_a[0]))
+                & (df_proc["Data"] <= pd.to_datetime(p_a[1]))
+            ]
+            df_B = df_proc[
+                (df_proc["Data"] >= pd.to_datetime(p_b[0]))
+                & (df_proc["Data"] <= pd.to_datetime(p_b[1]))
+            ]
+
+            if df_A.empty or df_B.empty:
+                st.warning(
+                    "⚠️ Nuk u gjetën shitje në njërën prej periudhave të përzgjedhura. Ndryshoni datat."
+                )
+                return
+
+            # FAZA 1: Mesatarja e Klientit dhe Agjentit për Kategori në Periudhën A
+            muaj_unike_A = df_A["VitiMuaji"].nunique()
+            nr_muajve_A = muaj_unike_A if muaj_unike_A > 0 else 1
+
+            df_klient_A = (
+                df_A.groupby(["ForcaShitese", "KodiKlient", "Klienti", "kat"])["kg"]
+                .sum()
+                .reset_index()
+            )
+            df_klient_A["Mesatare_KG_Kategori"] = df_klient_A["kg"] / nr_muajve_A
+            df_klient_A = df_klient_A.drop(columns=["kg"])
+
+            # FAZA 2: Mix-i i shitjeve të artikujve në Periudhën B brenda kategorisë
+            tot_kat_B = (
+                df_B.groupby("kat")["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "Tot_Kat_B"})
+            )
+            tot_art_B = (
+                df_B.groupby(["kat", "KodiArt", "Artikulli"])["kg"]
+                .sum()
+                .reset_index()
+                .rename(columns={"kg": "Tot_Art_B"})
+            )
+
+            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="kat")
+            df_mix_B["Pesha_Artikullit"] = np.where(
+                df_mix_B["Tot_Kat_B"] > 0,
+                df_mix_B["Tot_Art_B"] / df_mix_B["Tot_Kat_B"],
+                0,
+            )
+            df_mix_B = df_mix_B[["kat", "KodiArt", "Artikulli", "Pesha_Artikullit"]]
+
+            # 🔥 FILTRI KRITIK: Mbajmë VETËM artikujt që kanë pasur shitje reale (peshë > 0) në Periudhën B
+            df_mix_B = df_mix_B[df_mix_B["Pesha_Artikullit"] > 0]
+
+            # FAZA 3: Kombinimi Matematik i Planit (inner join siguron që mbeten vetëm artikujt e filtruar mësipër)
+            df_plani = pd.merge(df_klient_A, df_mix_B, on="kat", how="inner")
+
+            faktor_rritje = 1 + (rritja_p / 100.0)
+            df_plani["Plani_KG"] = (
+                df_plani["Mesatare_KG_Kategori"]
+                * df_plani["Pesha_Artikullit"]
+                * faktor_rritje
+            )
+
+            # Konvertimi në Copa sipas peshës nominale
+            try:
+                df_peshat = df_proc[["KodiArt", "KG/SKU"]].drop_duplicates()
+                df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
+                df_plani["Plani_Cope"] = np.where(
+                    df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
+                )
+            except Exception:
+                df_plani["Plani_Cope"] = 0
+
+            # --- KRIJIMI I TABELAVE TË NDARA (KATEGORI DHE ARTIKUJ) ---
+            df_agj_kategori = (
+                df_plani.groupby(["ForcaShitese", "kat"])[["Plani_KG", "Plani_Cope"]]
+                .sum()
+                .reset_index()
+            )
+            df_agj_kategori.columns = [
+                "Agjenti",
+                "Kategoria",
+                "Plani Target (KG)",
+                "Plani Target (Copa)",
+            ]
+
+            df_agj_artikuj = (
+                df_plani.groupby(["ForcaShitese", "kat", "KodiArt", "Artikulli"])[
+                    ["Plani_KG", "Plani_Cope"]
+                ]
+                .sum()
+                .reset_index()
+            )
+            df_agj_artikuj.columns = [
+                "Agjenti",
+                "Kategoria",
+                "Kodi Art.",
+                "Artikulli",
+                "Plani Target (KG)",
+                "Plani Target (Copa)",
+            ]
+
+            st.success(
+                f"✅ Plani i ri struktural u kalkulua me sukses! Përfshihen vetëm artikujt aktivë të shitur në Periudhën B me +{rritja_p}% rritje."
+            )
+
+            # --- SHFAQJA NË TABS ---
+            tab1, tab2 = st.tabs(
+                ["📊 Përmbledhja sipas Kategorive", "📦 Detajet sipas Artikujve"]
+            )
+
+            with tab1:
+                st.dataframe(df_agj_kategori, use_container_width=True)
+            with tab2:
+                st.dataframe(df_agj_artikuj, use_container_width=True)
+
+            # --- EKSPORTI NË EXCEL (Multi-Sheet) ---
+            import io
+
+            out_xl = io.BytesIO()
+            with pd.ExcelWriter(out_xl, engine="xlsxwriter") as wr:
+                df_agj_kategori.to_excel(
+                    wr, index=False, sheet_name="Plani_sipas_Kategorive"
+                )
+                df_agj_artikuj.to_excel(
+                    wr, index=False, sheet_name="Plani_sipas_Artikujve"
+                )
+
+            st.download_button(
+                label="📥 Shkarko të dyja tabelat në Excel",
+                data=out_xl.getvalue(),
+                file_name="plani_struktural_agjente.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+            # --- GJENERIMI I RAPORTIT PDF ---
+            st.subheader("📄 Gjenerimi i Raportit PDF")
+
+            html_content = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; color: #333; margin: 20px; }}
+                    h1 {{ text-align: center; color: #1f4e78; font-size: 24px; }}
+                    h2 {{ color: #2e74b5; border-bottom: 2px solid #2e74b5; padding-bottom: 5px; font-size: 16px; margin-top: 30px; }}
+                    .meta-box {{ background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 12px; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
+                    th {{ background-color: #1f4e78; color: white; padding: 6px; text-align: left; border: 1px solid #ddd; }}
+                    td {{ padding: 5px; border: 1px solid #ddd; text-align: left; }}
+                    .num {{ text-align: right; }}
+                    .footer {{ text-align: center; font-size: 10px; color: #7f7f7f; margin-top: 40px; }}
+                </style>
+            </head>
+            <body>
+                <h1>RAPORTI I PLANIFIKIMIT STRUKTURAL STRATEGJIK</h1>
+                <div class="meta-box">
+                    <strong>Konfigurimi i Sistemit:</strong><br>
+                    • Periudha A (Kapaciteti): {p_a[0].strftime('%d/%m/%Y')} - {p_a[1].strftime('%d/%m/%Y')}<br>
+                    • Periudha B (Filtri i Mix-it të Ri): {p_b[0].strftime('%d/%m/%Y')} - {p_b[1].strftime('%d/%m/%Y')}<br>
+                    • Rritja e Aplikuar Target: <strong>+{rritja_p}%</strong><br>
+                    • Shënim Logjik: Përfshihen vetëm artikujt me performancë aktive në Periudhën B.<br>
+                    • Data e Gjenerimit: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+                </div>
+
+                <h2>1. Përmbledhja e Planeve sipas Agjentëve dhe Kategorive</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Agjenti</th>
+                            <th>Kategoria</th>
+                            <th class="num">Plani Target (KG)</th>
+                            <th class="num">Plani Target (Copa)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+
+            for _, row in df_agj_kategori.head(200).iterrows():
+                html_content += f"""
+                        <tr>
+                            <td>{row['Agjenti']}</td>
+                            <td>{row['Kategoria']}</td>
+                            <td class="num">{row['Plani Target (KG)']:,.1f}</td>
+                            <td class="num">{row['Plani Target (Copa)']:,.0f}</td>
+                        </tr>
+                """
+
+            html_content += """
+                    </tbody>
+                </table>
+                <div class="footer">Sistemi i Menaxhimit të Planifikimit © AXION - DEKA SQL</div>
+            </body>
+            </html>
+            """
+
+            try:
+                from weasyprint import HTML
+
+                pdf_out = io.BytesIO()
+                HTML(string=html_content).write_pdf(pdf_out)
+
+                st.download_button(
+                    label="📕 Shkarko Raportin Ekzekutiv në format PDF",
+                    data=pdf_out.getvalue(),
+                    file_name="raporti_plani_struktural.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.info(
+                    "💡 Për të shkarkuar versionin PDF direkt në Streamlit Cloud, sigurohuni që keni shtuar 'weasyprint' te requirements.txt. Ndërkohë, skedari i plotë i detajuar Excel i mësipërm është gati për përdorim."
+                )
+    else:
+        st.info(
+            "💡 Ju lutem përzgjedhni rrezen e plotë të datave për të dyja periudhat që të aktivizohet butoni i kalkulimit."
+        )
+
+
+# endregion
+if page == "🎯 Plani sipas Strukturës B":
+    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
+    shfaq_modul_planifikimi_artikujve(df_raw)
+    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
