@@ -69,14 +69,29 @@ if not check_password():
 # endregion
 
 # =========================================================
-# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
+# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)+versioni
 # region ==================================================
 EMRI_FOTOS = "logo.png"
 
 if os.path.exists(EMRI_FOTOS):
     try:
-        logo_axion = Image.open(EMRI_FOTOS)
-        st.sidebar.image(logo_axion, use_container_width=True)
+        logo_origjinale = Image.open(EMRI_FOTOS)
+
+        # RREGULLIMI PËR QARTËSI (Anti-aliasing me cilësi maksimale)
+        # Përcaktojmë një gjerësi standarde për sidebar (pajtohet me v.1.1.1 e logos)
+        gjeresia_target = 280
+        lartesia_target = int(
+            (gjeresia_target / logo_origjinale.width) * logo_origjinale.height
+        )
+
+        # Përdorim Resampling LANCZOS që eliminon pamjen grainy
+        logo_axion = logo_origjinale.resize(
+            (gjeresia_target, lartesia_target), Image.Resampling.LANCZOS
+        )
+
+        # E shfaqim pa e sforcuar me container_width nëse nuk është e nevojshme
+        st.sidebar.image(logo_axion, use_container_width=False)
+
     except Exception as e:
         st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
 else:
