@@ -75,25 +75,38 @@ EMRI_FOTOS_SVG = "logo.svg"
 
 if os.path.exists(EMRI_FOTOS_SVG):
     try:
-        # Lexojmë skedarin SVG si tekst (XML)
+        # Lexojmë skedarin SVG si tekst
         with open(EMRI_FOTOS_SVG, "r", encoding="utf-8") as f:
             svg_code = f.read()
 
-        # Injektojmë kodin SVG direkt në Sidebar duke i dhënë një gjerësi të kontrolluar
+        # PËRMASIMI I KONTROLLUAR: E mbështjellim SVG-në me një div që kontrollon gjerësinë maksimale
+        # CSS i thotë që svg-ja brenda të mos bëhet më e madhe se 240 piksela dhe lartësia të rregullohet vetë
         st.sidebar.markdown(
-            f'<div style="width: 100%; text-align: center; padding: 10px 0;">{svg_code}</div>',
+            f"""
+            <div style="width: 100%; text-align: center; padding: 10px 0; box-sizing: border-box;">
+                <style>
+                    .sidebar-logo-container svg {{
+                        width: 100% !important;
+                        max-width: 240px !important; /* Ndryshoje këtë vlerë nëse e do pak më të madhe ose më të vogël */
+                        height: auto !important;
+                    }}
+                </style>
+                <div class="sidebar-logo-container">
+                    {svg_code}
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
     except Exception as e:
         st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos SVG: {e}")
 else:
-    # Nëse nuk gjendet SVG-ja, tentojmë si fallback logon e vjetër PNG nëse ekziston
     EMRI_FOTOS_PNG = "logo.png"
     if os.path.exists(EMRI_FOTOS_PNG):
         try:
             logo_origjinale = Image.open(EMRI_FOTOS_PNG)
             logo_axion = logo_origjinale.resize(
-                (280, int((280 / logo_origjinale.width) * logo_origjinale.height)),
+                (240, int((240 / logo_origjinale.width) * logo_origjinale.height)),
                 Image.Resampling.LANCZOS,
             )
             st.sidebar.image(logo_axion, use_container_width=False)
@@ -107,13 +120,12 @@ else:
 st.sidebar.markdown(
     """
     <style>
-    /* Rregullimi i hapësirës për div-in ku ndodhet SVG */
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
         color: #566573 !important;
         text-align: center;
-        margin-top: -10px !important; /* Ajustoje këtë vlerë nëse versioni qëndron shumë lart ose poshtë */
+        margin-top: -5px !important; /* Tërheq tekstin e versionit afër logos */
         margin-bottom: 20px !important;
         letter-spacing: 1px;
         font-weight: 500;
