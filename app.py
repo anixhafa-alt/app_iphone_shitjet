@@ -69,48 +69,51 @@ if not check_password():
 # endregion
 
 # =========================================================
-# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)+versioni
+# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
 # region ==================================================
-EMRI_FOTOS = "logo.svg"
+EMRI_FOTOS_SVG = "logo.svg"
 
-if os.path.exists(EMRI_FOTOS):
+if os.path.exists(EMRI_FOTOS_SVG):
     try:
-        logo_origjinale = Image.open(EMRI_FOTOS)
+        # Lexojmë skedarin SVG si tekst (XML)
+        with open(EMRI_FOTOS_SVG, "r", encoding="utf-8") as f:
+            svg_code = f.read()
 
-        # RREGULLIMI PËR QARTËSI (Anti-aliasing me cilësi maksimale)
-        # Përcaktojmë një gjerësi standarde për sidebar (pajtohet me v.1.1.1 e logos)
-        gjeresia_target = 280
-        lartesia_target = int(
-            (gjeresia_target / logo_origjinale.width) * logo_origjinale.height
+        # Injektojmë kodin SVG direkt në Sidebar duke i dhënë një gjerësi të kontrolluar
+        st.sidebar.markdown(
+            f'<div style="width: 100%; text-align: center; padding: 10px 0;">{svg_code}</div>',
+            unsafe_allow_html=True,
         )
-
-        # Përdorim Resampling LANCZOS që eliminon pamjen grainy
-        logo_axion = logo_origjinale.resize(
-            (gjeresia_target, lartesia_target), Image.Resampling.LANCZOS
-        )
-
-        # E shfaqim pa e sforcuar me container_width nëse nuk është e nevojshme
-        st.sidebar.image(logo_axion, use_container_width=False)
-
     except Exception as e:
-        st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
+        st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos SVG: {e}")
 else:
-    st.sidebar.title("AXION")
-    st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
+    # Nëse nuk gjendet SVG-ja, tentojmë si fallback logon e vjetër PNG nëse ekziston
+    EMRI_FOTOS_PNG = "logo.png"
+    if os.path.exists(EMRI_FOTOS_PNG):
+        try:
+            logo_origjinale = Image.open(EMRI_FOTOS_PNG)
+            logo_axion = logo_origjinale.resize(
+                (280, int((280 / logo_origjinale.width) * logo_origjinale.height)),
+                Image.Resampling.LANCZOS,
+            )
+            st.sidebar.image(logo_axion, use_container_width=False)
+        except Exception:
+            st.sidebar.title("AXION")
+    else:
+        st.sidebar.title("AXION")
+        st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS_SVG}' nuk u gjet në server.")
 
+# Injektimi i CSS për afërsi maksimale të versionit në Sidebar
 st.sidebar.markdown(
     """
     <style>
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        margin-bottom: 0px !important;
-        padding-bottom: 0px !important;
-    }
+    /* Rregullimi i hapësirës për div-in ku ndodhet SVG */
     .version-text {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-size: 12px !important;
         color: #566573 !important;
-        text-align: right;
-        margin-top: -110px !important;
+        text-align: center;
+        margin-top: -10px !important; /* Ajustoje këtë vlerë nëse versioni qëndron shumë lart ose poshtë */
         margin-bottom: 20px !important;
         letter-spacing: 1px;
         font-weight: 500;
@@ -120,7 +123,8 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown('<p class="version-text"> v.1.1.1</p>', unsafe_allow_html=True)
+# Shfaqja e versionit fiks nën logo
+st.sidebar.markdown('<p class="version-text">v.1.1.1</p>', unsafe_allow_html=True)
 # endregion
 
 # =========================================================
