@@ -69,7 +69,6 @@ if not check_password():
     st.stop()
 # endregion
 
-
 # =========================================================
 # 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
 # region ==================================================
@@ -109,7 +108,6 @@ st.sidebar.markdown(
 
 st.sidebar.markdown('<p class="version-text">     v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
-
 
 # =========================================================
 # 4. NAVIGIMI (PANEL KONTROLLI) - ME EMËRTIMET E SAKTA
@@ -281,7 +279,6 @@ if df_raw is not None and df_link is not None:
         )
 # endregion
 
-
 # =========================================================
 # RIFRESKIMI AUTOMATIK ÇDO 30 MINUTA (PA NGADALËSIM)
 # region ==================================================
@@ -293,7 +290,6 @@ if time.time() - st.session_state["koha_rifreskimit_fundit"] > 1800:
     st.session_state["koha_rifreskimit_fundit"] = time.time()
     st.rerun()
 # endregion
-
 
 # =========================================================
 # 6. KORNIZA E RE E SINKRONIZIMIT
@@ -2453,8 +2449,14 @@ elif page == "Klientët me shumë Agjentë" and df_raw is not None:
 def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
     st.markdown(
-        "Konverton vëllimin mesatar të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
+        "Konverton shitjet mesatare të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
     )
+
+
+if page == "🎯 Plani sipas Strukturës B":
+    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
+    shfaq_modul_planifikimi_artikujve(df_raw)
+    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
 
     df_proc = df_baze_sales.copy()
     df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
@@ -2803,7 +2805,3 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 
 
 # endregion
-if page == "🎯 Plani sipas Strukturës B":
-    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
-    shfaq_modul_planifikimi_artikujve(df_raw)
-    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
