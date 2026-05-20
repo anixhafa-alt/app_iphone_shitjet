@@ -503,9 +503,12 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # =========================================================
 # 10. KONTROLLI I NAVIGIMIT DHE MENAXHIMI I MODULEVE
 # =========================================================
-
+if page == "🎯 Plani sipas Strukturës B":
+    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
+    shfaq_modul_planifikimi_artikujve(df_raw)
+    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
 # =========================================================
-# 10. MODULET
+# 11. MODULET
 # region ==================================================
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
@@ -2798,7 +2801,3 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 
 
 # endregion
-if page == "🎯 Plani sipas Strukturës B":
-    # Thërret modulin e jashtëm nga skedari 'plani_shitjeve.py'
-    shfaq_modul_planifikimi_artikujve(df_raw)
-    st.stop()  # Ndalon përplasjen me kodin e vjetër poshtë
