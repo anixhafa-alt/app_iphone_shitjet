@@ -1666,246 +1666,267 @@ elif page == "Asistenti AI":
             st.info("Zgjidhni klientët në tab-et e mësipërme për të gjeneruar planet.")
 
 # ---------------------------------------------------------
-# MODULI I RI: ROUTE PLAN AI & AUTOENCODER (I SAKTËSUAR)
+# MODULI: ROUTE PLAN AI & AUTOENCODER (I PËRDITËSUAR)
 # ---------------------------------------------------------
 elif page == "Route Plan AI":
-    st.title("🎯 Inteligjenca Artificiale: Route Plan sipas Agjentëve")
-
+    st.title("🎯 Inteligjenca Artificiale: Route Plan & Kategorizimi")
+    st.markdown(f"### 👤 Agjenti i Përzgjedhur: **{agj_sel}**")
+    
     if df_raw is not None and not df_raw.empty:
-        st.info(
-            "💡 Ky modul përdor një Autoencoder Neural (SVD-Bottleneck) për të vlerësuar sjelljen e klientëve bazuar në blerjet e tyre të fundit dhe gjeneron rrugën optimale ditore."
-        )
-
-        # --- HAPI 1: PREGATITJA E MATRICËS ME EMRA TË SAKTË TË SQL ---
-        with st.spinner("Duke analizuar klientët dhe vizitat e fundit..."):
+        st.info("💡 Ky modul përdor një Autoencoder Neural (SVD-Bottleneck) për të analizuar sjelljen 4-vjeçare të klientëve dhe për të gjeneruar rrugën optimale ditore për shitje.")
+        
+        # --- HAPI 1: PËRGATITJA E TË DHËNAVE (PIVOTIMI SIPAS EMRAVE TË TU RE) ---
+        with st.spinner("Duke procesuar historikun e shitjeve me Autoencoder..."):
             df_ae = df_raw.copy()
-
-            # Grupimi dhe llogaritja e ditëve nga blerja e fundit (Recency) bazuar në kolonat e SQL tuaj
-            klient_features = (
-                df_ae.groupby(["KodiKlient", "Klienti", "ForcaShitese"])
-                .agg(
-                    Totale_KG=("kg", "sum"),
-                    Totale_Vlera=("Vlera_Historike", "sum"),
-                    Frekuenca_Blerjeve=("Data", "nunique"),
-                    Dite_Nga_Blerja_Fundit=(
-                        "Data",
-                        lambda x: (datetime.now() - x.max()).days,
-                    ),
-                )
-                .reset_index()
-            )
-
-            # Pivotimi për të kapur llojin e produktit që preferon klienti (DEKA, OLIM, ETJ)
-            grup_pivot = df_ae.pivot_table(
-                index="KodiKlient",
-                columns="Grup_Filtri",
-                values="kg",
-                aggfunc="sum",
-                fill_value=0,
+            
+            # Agregimi bazë për çdo klient (Sipas kolonave të tua: 'KodiKlient', 'Klienti', 'Data')
+            klient_features = df_ae.groupby(['KodiKlient', 'Klienti']).agg(
+                Totale_KG=('kg', 'sum'),
+                Totale_Vlera=('Vlera_Historike', 'sum'),
+                Frekuenca_Blerjeve=('Data', 'nunique'),
+                Dite_Nga_Blerja_Fundit=('Data', lambda x: (datetime.now() - x.max()).days)
             ).reset_index()
-
-            df_master_intelligence = pd.merge(
-                klient_features, grup_pivot, on="KodiKlient", how="left"
-            )
-
-            # Përgatitja e matricës për Autoencoder
-            kolonat_input = ["Totale_KG", "Totale_Vlera", "Frekuenca_Blerjeve"] + [
-                c for c in grup_pivot.columns if c != "KodiKlient"
-            ]
-            X_features = df_master_intelligence[kolonat_input].fillna(0)
-
+            
+            # Krijojmë profilin e blerjes sipas grupeve të produkteve (DEKA, OLIM, ETJ)
+            grup_pivot = df_ae.pivot_table(
+                index='KodiKlient', 
+                columns='Grup_Filtri', 
+                values='kg', 
+                aggfunc='sum', 
+                fill_value=0
+            ).reset_index()
+            
+            matrica_finale = pd.merge(klient_features, grup_pivot, on='KodiKlient', how='left')
+            
+            # Përzgjedhim kolonat numerike për matricën e Autoencoder-it
+            kolonat_profile = ['Totale_KG', 'Totale_Vlera', 'Frekuenca_Blerjeve'] + [c for c in grup_pivot.columns if c != 'KodiKlient']
+            X_features = matrica_finale[kolonat_profile].fillna(0)
+            
             # Normalizimi MinMax për rrjetin neural
-            X_normalized = (X_features - X_features.min()) / (
-                X_features.max() - X_features.min() + 1e-5
-            )
+            X_normalized = (X_features - X_features.min()) / (X_features.max() - X_features.min() + 1e-5)
             X_matrix = X_normalized.values
 
-        # --- HAPI 2: EMBEDDING LAYER (AUTOENCODER HAPËSIRA LATENTE) ---
+        # --- HAPI 2: BOTTLENECK LAYER (AUTOENCODER LATENT SPACE) ---
+        # Përdorim dekompozimin SVD që përfaqëson një Linear Autoencoder pa pasur nevojë për mbingarkesë të mjedisit Cloud
         U, S, Vt = np.linalg.svd(X_matrix, full_matrices=False)
-        latent_space = U[:, :3]  # Ngjeshja e historikut në 3 dimensione kryesore
-
-        # Llogaritja e gabimit të rikonstruksionit (Për të parë devijimet e fundit të sjelljes)
+        latent_space = U[:, :3]  # Kompresimi në 3 dimensione kryesore (Thelbi i sjelljes)
+        
+        # Rikonstruksioni dhe gjetja e Gabimit të Rikonstruksionit
         X_reconstructed = np.dot(latent_space, np.dot(np.diag(S[:3]), Vt[:3, :]))
         reconstruction_error = np.mean(np.square(X_matrix - X_reconstructed), axis=1)
-
-        df_master_intelligence["Gabimi_Sjelljes"] = reconstruction_error
-
-        # Kategorizimi Inteligjent në Vite / Kohë
+        
+        # Klasifikimi inteligjent i klientëve
         kategorite = []
-        for i, row in df_master_intelligence.iterrows():
-            if row["Dite_Nga_Blerja_Fundit"] > 150:
-                kategorite.append("🔴 Klient Pasiv (Nuk blen më)")
-            elif row["Dite_Nga_Blerja_Fundit"] > 45:
-                kategorite.append("🟡 Në Rrezik Largimi (Churn)")
+        for i, row in matrica_finale.iterrows():
+            if row['Dite_Nga_Blerja_Fundit'] > 180:
+                kategorite.append("🔴 Klient i Humbur (Inaktiv)")
+            elif row['Dite_Nga_Blerja_Fundit'] > 45:
+                kategorite.append("Sample 🟡 Në Rrezik Largimi (Churn)")
             elif reconstruction_error[i] > np.percentile(reconstruction_error, 85):
-                kategorite.append("⚡ Sjellje e Ndryshuar (Vizitë Urgjente)")
-            elif row["Totale_KG"] > df_master_intelligence["Totale_KG"].median() * 2:
-                kategorite.append("⭐ Klient Premium (Blerës i Rregullt)")
+                kategorite.append("⚡ Sjellje e Ndryshuar (Mundësi Blerje)")
+            elif row['Totale_KG'] > matrica_finale['Totale_KG'].median() * 2:
+                kategorite.append("⭐ Klient Premium (Volum i Lartë)")
             else:
                 kategorite.append("🟢 Klient Stabil / Normal")
+                
+        matrica_finale['Kategoria_Sjelljes'] = kategorite
+        matrica_finale['Gabimi_Sjelljes'] = reconstruction_error
 
-        df_master_intelligence["Kategoria_AI"] = kategorite
-
-        # Algoritmi i Pikëve të Prioritetit për të nxjerrë Rrugën (Route)
-        df_master_intelligence["Pikët_e_Prioritetit"] = (
-            (df_master_intelligence["Dite_Nga_Blerja_Fundit"] * 0.5)
-            + (df_master_intelligence["Gabimi_Sjelljes"] * 100 * 0.2)
-            + (
-                df_master_intelligence["Kategoria_AI"].apply(
-                    lambda x: 35 if "⚡" in x else (25 if "⭐" in x else 10)
-                )
+        # --- HAPI 3: INTEGRIMI ME FILTRAT DHE HISTORIKUN ---
+        if df_klientet_regjistri is not None:
+            # Bashkojmë regjistrin gjeografik me matricën tonë të inteligjencës artificiale
+            df_route_master = pd.merge(
+                df_klientet_regjistri[['KodiKlient', 'Rajoni', 'Latitude', 'Longitude', 'ForcaShiteseAktuale']],
+                matrica_finale,
+                on='KodiKlient',
+                how='inner'
             )
-        )
-
-        # Interfata e Përdoruesit për Zgjedhjen e Rrugëve
-        st.subheader("📋 Menaxhimi i Rrugëve Ditore sipas Agjentëve")
-
-        opsioni_shfaqjes = st.radio(
-            "Zgjidh mënyrën e shikimit të Rrugës (Route):",
-            [
-                "Shiko Agjentin e përzgjedhur në Sidebar",
-                "Gjenero dhe shkarko rrugët për të GJITHË Agjentët",
-            ],
-        )
-
-        limit_klientash = st.slider(
-            "Numri maksimal i klientëve për rrugë ditore (për agjent):", 5, 35, 15
-        )
-
-        # --- OPSIONI 1: SHIKIMI I INDIVIDUALIZUAR (Sipas Sidebar) ---
-        if opsioni_shfaqjes == "Shiko Agjentin e përzgjedhur në Sidebar":
-            st.markdown(f"### 📍 Rruga Ditore e Sugjeruar për: **{agj_sel}**")
-
-            # Filtrimi i matricës sonë inteligjente sipas agjentit aktual
+            # Përdorim kolonën e agjentit të përzgjedhur në sidebar
             if agj_sel != "Të gjithë":
-                df_route_agjenti = df_master_intelligence[
-                    df_master_intelligence["ForcaShitese"] == agj_sel
-                ]
-            else:
-                df_route_agjenti = df_master_intelligence.copy()
-                st.warning(
-                    "⚠️ Ju lutem përzgjidhni një Agjent specifik te menuja majtas (Sidebar) për të parë rrugën e tij të detajuar ose ndryshoni opsionin më lart."
-                )
+                df_route_master = df_route_master[df_route_master['ForcaShiteseAktuale'] == agj_sel]
+        else:
+            df_route_master = matrica_finale.copy()
+            # Nëse mungon regjistri, filtrojmë nga historiku direkt me kolonën tuaj 'ForcaShitese'
+            df_historik_agj = df_ae[['KodiKlient', 'ForcaShitese']].drop_duplicates()
+            df_route_master = pd.merge(df_route_master, df_historik_agj, on='KodiKlient', how='inner')
+            if agj_sel != "Të gjithë":
+                df_route_master = df_route_master[df_route_master['ForcaShitese'] == agj_sel]
 
-            # Renditja për të nxjerrë klientët më të fundit / më me prioritet
-            rruga_finale = df_route_agjenti.sort_values(
-                by="Pikët_e_Prioritetit", ascending=False
-            ).head(limit_klientash)
+        # --- SHPËRNDARJA E METRIKAVE NË UI ---
+        st.subheader("📊 Analiza e Grupeve të Klientëve")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Klientë Premium ⭐", len(df_route_master[df_route_master['Kategoria_Sjelljes'].str.contains("Premium")]))
+        c2.metric("Klientë Stabilë 🟢", len(df_route_master[df_route_master['Kategoria_Sjelljes'].str.contains("Stabil")]))
+        c3.metric("Në Rrezik 🟡", len(df_route_master[df_route_master['Kategoria_Sjelljes'].str.contains("Rrezik")]))
+        c4.metric("Ndryshim Sjellje ⚡", len(df_route_master[df_route_master['Kategoria_Sjelljes'].str.contains("Ndryshuar")]))
 
-            # Shfaqja e Hartës nëse ka të dhëna gjeografike nga regjistri
-            if df_klientet_regjistri is not None and not rruga_finale.empty:
-                rruga_hartë = pd.merge(
-                    rruga_finale,
-                    df_klientet_regjistri[["KodiKlient", "Latitude", "Longitude"]],
-                    on="KodiKlient",
-                    how="inner",
-                )
-                if not rruga_hartë.empty:
-                    st.map(
-                        rruga_hartë[["Latitude", "Longitude"]].rename(
-                            columns={"Latitude": "lat", "Longitude": "lon"}
-                        ),
-                        use_container_width=True,
-                    )
+        st.divider()
 
-            # Tabela në ekran
+        # --- GENERATORI I RUTEVE DITORE ---
+        st.subheader("📅 Planifikuesi i Rrugës Ditore të Shitjes")
+        
+        dita_javes = st.selectbox("Zgjidh ditën e rrugës:", ["E Hënë", "E Martë", "E Mërkurë", "E Enjte", "E Premte", "E Shtunë"])
+        limit_klientash = st.slider("Numri maksimal i klientëve për t'u vizituar sot:", 5, 40, 15)
+
+        # Formula e pikëve të prioritetit (Pikët rriten nëse klienti ka ditë pa blerë dhe nëse Autoencoder ka zbuluar anomali/ndryshim sjellje)
+        df_route_master['Pikët_e_Prioritetit'] = (
+            (df_route_master['Dite_Nga_Blerja_Fundit'] * 0.4) + 
+            (df_route_master['Gabimi_Sjelljes'] * 100 * 0.3) +
+            (df_route_master['Kategoria_Sjelljes'].apply(lambda x: 30 if "Premium" in x else (25 if "Rrezik" in x else 10)))
+        )
+        
+        # Rendisim klientët dhe marrim vetëm ata me prioritetin më të lartë që nuk janë inaktivë totalë
+        df_rruga_sot = df_route_master[~df_route_master['Kategoria_Sjelljes'].str.contains("Humbur")].sort_values(by='Pikët_e_Prioritetit', ascending=False).head(limit_klientash)
+
+        st.markdown(f"### 📍 Rruga e Rekomanduar Inteligjente (Top {len(df_rruga_sot)} Klientët)")
+        
+        # Vizualizimi në Hartë nëse ka koordinata gjeografike
+        if "Latitude" in df_rruga_sot.columns and not df_rruga_sot.empty:
+            map_data = df_rruga_sot[['Latitude', 'Longitude', 'Klienti']].rename(columns={'Latitude': 'lat', 'Longitude': 'lon'})
+            st.map(map_data, use_container_width=True)
+
+        # Tabela përfundimtare për agjentin
+        st.dataframe(
+            df_rruga_sot[[
+                'KodiKlient', 'Klienti', 'Kategoria_Sjelljes', 
+                'Dite_Nga_Blerja_Fundit', 'Totale_KG', 'Totale_Vlera'
+            ]].rename(columns={
+                'Kategoria_Sjelljes': 'Statusi i Sjelljes (AI)',
+                'Dite_Nga_Blerja_Fundit': 'Ditë pa Blerë',
+                'Totale_KG': 'Volumi 4-Vjeçar (KG)',
+                'Totale_Vlera': 'Vlera Historike (Lekë)'
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # Eksporti i rrugës ditore në CSV për agjentin
+        csv_data = df_rruga_sot[['KodiKlient', 'Klienti', 'Kategoria_Sjelljes', 'Dite_Nga_Blerja_Fundit']].to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Shkarko Rrugën Ditore në formatin CSV",
+            data=csv_data,
+            file_name=f"rruga_{agj_sel.lower().replace(' ', '_')}_{dita_javes.lower()}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+        
+    else:
+        st.warning("⚠️ Ju lutem ngarkoni të dhënat fillimisht te moduli kryesor që të ekzekutohet modeli.")----------------------------
+# -----------------------------------------------------------------
+# MODULI: ROUTE PLAN & ANALIZA E KLIENTËVE TË HUMBUR (I SAKTËSUAR)
+# -----------------------------------------------------------------
+elif page == "Route Plan AI":
+    st.title("🎯 Analiza e Agjentëve Aktivë dhe Klientëve të Humbur")
+    
+    if df_raw is not None and not df_raw.empty:
+        # --- HAPI 1: PËRCAKTIMI I PERIUDHAVE TË KOHËS ---
+        sot = datetime.now()
+        viti_aktual = sot.year
+        muaji_aktual = sot.month
+        
+        # Gjejmë muajin e fundit të plotë (duke përjashtuar muajin aktual)
+        if muaji_aktual == 1:
+            muaji_kaluar = 12
+            viti_muajit_kaluar = viti_aktual - 1
+        else:
+            muaji_kaluar = muaji_aktual - 1
+            viti_muajit_kaluar = viti_aktual
+            
+        # Data limit për klientët e humbur: 1 Janar i vitit para ketij aktual
+        data_limit_humbur = datetime(viti_aktual - 1, 1, 1)
+        
+        st.info(f"📅 **Konfigurimi i Kohës:**\n"
+                f"- Muaji i fundit i plotë i analizuar: **{muaji_kaluar}/{viti_muajit_kaluar}** (Muaji aktual {muaji_aktual}/{viti_aktual} është përjashtuar).\n"
+                f"- Klientët e humbur: Nuk kanë blerë që nga **01/01/{viti_aktual - 1}**.")
+
+        # --- HAPI 2: FILTRIMI I AGJENTËVE QË KANË SHITUR MUAJIN E KALUAR ---
+        df_koha = df_raw.copy()
+        df_koha["Viti"] = df_koha["Data"].dt.year
+        df_koha["Muaji"] = df_koha["Data"].dt.month
+        
+        # Izolojmë shitjet vetëm të muajit të kaluar të plotë
+        mask_muaji_kaluar = (df_koha["Viti"] == viti_muajit_kaluar) & (df_koha["Muaji"] == muaji_kaluar)
+        agjentet_aktive_muajin_kaluar = df_koha[mask_muaji_kaluar]["ForcaShitese"].unique()
+        
+        # Filtrojmë dataframe-in kryesor që të mbajë VETËM këta agjentë
+        df_filtruar = df_koha[df_koha["ForcaShitese"].isin(agjentet_aktive_muajin_kaluar)].copy()
+
+        # --- HAPI 3: KATEGORIZIMI I KLIENTËVE (AKTIVË VS TË HUMBUR) ---
+        # Gjejmë datën e fundit të blerjes për çdo klient dhe agjent të përfshirë
+        klient_status = df_filtruar.groupby(["ForcaShitese", "KodiKlient", "Klienti"]).agg(
+            Data_Blerjes_Fundit=('Data', 'max'),
+            Totale_KG=('kg', 'sum'),
+            Totale_Vlera=('Vlera_Historike', 'sum')
+        ).reset_index()
+        
+        # Ndajmë klientët sipas rregullit të datës 1 Janar të vitit të kaluar
+        mask_humbur = klient_status["Data_Blerjes_Fundit"] < data_limit_humbur
+        
+        df_klientet_humbur = klient_status[mask_humbur].copy()
+        df_klientet_aktive = klient_status Tint[~mask_humbur].copy()
+
+        # Llogaritim ditët pa blerë për të dyja grupet
+        df_klientet_humbur["Ditë pa Blerë"] = (datetime.now() - df_klientet_humbur["Data_Blerjes_Fundit"]).dt.days
+        df_klientet_aktive["Ditë pa Blerë"] = (datetime.now() - df_klientet_aktive["Data_Blerjes_Fundit"]).dt.days
+
+        # --- HAPI 4: SHAQJA E REZULTATEVE NË INTERFACË ---
+        st.subheader("📊 Përmbledhje Metrikash globale")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Agjentë Aktivë (Muaji i Kaluar)", len(agjentet_aktive_muajin_kaluar))
+        m2.metric("Klientë në Rrugë Operative", len(df_klientet_aktive))
+        m3.metric("Klientë të Humbur (Total)", len(df_klientet_humbur))
+
+        st.divider()
+
+        # Krijojmë dy skeda (Tabs) për të ndarë menaxhimin operative nga klientët e humbur
+        tab_aktive, tab_humbur = st.tabs(["📍 Rrugët Operative (Klientët Aktivë)", "🛑 Lista e Klientëve të Humbur"])
+
+        with tab_aktive:
+            st.subheader("📋 Planifikuesi i Rrugës për Agjentët Aktivë")
+            
+            # Filtri i agjentit i lidhur me sidebar-in ose lokal në faqe
+            agj_zgjedhur = st.selectbox("Zgjidh Agjentin për të parë klientët aktivë:", sorted(list(agjentet_aktive_muajin_kaluar)))
+            
+            df_rruga_agjentit = df_klientet_aktive[df_klientet_aktive["ForcaShitese"] == agj_zgjedhur].sort_values(by="Ditë pa Blerë", ascending=False)
+            
+            st.markdown(f"**Klientët që duhen vizituar për agjentin `{agj_zgjedhur}` (Renditur nga ata me më shumë ditë pa blerë):**")
             st.dataframe(
-                rruga_finale[
-                    [
-                        "KodiKlient",
-                        "Klienti",
-                        "Kategoria_AI",
-                        "Dite_Nga_Blerja_Fundit",
-                        "Totale_KG",
-                        "Totale_Vlera",
-                    ]
-                ].rename(
-                    columns={
-                        "Kategoria_AI": "Vlerësimi AI",
-                        "Dite_Nga_Blerja_Fundit": "Ditë pa blerë (Recency)",
-                        "Totale_KG": "Volumi Historik (KG)",
-                        "Totale_Vlera": "Vlera Totale (Lekë)",
-                    }
+                df_rruga_agjentit[["KodiKlient", "Klienti", "Data_Blerjes_Fundit", "Ditë pa Blerë", "Totale_KG"]].rename(
+                    columns={"Data_Blerjes_Fundit": "Blerja e Fundit", "Totale_KG": "Volumi Historik (KG)"}
                 ),
                 use_container_width=True,
-                hide_index=True,
+                hide_index=True
             )
+            
+            # Shkarkimi i rrugës operative
+            csv_aktive = df_rruga_agjentit.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Shkarko Rrugën Operative (CSV)", csv_aktive, f"rruga_operative_{agj_zgjedhur}.csv", "text/csv", use_container_width=True)
 
-            # Shkarkimi i rrugës specifike
-            csv_specifik = (
-                rruga_finale[
-                    ["KodiKlient", "Klienti", "Kategoria_AI", "Dite_Nga_Blerja_Fundit"]
-                ]
-                .to_csv(index=False)
-                .encode("utf-8")
-            )
-            st.download_button(
-                label=f"📥 Shkarko Rrugën Ditore për {agj_sel} (CSV)",
-                data=csv_specifik,
-                file_name=f"rruga_ditore_{agj_sel.lower().replace(' ', '_')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-        # --- OPSIONI 2: GJENERIMI GLOBAL PËR TË GJITHË ---
-        else:
-            st.markdown("### 🏢 Rrugët Ditore për të gjithë Agjentët e Sistemit")
-
-            # Krijojmë një DataFrame të madh që mbledh top rrugët për çdo agjent automatikisht
-            rruget_e_te_gjitheve = (
-                df_master_intelligence.sort_values(
-                    ["ForcaShitese", "Pikët_e_Prioritetit"], ascending=[True, False]
+        with tab_humbur:
+            st.subheader(f"🔴 Klientët e Humbur (Nuk kanë blerë që nga 01/01/{viti_aktual - 1})")
+            st.warning("⚠️ Këta klientë janë përjashtuar nga rrugët ditore operative dhe janë vendosur në këtë listë për ndjekje menaxheriale ose fushata rikthimi.")
+            
+            # Mundësia për të parë klientët e humbur sipas agjentëve përkatës që i mbulonin
+            përmbledhje_humbur = df_klientet_humbur.groupby("ForcaShitese").size().reset_index(name="Numri i Klientëve të Humbur")
+            
+            c_h1, c_h2 = st.columns([1, 2])
+            with c_h1:
+                st.markdown("**Sasia e klientëve të humbur sipas Agjentit:**")
+                st.dataframe(përmbledhje_humbur, use_container_width=True, hide_index=True)
+            
+            with c_h2:
+                st.markdown("**Lista e Detajuar e Klientëve të Humbur:**")
+                st.dataframe(
+                    df_klientet_humbur[["ForcaShitese", "KodiKlient", "Klienti", "Data_Blerjes_Fundit", "Ditë pa Blerë", "Totale_Vlera"]].rename(
+                        columns={"ForcaShitese": "Agjenti", "Data_Blerjes_Fundit": "Blerimi i Fundit", "Totale_Vlera": "Vlera Historike"}
+                    ).sort_values("Ditë pa Blerë", ascending=False),
+                    use_container_width=True,
+                    hide_index=True
                 )
-                .groupby("ForcaShitese")
-                .head(limit_klientash)
-            )
-
-            # Shfaqim përmbledhjen e klientëve për çdo agjent
-            përmbledhje_agjentësh = (
-                rruget_e_te_gjitheve.groupby("ForcaShitese")
-                .size()
-                .reset_index(name="Numri i Klientëve në Rrugë")
-            )
-            st.table(përmbledhje_agjentësh)
-
-            # Butoni i Shkarkimit Global (Mundëson që menaxhmenti të shkarkojë të gjitha rrugët e agjentëve në një skedar të vetëm)
-            csv_global = (
-                rruget_e_te_gjitheve[
-                    [
-                        "ForcaShitese",
-                        "KodiKlient",
-                        "Klienti",
-                        "Kategoria_AI",
-                        "Dite_Nga_Blerja_Fundit",
-                    ]
-                ]
-                .to_csv(index=False)
-                .encode("utf-8")
-            )
-            st.download_button(
-                label="📥 Shkarko Master-Planin e Rrugëve për të GJITHË Agjentët (CSV)",
-                data=csv_global,
-                file_name="master_plan_rruget_agjenteve.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-            # Shfaqja e të gjithë klientëve të ndarë
-            st.dataframe(
-                rruget_e_te_gjitheve[
-                    [
-                        "ForcaShitese",
-                        "KodiKlient",
-                        "Klienti",
-                        "Kategoria_AI",
-                        "Dite_Nga_Blerja_Fundit",
-                    ]
-                ],
-                use_container_width=True,
-                hide_index=True,
-            )
-
+                
+            # Eksporti i listës master të klientëve të humbur
+            csv_humbur = df_klientet_humbur.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Shkarko të gjithë Klientët e Humbur (CSV)", csv_humbur, "klientet_e_humbur_master.csv", "text/csv", use_container_width=True)
+            
     else:
-        st.error(
-            "⚠️ Nuk u gjetën të dhëna të ngarkuara. Ju lutem sigurohuni që databaza po funksionon."
-        )
+        st.error("⚠️ Nuk u gjetën të dhëna të ngarkuara në modul.")
