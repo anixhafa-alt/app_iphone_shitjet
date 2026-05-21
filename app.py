@@ -11,7 +11,7 @@ from ai_modules_improved import render_plan_ditor
 
 # Importet ekzistuese të modulit të ri
 from ai_modules_improved import render_plan_ditor
-from mundesite2 import render_mundesite_shitjes  # <-- SHTO KËTË LINE
+from mundesite2 import render_mundesite_v3
 
 # =========================================================
 # region ==================================================
@@ -2008,7 +2008,7 @@ if page == "🎯 Plani sipas Strukturës B":
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
 if page == "🔍 Analiza e Mundësive":
-    # df_raw është DataFrame që aplikacioni yt lexon nga SQL ose Exceli
-    render_mundesite_shitjes(df_raw)
+    # Kalojmë direkt df_raw ose DataFrame-in kryesor që lexon nga XLSB tuaj
+    render_mundesite_v3(df_raw)
 
 # endregion
