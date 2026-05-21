@@ -2008,6 +2008,8 @@ if page == "🎯 Plani sipas Strukturës B":
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
 if page == "historiku2":
-    render_analiza_klienteve(df_raw)
+    render_analiza_klienteve(
+        df_raw
+    )  # df_raw është DataFrame që lexon SAD-DATAbase1.xlsb në app.py
 
 # endregion
