@@ -2846,13 +2846,13 @@ if page == "🎯 Plani sipas Strukturës B":
 # -----------------------------------------------------------------
 elif page == "Route Plan AI-2":
     st.title("🎯 Analiza e Agjentëve Aktivë dhe Klientëve të Humbur")
-    
+
     if df_raw is not None and not df_raw.empty:
         # --- HAPI 1: PËRCAKTIMI I PERIUDHAVE TË KOHËS ---
         sot = datetime.now()
         viti_aktual = sot.year
         muaji_aktual = sot.month
-        
+
         # Gjejmë muajin e fundit të plotë (duke përjashtuar muajin aktual)
         if muaji_aktual == 1:
             muaji_kaluar = 12
@@ -2860,43 +2860,59 @@ elif page == "Route Plan AI-2":
         else:
             muaji_kaluar = muaji_aktual - 1
             viti_muajit_kaluar = viti_aktual
-            
+
         # Data limit për klientët e humbur: 1 Janar i vitit para ketij aktual
         data_limit_humbur = datetime(viti_aktual - 1, 1, 1)
-        
-        st.info(f"📅 **Konfigurimi i Kohës:**\n"
-                f"- Muaji i fundit i plotë i analizuar: **{muaji_kaluar}/{viti_muajit_kaluar}** (Muaji aktual {muaji_aktual}/{viti_aktual} është përjashtuar).\n"
-                f"- Klientët e humbur: Nuk kanë blerë që nga **01/01/{viti_aktual - 1}**.")
+
+        st.info(
+            f"📅 **Konfigurimi i Kohës:**\n"
+            f"- Muaji i fundit i plotë i analizuar: **{muaji_kaluar}/{viti_muajit_kaluar}** (Muaji aktual {muaji_aktual}/{viti_aktual} është përjashtuar).\n"
+            f"- Klientët e humbur: Nuk kanë blerë që nga **01/01/{viti_aktual - 1}**."
+        )
 
         # --- HAPI 2: FILTRIMI I AGJENTËVE QË KANË SHITUR MUAJIN E KALUAR ---
         df_koha = df_raw.copy()
         df_koha["Viti"] = df_koha["Data"].dt.year
         df_koha["Muaji"] = df_koha["Data"].dt.month
-        
+
         # Izolojmë shitjet vetëm të muajit të kaluar të plotë
-        mask_muaji_kaluar = (df_koha["Viti"] == viti_muajit_kaluar) & (df_koha["Muaji"] == muaji_kaluar)
-        agjentet_aktive_muajin_kaluar = df_koha[mask_muaji_kaluar]["ForcaShitese"].unique()
-        
+        mask_muaji_kaluar = (df_koha["Viti"] == viti_muajit_kaluar) & (
+            df_koha["Muaji"] == muaji_kaluar
+        )
+        agjentet_aktive_muajin_kaluar = df_koha[mask_muaji_kaluar][
+            "ForcaShitese"
+        ].unique()
+
         # Filtrojmë dataframe-in kryesor që të mbajë VETËM këta agjentë
-        df_filtruar = df_koha[df_koha["ForcaShitese"].isin(agjentet_aktive_muajin_kaluar)].copy()
+        df_filtruar = df_koha[
+            df_koha["ForcaShitese"].isin(agjentet_aktive_muajin_kaluar)
+        ].copy()
 
         # --- HAPI 3: KATEGORIZIMI I KLIENTËVE (AKTIVË VS TË HUMBUR) ---
         # Gjejmë datën e fundit të blerjes për çdo klient dhe agjent të përfshirë
-        klient_status = df_filtruar.groupby(["ForcaShitese", "KodiKlient", "Klienti"]).agg(
-            Data_Blerjes_Fundit=('Data', 'max'),
-            Totale_KG=('kg', 'sum'),
-            Totale_Vlera=('Vlera_Historike', 'sum')
-        ).reset_index()
-        
+        klient_status = (
+            df_filtruar.groupby(["ForcaShitese", "KodiKlient", "Klienti"])
+            .agg(
+                Data_Blerjes_Fundit=("Data", "max"),
+                Totale_KG=("kg", "sum"),
+                Totale_Vlera=("Vlera_Historike", "sum"),
+            )
+            .reset_index()
+        )
+
         # Ndajmë klientët sipas rregullit të datës 1 Janar të vitit të kaluar
         mask_humbur = klient_status["Data_Blerjes_Fundit"] < data_limit_humbur
-        
+
         df_klientet_humbur = klient_status[mask_humbur].copy()
-        df_klientet_aktive = klient_status Tint[~mask_humbur].copy()
+        df_klientet_aktive = klient_status[~mask_humbur].copy()
 
         # Llogaritim ditët pa blerë për të dyja grupet
-        df_klientet_humbur["Ditë pa Blerë"] = (datetime.now() - df_klientet_humbur["Data_Blerjes_Fundit"]).dt.days
-        df_klientet_aktive["Ditë pa Blerë"] = (datetime.now() - df_klientet_aktive["Data_Blerjes_Fundit"]).dt.days
+        df_klientet_humbur["Ditë pa Blerë"] = (
+            datetime.now() - df_klientet_humbur["Data_Blerjes_Fundit"]
+        ).dt.days
+        df_klientet_aktive["Ditë pa Blerë"] = (
+            datetime.now() - df_klientet_aktive["Data_Blerjes_Fundit"]
+        ).dt.days
 
         # --- HAPI 4: SHAQJA E REZULTATEVE NË INTERFACË ---
         st.subheader("📊 Përmbledhje Metrikash globale")
@@ -2908,54 +2924,111 @@ elif page == "Route Plan AI-2":
         st.divider()
 
         # Krijojmë dy skeda (Tabs) për të ndarë menaxhimin operative nga klientët e humbur
-        tab_aktive, tab_humbur = st.tabs(["📍 Rrugët Operative (Klientët Aktivë)", "🛑 Lista e Klientëve të Humbur"])
+        tab_aktive, tab_humbur = st.tabs(
+            ["📍 Rrugët Operative (Klientët Aktivë)", "🛑 Lista e Klientëve të Humbur"]
+        )
 
         with tab_aktive:
             st.subheader("📋 Planifikuesi i Rrugës për Agjentët Aktivë")
-            
+
             # Filtri i agjentit i lidhur me sidebar-in ose lokal në faqe
-            agj_zgjedhur = st.selectbox("Zgjidh Agjentin për të parë klientët aktivë:", sorted(list(agjentet_aktive_muajin_kaluar)))
-            
-            df_rruga_agjentit = df_klientet_aktive[df_klientet_aktive["ForcaShitese"] == agj_zgjedhur].sort_values(by="Ditë pa Blerë", ascending=False)
-            
-            st.markdown(f"**Klientët që duhen vizituar për agjentin `{agj_zgjedhur}` (Renditur nga ata me më shumë ditë pa blerë):**")
+            agj_zgjedhur = st.selectbox(
+                "Zgjidh Agjentin për të parë klientët aktivë:",
+                sorted(list(agjentet_aktive_muajin_kaluar)),
+            )
+
+            df_rruga_agjentit = df_klientet_aktive[
+                df_klientet_aktive["ForcaShitese"] == agj_zgjedhur
+            ].sort_values(by="Ditë pa Blerë", ascending=False)
+
+            st.markdown(
+                f"**Klientët që duhen vizituar për agjentin `{agj_zgjedhur}` (Renditur nga ata me më shumë ditë pa blerë):**"
+            )
             st.dataframe(
-                df_rruga_agjentit[["KodiKlient", "Klienti", "Data_Blerjes_Fundit", "Ditë pa Blerë", "Totale_KG"]].rename(
-                    columns={"Data_Blerjes_Fundit": "Blerja e Fundit", "Totale_KG": "Volumi Historik (KG)"}
+                df_rruga_agjentit[
+                    [
+                        "KodiKlient",
+                        "Klienti",
+                        "Data_Blerjes_Fundit",
+                        "Ditë pa Blerë",
+                        "Totale_KG",
+                    ]
+                ].rename(
+                    columns={
+                        "Data_Blerjes_Fundit": "Blerja e Fundit",
+                        "Totale_KG": "Volumi Historik (KG)",
+                    }
                 ),
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
             )
-            
+
             # Shkarkimi i rrugës operative
-            csv_aktive = df_rruga_agjentit.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Shkarko Rrugën Operative (CSV)", csv_aktive, f"rruga_operative_{agj_zgjedhur}.csv", "text/csv", use_container_width=True)
+            csv_aktive = df_rruga_agjentit.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "📥 Shkarko Rrugën Operative (CSV)",
+                csv_aktive,
+                f"rruga_operative_{agj_zgjedhur}.csv",
+                "text/csv",
+                use_container_width=True,
+            )
 
         with tab_humbur:
-            st.subheader(f"🔴 Klientët e Humbur (Nuk kanë blerë që nga 01/01/{viti_aktual - 1})")
-            st.warning("⚠️ Këta klientë janë përjashtuar nga rrugët ditore operative dhe janë vendosur në këtë listë për ndjekje menaxheriale ose fushata rikthimi.")
-            
+            st.subheader(
+                f"🔴 Klientët e Humbur (Nuk kanë blerë që nga 01/01/{viti_aktual - 1})"
+            )
+            st.warning(
+                "⚠️ Këta klientë janë përjashtuar nga rrugët ditore operative dhe janë vendosur në këtë listë për ndjekje menaxheriale ose fushata rikthimi."
+            )
+
             # Mundësia për të parë klientët e humbur sipas agjentëve përkatës që i mbulonin
-            përmbledhje_humbur = df_klientet_humbur.groupby("ForcaShitese").size().reset_index(name="Numri i Klientëve të Humbur")
-            
+            përmbledhje_humbur = (
+                df_klientet_humbur.groupby("ForcaShitese")
+                .size()
+                .reset_index(name="Numri i Klientëve të Humbur")
+            )
+
             c_h1, c_h2 = st.columns([1, 2])
             with c_h1:
                 st.markdown("**Sasia e klientëve të humbur sipas Agjentit:**")
-                st.dataframe(përmbledhje_humbur, use_container_width=True, hide_index=True)
-            
+                st.dataframe(
+                    përmbledhje_humbur, use_container_width=True, hide_index=True
+                )
+
             with c_h2:
                 st.markdown("**Lista e Detajuar e Klientëve të Humbur:**")
                 st.dataframe(
-                    df_klientet_humbur[["ForcaShitese", "KodiKlient", "Klienti", "Data_Blerjes_Fundit", "Ditë pa Blerë", "Totale_Vlera"]].rename(
-                        columns={"ForcaShitese": "Agjenti", "Data_Blerjes_Fundit": "Blerimi i Fundit", "Totale_Vlera": "Vlera Historike"}
-                    ).sort_values("Ditë pa Blerë", ascending=False),
+                    df_klientet_humbur[
+                        [
+                            "ForcaShitese",
+                            "KodiKlient",
+                            "Klienti",
+                            "Data_Blerjes_Fundit",
+                            "Ditë pa Blerë",
+                            "Totale_Vlera",
+                        ]
+                    ]
+                    .rename(
+                        columns={
+                            "ForcaShitese": "Agjenti",
+                            "Data_Blerjes_Fundit": "Blerimi i Fundit",
+                            "Totale_Vlera": "Vlera Historike",
+                        }
+                    )
+                    .sort_values("Ditë pa Blerë", ascending=False),
                     use_container_width=True,
-                    hide_index=True
+                    hide_index=True,
                 )
-                
+
             # Eksporti i listës master të klientëve të humbur
-            csv_humbur = df_klientet_humbur.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Shkarko të gjithë Klientët e Humbur (CSV)", csv_humbur, "klientet_e_humbur_master.csv", "text/csv", use_container_width=True)
-            
+            csv_humbur = df_klientet_humbur.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "📥 Shkarko të gjithë Klientët e Humbur (CSV)",
+                csv_humbur,
+                "klientet_e_humbur_master.csv",
+                "text/csv",
+                use_container_width=True,
+            )
+
     else:
         st.error("⚠️ Nuk u gjetën të dhëna të ngarkuara në modul.")
