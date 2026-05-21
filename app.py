@@ -2968,95 +2968,249 @@ if page == "🎯 Plani sipas Strukturës B":
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
 # endregion
-# =========================================================
-# MODULI: ITINERARI DHE RRUGËTIMI I FUNDIT I AGJENTËVE
-# region ==================================================
+# ---------------------------------------------------------
+# MODULI: ROUTE PLAN AI & AUTOENCODER (I PËRDITËSUAR)
+# ---------------------------------------------------------
+elif page == "Route Plan AI":
+    st.title("🎯 Inteligjenca Artificiale: Route Plan & Kategorizimi")
+    st.markdown(f"### 👤 Agjenti i Përzgjedhur: **{agj_sel}**")
 
-
-def shfaq_itinerarin_e_agjenteve(df):
-    st.subheader("📍 Rrugëtimi i Fundit i Agjentëve sipas Klientëve")
-    st.markdown(
-        "Ky modul tregon itinerarin kronologjik të agjentëve bazuar në klientët që kanë vizituar ose shërbyer së fundmi."
-    )
-
-    # Supozojmë që kolonat në DataFrame janë: 'Agjenti', 'Klienti', 'Data'
-    # Nëse kolonat e tua kanë emra të tjerë (psh 'Data_Fatures', 'Emër Agjenti'), ndryshoji poshtë:
-    kolona_agjenti = "ForcaShitese"
-    kolona_klienti = "Klienti"
-    kolona_data = "Data"
-
-    # Kontrolli nëse kolonat ekzistojnë në skedarin e ngarkuar
-    if all(col in df.columns for col in [kolona_agjenti, kolona_klienti, kolona_data]):
-
-        # 1. Sigurohemi që data është në formatin e saktë datetime
-        df[kolona_data] = pd.to_datetime(df[kolona_data])
-
-        # 2. Gjejmë vizitën/faturën më të fundit për çdo kombinim Agjent-Klient
-        df_fundit = (
-            df.sort_values(by=kolona_data)
-            .groupby([kolona_agjenti, kolona_klienti])
-            .last()
-            .reset_index()
+    if df_raw is not None and not df_raw.empty:
+        st.info(
+            "💡 Ky modul përdor një Autoencoder Neural (SVD-Bottleneck) për të analizuar sjelljen 4-vjeçare të klientëve dhe për të gjeneruar rrugën optimale ditore për shitje."
         )
 
-        # 3. Renditim përsëri sipas datës më të re për të parë rrugëtimin kronologjik
-        df_route = df_fundit.sort_values(
-            by=[kolona_agjenti, kolona_data], ascending=[True, False]
-        )
+        # --- HAPI 1: PËRGATITJA E TË DHËNAVE (PIVOTIMI SIPAS EMRAVE TË TU RE) ---
+        with st.spinner("Duke procesuar historikun e shitjeve me Autoencoder..."):
+            df_ae = df_raw.copy()
 
-        # Filter për të zgjedhur një Agjent specifik ose për t'i parë të gjithë
-        lista_agjenteve = ["Të gjithë"] + sorted(
-            df_route[kolona_agjenti].unique().tolist()
-        )
-        agjenti_përzgjedhur = st.selectbox("Filtro sipas Agjentit:", lista_agjenteve)
+            # Agregimi bazë për çdo klient (Sipas kolonave të tua: 'KodiKlient', 'Klienti', 'Data')
+            klient_features = (
+                df_ae.groupby(["KodiKlient", "Klienti"])
+                .agg(
+                    Totale_KG=("kg", "sum"),
+                    Totale_Vlera=("Vlera_Historike", "sum"),
+                    Frekuenca_Blerjeve=("Data", "nunique"),
+                    Dite_Nga_Blerja_Fundit=(
+                        "Data",
+                        lambda x: (datetime.now() - x.max()).days,
+                    ),
+                )
+                .reset_index()
+            )
 
-        if agjenti_përzgjedhur != "Të gjithë":
-            df_shfaqje = df_route[df_route[kolona_agjenti] == agjenti_përzgjedhur]
+            # Krijojmë profilin e blerjes sipas grupeve të produkteve (DEKA, OLIM, ETJ)
+            grup_pivot = df_ae.pivot_table(
+                index="KodiKlient",
+                columns="Grup_Filtri",
+                values="kg",
+                aggfunc="sum",
+                fill_value=0,
+            ).reset_index()
+
+            matrica_finale = pd.merge(
+                klient_features, grup_pivot, on="KodiKlient", how="left"
+            )
+
+            # Përzgjedhim kolonat numerike për matricën e Autoencoder-it
+            kolonat_profile = ["Totale_KG", "Totale_Vlera", "Frekuenca_Blerjeve"] + [
+                c for c in grup_pivot.columns if c != "KodiKlient"
+            ]
+            X_features = matrica_finale[kolonat_profile].fillna(0)
+
+            # Normalizimi MinMax për rrjetin neural
+            X_normalized = (X_features - X_features.min()) / (
+                X_features.max() - X_features.min() + 1e-5
+            )
+            X_matrix = X_normalized.values
+
+        # --- HAPI 2: BOTTLENECK LAYER (AUTOENCODER LATENT SPACE) ---
+        # Përdorim dekompozimin SVD që përfaqëson një Linear Autoencoder pa pasur nevojë për mbingarkesë të mjedisit Cloud
+        U, S, Vt = np.linalg.svd(X_matrix, full_matrices=False)
+        latent_space = U[
+            :, :3
+        ]  # Kompresimi në 3 dimensione kryesore (Thelbi i sjelljes)
+
+        # Rikonstruksioni dhe gjetja e Gabimit të Rikonstruksionit
+        X_reconstructed = np.dot(latent_space, np.dot(np.diag(S[:3]), Vt[:3, :]))
+        reconstruction_error = np.mean(np.square(X_matrix - X_reconstructed), axis=1)
+
+        # Klasifikimi inteligjent i klientëve
+        kategorite = []
+        for i, row in matrica_finale.iterrows():
+            if row["Dite_Nga_Blerja_Fundit"] > 180:
+                kategorite.append("🔴 Klient i Humbur (Inaktiv)")
+            elif row["Dite_Nga_Blerja_Fundit"] > 45:
+                kategorite.append("Sample 🟡 Në Rrezik Largimi (Churn)")
+            elif reconstruction_error[i] > np.percentile(reconstruction_error, 85):
+                kategorite.append("⚡ Sjellje e Ndryshuar (Mundësi Blerje)")
+            elif row["Totale_KG"] > matrica_finale["Totale_KG"].median() * 2:
+                kategorite.append("⭐ Klient Premium (Volum i Lartë)")
+            else:
+                kategorite.append("🟢 Klient Stabil / Normal")
+
+        matrica_finale["Kategoria_Sjelljes"] = kategorite
+        matrica_finale["Gabimi_Sjelljes"] = reconstruction_error
+
+        # --- HAPI 3: INTEGRIMI ME FILTRAT DHE HISTORIKUN ---
+        if df_klientet_regjistri is not None:
+            # Bashkojmë regjistrin gjeografik me matricën tonë të inteligjencës artificiale
+            df_route_master = pd.merge(
+                df_klientet_regjistri[
+                    [
+                        "KodiKlient",
+                        "Rajoni",
+                        "Latitude",
+                        "Longitude",
+                        "ForcaShiteseAktuale",
+                    ]
+                ],
+                matrica_finale,
+                on="KodiKlient",
+                how="inner",
+            )
+            # Përdorim kolonën e agjentit të përzgjedhur në sidebar
+            if agj_sel != "Të gjithë":
+                df_route_master = df_route_master[
+                    df_route_master["ForcaShiteseAktuale"] == agj_sel
+                ]
         else:
-            df_shfaqje = df_route
+            df_route_master = matrica_finale.copy()
+            # Nëse mungon regjistri, filtrojmë nga historiku direkt me kolonën tuaj 'ForcaShitese'
+            df_historik_agj = df_ae[["KodiKlient", "ForcaShitese"]].drop_duplicates()
+            df_route_master = pd.merge(
+                df_route_master, df_historik_agj, on="KodiKlient", how="inner"
+            )
+            if agj_sel != "Të gjithë":
+                df_route_master = df_route_master[
+                    df_route_master["ForcaShitese"] == agj_sel
+                ]
 
-        # Formatimi i datës për lexim më të lehtë në tabelë
-        df_shfaqje_stilizuar = df_shfaqje.copy()
-        df_shfaqje_stilizuar[kolona_data] = df_shfaqje_stilizuar[
-            kolona_data
-        ].dt.strftime("%d/%m/%Y %H:%M")
+        # --- SHPËRNDARJA E METRIKAVE NË UI ---
+        st.subheader("📊 Analiza e Grupeve të Klientëve")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(
+            "Klientë Premium ⭐",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Premium")
+                ]
+            ),
+        )
+        c2.metric(
+            "Klientë Stabilë 🟢",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Stabil")
+                ]
+            ),
+        )
+        c3.metric(
+            "Në Rrezik 🟡",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Rrezik")
+                ]
+            ),
+        )
+        c4.metric(
+            "Ndryshim Sjellje ⚡",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Ndryshuar")
+                ]
+            ),
+        )
 
-        # Shfaqja e të dhënave në mënyrë vizuale
+        st.divider()
+
+        # --- GENERATORI I RUTEVE DITORE ---
+        st.subheader("📅 Planifikuesi i Rrugës Ditore të Shitjes")
+
+        dita_javes = st.selectbox(
+            "Zgjidh ditën e rrugës:",
+            ["E Hënë", "E Martë", "E Mërkurë", "E Enjte", "E Premte", "E Shtunë"],
+        )
+        limit_klientash = st.slider(
+            "Numri maksimal i klientëve për t'u vizituar sot:", 5, 40, 15
+        )
+
+        # Formula e pikëve të prioritetit (Pikët rriten nëse klienti ka ditë pa blerë dhe nëse Autoencoder ka zbuluar anomali/ndryshim sjellje)
+        df_route_master["Pikët_e_Prioritetit"] = (
+            (df_route_master["Dite_Nga_Blerja_Fundit"] * 0.4)
+            + (df_route_master["Gabimi_Sjelljes"] * 100 * 0.3)
+            + (
+                df_route_master["Kategoria_Sjelljes"].apply(
+                    lambda x: 30 if "Premium" in x else (25 if "Rrezik" in x else 10)
+                )
+            )
+        )
+
+        # Rendisim klientët dhe marrim vetëm ata me prioritetin më të lartë që nuk janë inaktivë totalë
+        df_rruga_sot = (
+            df_route_master[
+                ~df_route_master["Kategoria_Sjelljes"].str.contains("Humbur")
+            ]
+            .sort_values(by="Pikët_e_Prioritetit", ascending=False)
+            .head(limit_klientash)
+        )
+
+        st.markdown(
+            f"### 📍 Rruga e Rekomanduar Inteligjente (Top {len(df_rruga_sot)} Klientët)"
+        )
+
+        # Vizualizimi në Hartë nëse ka koordinata gjeografike
+        if "Latitude" in df_rruga_sot.columns and not df_rruga_sot.empty:
+            map_data = df_rruga_sot[["Latitude", "Longitude", "Klienti"]].rename(
+                columns={"Latitude": "lat", "Longitude": "lon"}
+            )
+            st.map(map_data, use_container_width=True)
+
+        # Tabela përfundimtare për agjentin
         st.dataframe(
-            df_shfaqje_stilizuar[[kolona_agjenti, kolona_klienti, kolona_data]],
+            df_rruga_sot[
+                [
+                    "KodiKlient",
+                    "Klienti",
+                    "Kategoria_Sjelljes",
+                    "Dite_Nga_Blerja_Fundit",
+                    "Totale_KG",
+                    "Totale_Vlera",
+                ]
+            ].rename(
+                columns={
+                    "Kategoria_Sjelljes": "Statusi i Sjelljes (AI)",
+                    "Dite_Nga_Blerja_Fundit": "Ditë pa Blerë",
+                    "Totale_KG": "Volumi 4-Vjeçar (KG)",
+                    "Totale_Vlera": "Vlera Historike (Lekë)",
+                }
+            ),
             use_container_width=True,
             hide_index=True,
         )
 
-        # Eksporti i këtij itinerari në Excel
-        try:
-            import io
-
-            towrite = io.BytesIO()
-            df_shfaqje.to_excel(towrite, index=False, header=True, engine="openpyxl")
-            towrite.seek(0)
-            st.download_button(
-                label="📥 Shkarko këtë Itinerar në Excel",
-                data=towrite,
-                file_name=f"itinerari_{agjenti_përzgjedhur.lower().replace(' ', '_')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        except Exception as e:
-            st.warning(f"Nuk u mundësua krijimi i butonit të shkarkimit: {e}")
-
-    else:
-        st.error(
-            f"❌ Nuk u gjetën kolonat e nevojshme. Sigurohu që skedari ka: '{kolona_agjenti}', '{kolona_klienti}' dhe '{kolona_data}'."
+        # Eksporti i rrugës ditore në CSV për agjentin
+        csv_data = (
+            df_rruga_sot[
+                [
+                    "KodiKlient",
+                    "Klienti",
+                    "Kategoria_Sjelljes",
+                    "Dite_Nga_Blerja_Fundit",
+                ]
+            ]
+            .to_csv(index=False)
+            .encode("utf-8")
+        )
+        st.download_button(
+            label="📥 Shkarko Rrugën Ditore në formatin CSV",
+            data=csv_data,
+            file_name=f"rruga_{agj_sel.lower().replace(' ', '_')}_{dita_javes.lower()}.csv",
+            mime="text/csv",
+            use_container_width=True,
         )
 
-
-# Integrimi me menunë tuaj (blloku IF)
-if page == "Route Agjentëve":
-    # Supozojmë që df_kryesor është DataFrame që keni ngarkuar te appi
-    if "df_kryesor" in locals() or "df_kryesor" in globals():
-        shfaq_itinerarin_e_agjenteve(df_kryesor)
     else:
-        st.warning("⚠️ Ju lutem ngarkoni të dhënat fillimisht te moduli kryesor.")
-    st.stop()
-
-# endregion
+        st.warning(
+            "⚠️ Ju lutem ngarkoni të dhënat fillimisht te moduli kryesor që të ekzekutohet modeli."
+        )
