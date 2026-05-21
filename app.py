@@ -8,10 +8,7 @@ import time
 
 # --- Moduli i unifikuar AI (v3.0) ---
 from ai_modules_improved import render_plan_ditor
-
-# Importet ekzistuese të modulit të ri
-from ai_modules_improved import render_plan_ditor
-from analiza import render_analiza_klienteve
+from analiza_module import render_analiza
 
 # =========================================================
 # region ==================================================
@@ -144,14 +141,14 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
     [
-        "🎯 Plani Ditor",  # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
+        "🎯 Plani Ditor",          # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
+        "📊 Analiza",              # Dashboard interaktiv (trendet, top kategorite, agjentet)
         "Shitjet Ditore",
         "Realizimi",
         "Planifikimi",
         "🎯 Plani sipas Strukturës B",
         "Mundësitë",
         "Historiku",
-        "Historiku2",
     ],
 )
 # endregion
@@ -519,9 +516,14 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # MODULI I RI I UNIFIKUAR: PLANI DITOR (v3.0)
 # ---------------------------------------------------------
 if page == "🎯 Plani Ditor":
-    render_plan_ditor(
-        df_raw, df_klientet_regjistri, agj_sel, start_date, end_date, rritja
-    )
+    render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
+                      start_date, end_date, rritja)
+
+# ---------------------------------------------------------
+# MODULI: ANALIZA (Dashboard)
+# ---------------------------------------------------------
+elif page == "📊 Analiza":
+    render_analiza(df_raw)
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
@@ -1650,6 +1652,12 @@ elif page == "Shitjet Ditore":
         st.error("Të dhënat nuk u ngarkuan dot.")
 
 
+
+# ---------------------------------------------------------
+# MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
+# ---------------------------------------------------------
+
+
 # 1. HAPI I PARË: Deklarojmë funksionin në mënyrë që Python ta njohë
 def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
@@ -2007,9 +2015,7 @@ if page == "🎯 Plani sipas Strukturës B":
     shfaq_modul_planifikimi_artikujve(df_raw)
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
-if page == "historiku2":
-    render_analiza_klienteve(
-        df_raw
-    )  # df_raw është DataFrame që lexon SAD-DATAbase1.xlsb në app.py
-
 # endregion
+# -----------------------------------------------------------------
+# MODULI: ROUTE PLAN & ANALIZA E KLIENTËVE TË HUMBUR (I SAKTËSUAR)
+# -----------------------------------------------------------------
