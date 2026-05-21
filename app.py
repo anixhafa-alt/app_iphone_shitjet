@@ -11,7 +11,7 @@ from ai_modules_improved import render_plan_ditor
 
 # Importet ekzistuese të modulit të ri
 from ai_modules_improved import render_plan_ditor
-from mundesite_module import render_mundesite_shitjes  # <-- SHTO KËTË LINE
+from mundesite2 import render_mundesite_shitjes  # <-- SHTO KËTË LINE
 
 # =========================================================
 # region ==================================================
