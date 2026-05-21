@@ -628,7 +628,7 @@ def render_route_plan_ai(df_klientet_regjistri):
         use_container_width=True, hide_index=True,
     )
 
-    csv = df_opt.to_csv(index=False).encode("utf-8")
+    csv = df_opt.to_csv(index=False).encode("utf-8-sig")
     st.download_button("📥 Shkarko Rrugën Optimale (CSV)",
                        csv, f"rruga_optimale_{zona}.csv", "text/csv",
                        use_container_width=True)
@@ -746,7 +746,7 @@ def render_route_plan_ai_2(df_raw):
             use_container_width=True, hide_index=True,
         )
         st.download_button("📥 Shkarko (CSV)",
-                           df_rr.to_csv(index=False).encode("utf-8"),
+                           df_rr.to_csv(index=False).encode("utf-8-sig"),
                            f"rruga_{agj_zgj}.csv", "text/csv",
                            use_container_width=True)
 
@@ -777,7 +777,7 @@ def render_route_plan_ai_2(df_raw):
             use_container_width=True, hide_index=True,
         )
         st.download_button("📥 Shkarko të Humburit (CSV)",
-                           df_humbur.to_csv(index=False).encode("utf-8"),
+                           df_humbur.to_csv(index=False).encode("utf-8-sig"),
                            "klientet_e_humbur.csv", "text/csv",
                            use_container_width=True)
 
@@ -1111,7 +1111,10 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     st.subheader("📦 Plani i Vizitave + Produktet për Ofertë")
 
     plan_rrjeshtor = []
-    rendor_iter = df_opt.iterrows() if not df_opt.empty else kandidatet.assign(Rendi=range(1, len(kandidatet) + 1)).iterrows()
+    if not df_opt.empty:
+        rendor_iter = df_opt.iterrows()
+    else:
+        rendor_iter = kandidatet.assign(Rendi=range(1, len(kandidatet) + 1)).iterrows()
 
     for _, rresht in rendor_iter:
         klienti = rresht["klienti"]
@@ -1149,10 +1152,10 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
         hide_index=True,
     )
 
-    # ----- 13. EKSPORTI -----
+    # ----- 13. EKSPORTI (utf-8-sig për Excel në Windows) -----
     col_e1, col_e2, col_e3 = st.columns(3)
 
-    csv_data = df_plan.to_csv(index=False).encode("utf-8")
+    csv_data = df_plan.to_csv(index=False).encode("utf-8-sig")
     col_e1.download_button(
         "📥 Shkarko CSV",
         csv_data,
@@ -1182,7 +1185,7 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
                 "Artikulli": "—", "Sasia KG": 0, "Arsyeja": "Pa sugjerim",
             })
 
-    csv_detaj = pd.DataFrame(detaj_rrjeshta).to_csv(index=False).encode("utf-8")
+    csv_detaj = pd.DataFrame(detaj_rrjeshta).to_csv(index=False).encode("utf-8-sig")
     col_e2.download_button(
         "📥 Shkarko Detaj (CSV)",
         csv_detaj,
@@ -1194,7 +1197,7 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     # ----- 14. PËRMBLEDHJA LLM -----
     if col_e3.button("🤖 Përmbledhje AI", use_container_width=True):
         with st.spinner("Po thërras LLM..."):
-            kontekst_ldm = {
+            kontekst_llm = {
                 "agjenti": agj_sel,
                 "data_plani": data_plani.strftime("%d/%m/%Y"),
                 "klientet_ne_plan": len(df_plan),
@@ -1206,6 +1209,6 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
                     ["Klienti", "Priority", "Segment", "Mbetja KG", "Produktet për Ofertë"]
                 ].to_dict(orient="records"),
             }
-            permbledhja = gjenero_permbledhje_llm(kontekst_ldm, agjenti=agj_sel)
+            permbledhja = gjenero_permbledhje_llm(kontekst_llm, agjenti=agj_sel)
         st.markdown("### 🤖 Përmbledhje Strategjike")
         st.markdown(permbledhja)
