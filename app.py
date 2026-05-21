@@ -140,6 +140,7 @@ page = st.sidebar.radio(
         "Klientët me shumë Agjentë",
         "Asistenti AI",
         "Route Plan AI",
+        "Route Agjentëve",
     ],
 )
 # endregion
@@ -2965,5 +2966,97 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 if page == "🎯 Plani sipas Strukturës B":
     shfaq_modul_planifikimi_artikujve(df_raw)
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
+
+# endregion
+# =========================================================
+# MODULI: ITINERARI DHE RRUGËTIMI I FUNDIT I AGJENTËVE
+# region ==================================================
+
+
+def shfaq_itinerarin_e_agjenteve(df):
+    st.subheader("📍 Rrugëtimi i Fundit i Agjentëve sipas Klientëve")
+    st.markdown(
+        "Ky modul tregon itinerarin kronologjik të agjentëve bazuar në klientët që kanë vizituar ose shërbyer së fundmi."
+    )
+
+    # Supozojmë që kolonat në DataFrame janë: 'Agjenti', 'Klienti', 'Data'
+    # Nëse kolonat e tua kanë emra të tjerë (psh 'Data_Fatures', 'Emër Agjenti'), ndryshoji poshtë:
+    kolona_agjenti = "Agjenti"
+    kolona_klienti = "Klienti"
+    kolona_data = "Data"
+
+    # Kontrolli nëse kolonat ekzistojnë në skedarin e ngarkuar
+    if all(col in df.columns for col in [kolona_agjenti, kolona_klienti, kolona_data]):
+
+        # 1. Sigurohemi që data është në formatin e saktë datetime
+        df[kolona_data] = pd.to_datetime(df[kolona_data])
+
+        # 2. Gjejmë vizitën/faturën më të fundit për çdo kombinim Agjent-Klient
+        df_fundit = (
+            df.sort_values(by=kolona_data)
+            .groupby([kolona_agjenti, kolona_klienti])
+            .last()
+            .reset_index()
+        )
+
+        # 3. Renditim përsëri sipas datës më të re për të parë rrugëtimin kronologjik
+        df_route = df_fundit.sort_values(
+            by=[kolona_agjenti, kolona_data], ascending=[True, False]
+        )
+
+        # Filter për të zgjedhur një Agjent specifik ose për t'i parë të gjithë
+        lista_agjenteve = ["Të gjithë"] + sorted(
+            df_route[kolona_agjenti].unique().tolist()
+        )
+        agjenti_përzgjedhur = st.selectbox("Filtro sipas Agjentit:", lista_agjenteve)
+
+        if agjenti_përzgjedhur != "Të gjithë":
+            df_shfaqje = df_route[df_route[kolona_agjenti] == agjenti_përzgjedhur]
+        else:
+            df_shfaqje = df_route
+
+        # Formatimi i datës për lexim më të lehtë në tabelë
+        df_shfaqje_stilizuar = df_shfaqje.copy()
+        df_shfaqje_stilizuar[kolona_data] = df_shfaqje_stilizuar[
+            kolona_data
+        ].dt.strftime("%d/%m/%Y %H:%M")
+
+        # Shfaqja e të dhënave në mënyrë vizuale
+        st.dataframe(
+            df_shfaqje_stilizuar[[kolona_agjenti, kolona_klienti, kolona_data]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # Eksporti i këtij itinerari në Excel
+        try:
+            import io
+
+            towrite = io.BytesIO()
+            df_shfaqje.to_excel(towrite, index=False, header=True, engine="openpyxl")
+            towrite.seek(0)
+            st.download_button(
+                label="📥 Shkarko këtë Itinerar në Excel",
+                data=towrite,
+                file_name=f"itinerari_{agjenti_përzgjedhur.lower().replace(' ', '_')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        except Exception as e:
+            st.warning(f"Nuk u mundësua krijimi i butonit të shkarkimit: {e}")
+
+    else:
+        st.error(
+            f"❌ Nuk u gjetën kolonat e nevojshme. Sigurohu që skedari ka: '{kolona_agjenti}', '{kolona_klienti}' dhe '{kolona_data}'."
+        )
+
+
+# Integrimi me menunë tuaj (blloku IF)
+if page == "Route Agjentëve":
+    # Supozojmë që df_kryesor është DataFrame që keni ngarkuar te appi
+    if "df_kryesor" in locals() or "df_kryesor" in globals():
+        shfaq_itinerarin_e_agjenteve(df_kryesor)
+    else:
+        st.warning("⚠️ Ju lutem ngarkoni të dhënat fillimisht te moduli kryesor.")
+    st.stop()
 
 # endregion
