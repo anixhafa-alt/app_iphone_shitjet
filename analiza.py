@@ -12,13 +12,14 @@ def render_analiza_klienteve(df_raw):
     )
 
     if df_raw is None or df_raw.empty:
-        st.error("❌ Nuk u gjetën të dhënat nga skedari SAD-DATAbase1.xlsb.")
+        st.error("❌ Nuk u gjetën të dhëna valide nga skedari SAD-DATAbase1.xlsb.")
         return
 
-    # --- 1. PROCESIMI I TË DHËNAVE (Ekzaktësisht si kodi yt) ---
+    # --- 1. PROCESIMI I TË DHËNAVE ---
     df = df_raw.copy()
     df.columns = df.columns.str.strip().str.replace('"', "")
 
+    # Konvertimi i Datës në mënyrë të sigurt
     if pd.api.types.is_numeric_dtype(df["Data"]):
         df["Data"] = pd.to_datetime(df["Data"], unit="D", origin="1899-12-30")
     else:
@@ -26,7 +27,7 @@ def render_analiza_klienteve(df_raw):
 
     df = df.dropna(subset=["Data"])
 
-    # Konvertimet numerike
+    # Konvertimet numerike kritike
     cols_numerike = ["TotalRresht", "Sasia", "kg"]
     for c in cols_numerike:
         if c in df.columns:
@@ -37,8 +38,8 @@ def render_analiza_klienteve(df_raw):
             df[c] = 0.0
 
     # Krijimi i kolonave të kohës si te kodi yt
-    df["Viti"] = df["Data"].dt.year
-    df["Muaji_Nr"] = df["Data"].dt.month
+    df["Viti"] = df["Data"].dt.year.astype(int)
+    df["Muaji_Nr"] = df["Data"].dt.month.astype(int)
 
     muajt_shqip = {
         1: "Janar",
@@ -56,29 +57,38 @@ def render_analiza_klienteve(df_raw):
     }
     df["Muaji"] = df["Muaji_Nr"].map(muajt_shqip)
 
-    # Sigurohemi që ka kolonë Kategoria_Finale ose KATEG.
-    if "Kategoria_Finale" not in df.columns and "KATEG." in df.columns:
-        df["Kategoria_Finale"] = df["KATEG."]
-    elif "Kategoria_Finale" not in df.columns:
-        df["Kategoria_Finale"] = "ETJ"
+    # Sigurohemi që ekziston kolona e Kategorisë
+    if "Kategoria_Finale" not in df.columns:
+        if "KATEG." in df.columns:
+            df["Kategoria_Finale"] = df["KATEG."]
+        else:
+            df["Kategoria_Finale"] = "ETJ"
 
-    # Përgatitja e të dhënave për JSON (Heqim thonjëzat që thyejnë JS)
+    # --- PASTRIM STRUKTURAL PËR JSON (Mbrojtje ndaj thonjëzave dhe karakterve speciale) ---
     df["Klienti"] = (
-        df["Klienti"].astype(str).str.replace("'", "\\'").str.replace('"', '\\"')
+        df["Klienti"]
+        .astype(str)
+        .str.replace("'", " ", regex=False)
+        .str.replace('"', " ", regex=False)
+        .str.strip()
     )
     df["ForcaShitese"] = (
-        df["ForcaShitese"].astype(str).str.replace("'", "\\'").str.replace('"', '\\"')
+        df["ForcaShitese"]
+        .astype(str)
+        .str.replace("'", " ", regex=False)
+        .str.replace('"', " ", regex=False)
+        .str.strip()
     )
     df["Kategoria_Finale"] = (
         df["Kategoria_Finale"]
         .astype(str)
-        .str.replace("'", "\\'")
-        .str.replace('"', '\\"')
+        .str.replace("'", " ", regex=False)
+        .str.replace('"', " ", regex=False)
+        .str.strip()
     )
 
-    # Eksporti në formatin JSON që pret kodi yt në HTML
+    # Përgatitja e rreshtave të pastër për JSON
     json_cols = [
-        "Data",
         "Viti",
         "Muaji",
         "Muaji_Nr",
@@ -89,11 +99,14 @@ def render_analiza_klienteve(df_raw):
         "kg",
     ]
     records = df[json_cols].copy()
-    records["Data"] = records["Data"].dt.strftime("%Y-%m-%d")
 
-    json_data_str = records.to_json(orient="records")
+    # Sigurohemi që nuk ka mbetur asnjë NaN përpara konvertimit në JSON
+    records["TotalRresht"] = records["TotalRresht"].fillna(0).astype(float)
+    records["kg"] = records["kg"].fillna(0).astype(float)
 
-    # --- 2. INTERFEJSI HTML / JS / CHART.JS (100% i joti, pa asnjë ndryshim) ---
+    json_data_str = json.dumps(records.to_dict(orient="records"))
+
+    # --- 2. INTERFEJSI HTML / JS / CHART.JS ---
     html_template = f"""
     <!DOCTYPE html>
     <html lang="sq">
@@ -104,22 +117,25 @@ def render_analiza_klienteve(df_raw):
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
             :root {{ --primary: #1e3a8a; --bg: #f8fafc; --card: #ffffff; --text: #0f172a; }}
-            body {{ font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin:0; padding:10px; }}
-            .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 15px; }}
+            body {{ font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin:0; padding:10px; }}
+            .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 15px; }}
             .card {{ background: var(--card); padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }}
             .card-title {{ font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; }}
-            .card-value {{ font-size: 1.6rem; font-weight: 700; color: var(--primary); margin-top: 5px; }}
-            .chart-container {{ position: relative; height: 320px; width: 100%; background: white; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; }}
-            .flex-charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 15px; margin-bottom: 20px; }}
-            select, input {{ padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; box-sizing: border-box; font-size: 0.9rem; }}
+            .card-value {{ font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-top: 5px; }}
+            .chart-container {{ position: relative; height: 320px; width: 100%; background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; }}
+            .flex-charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            select {{ padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; box-sizing: border-box; font-size: 0.9rem; background: #fff; }}
             .filter-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; background: white; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; }}
             table {{ width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; font-size: 0.9rem; }}
             th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }}
             th {{ background: #f1f5f9; font-weight: 600; color: #334155; }}
             .home-btn {{ background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 5px; }}
+            #error-box {{ display: none; background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; border-left: 5px solid #ef4444; }}
         </style>
     </head>
     <body>
+
+        <div id="error-box"></div>
 
         <button class="home-btn" onclick="resetFilters()"><i class="fa-solid fa-house"></i> Reset Filters</button>
 
@@ -143,145 +159,149 @@ def render_analiza_klienteve(df_raw):
 
         <div class="card" style="padding:0; overflow-x:auto;">
             <table id="topTable">
-                <thead><tr><th>Renditja</th><th id="tableDynamicHeader">Klienti / Agjenti</th><th>Ecuria Lokale</th></tr></thead>
+                <thead><tr><th>Renditja</th><th id="tableDynamicHeader">Klienti / Agjenti</th><th>Ecuria</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
 
     <script>
-        const rawData = {json_data_str};
-        let lineChart, pieChart;
+        try {{
+            const rawData = {json_data_str};
+            let lineChart, pieChart;
 
-        // Mbush filtrat dinamikisht
-        const vitet = [...new Set(rawData.map(d => d.Viti))].sort((a,b)=>b-a);
-        const agjentet = [...new Set(rawData.map(d => d.ForcaShitese))].sort();
-        const muajt = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
+            // Ndërtimi i filtrave
+            const vitet = [...new Set(rawData.map(d => d.Viti))].sort((a,b)=>b-a);
+            const agjentet = [...new Set(rawData.map(d => d.ForcaShitese))].sort();
+            const muajt = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
 
-        const selViti = document.getElementById('fViti');
-        vitet.forEach(v => selViti.add(new Option(v, v)));
+            const selViti = document.getElementById('fViti');
+            vitet.forEach(v => selViti.add(new Option(v, v)));
 
-        const selMuaji = document.getElementById('fMuaji');
-        muajt.forEach(m => selMuaji.add(new Option(m, m)));
+            const selMuaji = document.getElementById('fMuaji');
+            muajt.forEach(m => selMuaji.add(new Option(m, m)));
 
-        const selAgjent = document.getElementById('fAgjent');
-        agjentet.forEach(a => selAgjent.add(new Option(a, a)));
+            const selAgjent = document.getElementById('fAgjent');
+            agjentet.forEach(a => selAgjent.add(new Option(a, a)));
 
-        function formatNum(n) {{
-            if(n >= 1000000) return (n/1000000).toFixed(2) + ' M';
-            if(n >= 1000) return (n/1000).toFixed(1) + ' k';
-            return n.toLocaleString('de-DE', {{maximumFractionDigits:0}});
-        }}
+            function formatNum(n) {{
+                if(n >= 1000000) return (n/1000000).toFixed(2) + ' M';
+                if(n >= 1000) return (n/1000).toFixed(1) + ' k';
+                return n.toLocaleString('de-DE', {{maximumFractionDigits:0}});
+            }}
 
-        function resetFilters() {{
-            document.getElementById('fViti').value = 'all';
-            document.getElementById('fMuaji').value = 'all';
-            document.getElementById('fAgjent').value = 'all';
-            document.getElementById('fMetrika').value = 'lek';
+            window.resetFilters = function() {{
+                document.getElementById('fViti').value = 'all';
+                document.getElementById('fMuaji').value = 'all';
+                document.getElementById('fAgjent').value = 'all';
+                document.getElementById('fMetrika').value = 'lek';
+                updateDashboard();
+            }}
+
+            window.updateDashboard = function() {{
+                const viti = document.getElementById('fViti').value;
+                const muaji = document.getElementById('fMuaji').value;
+                const agjent = document.getElementById('fAgjent').value;
+                const metric = document.getElementById('fMetrika').value;
+
+                let filtered = rawData.filter(d => {{
+                    return (viti === 'all' || d.Viti == viti) &&
+                           (muaji === 'all' || d.Muaji === muaji) &&
+                           (agjent === 'all' || d.ForcaShitese === agjent);
+                }});
+
+                let totalVal = filtered.reduce((acc, d) => acc + (metric === 'lek' ? d.TotalRresht : d.kg), 0);
+                let fatCount = filtered.length;
+                let klienteUnik = [...new Set(filtered.map(d => d.Klienti))].length;
+
+                document.getElementById('kpiTotal').innerText = formatNum(totalVal) + (metric==='lek' ? ' Lek' : ' KG');
+                document.getElementById('kpiFatura').innerText = fatCount.toLocaleString();
+                document.getElementById('kpiKliente').innerText = klienteUnik.toLocaleString();
+
+                renderCharts(filtered, metric, agjent);
+            }}
+
+            function renderCharts(filtered, metric, agjent) {{
+                const colors = ['#1e3a8a', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+                let labels = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
+                
+                // 1. LINE CHART
+                let yearsInDoc = [...new Set(filtered.map(d => d.Viti))].sort();
+                let lineDatasets = [];
+                yearsInDoc.forEach((yr, i) => {{
+                    let vals = new Array(12).fill(0);
+                    labels.forEach((m, mIdx) => {{
+                        vals[mIdx] = filtered.filter(d => d.Viti == yr && d.Muaji === m)
+                                             .reduce((acc, d) => acc + (metric==='lek' ? d.TotalRresht : d.kg), 0);
+                    }});
+                    lineDatasets.push({{
+                        label: yr,
+                        data: vals,
+                        borderColor: colors[i % colors.length],
+                        backgroundColor: 'transparent',
+                        borderWidth: 2.5,
+                        tension: 0.2
+                    }});
+                }});
+
+                if(lineChart) lineChart.destroy();
+                lineChart = new Chart(document.getElementById('lineChart'), {{
+                    type: 'line',
+                    data: {{ labels: labels, datasets: lineDatasets }},
+                    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ title: {{ display: true, text: 'Ecuria Sipas Muajve' }} }} }}
+                }});
+
+                // 2. PIE CHART
+                let catData = {{}};
+                filtered.forEach(d => {{
+                    let val = (metric === 'lek' ? d.TotalRresht : d.kg);
+                    catData[d.Kategoria_Finale] = (catData[d.Kategoria_Finale] || 0) + val;
+                }});
+                let catLabels = Object.keys(catData);
+                let catVals = Object.values(catData);
+
+                if(pieChart) pieChart.destroy();
+                pieChart = new Chart(document.getElementById('pieChart'), {{
+                    type: 'doughnut',
+                    data: {{ labels: catLabels, datasets: [{{ data: catVals, backgroundColor: colors }}] }},
+                    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'right' }} }} }}
+                }});
+
+                // 3. TABELA DINAMIKE
+                const showKlientet = agjent !== 'all' || filtered.length < 1000;
+                document.getElementById('tableDynamicHeader').innerText = showKlientet ? "Top Klientët" : "Top Agjentët";
+                
+                let tableData = {{}};
+                filtered.forEach(d => {{
+                    let key = showKlientet ? d.Klienti : d.ForcaShitese;
+                    let val = (metric === 'lek' ? d.TotalRresht : d.kg);
+                    tableData[key] = (tableData[key] || 0) + val;
+                }});
+
+                let sortedTable = Object.keys(tableData).map(k => ({{ name: k, value: tableData[k] }}))
+                                                       .sort((a,b) => b.value - a.value).slice(0, 15);
+
+                let tbody = document.getElementById('topTable').getElementsByTagName('tbody')[0];
+                tbody.innerHTML = '';
+                sortedTable.forEach((row, idx) => {{
+                    let r = tbody.insertRow();
+                    r.insertCell(0).innerText = "#" + (idx + 1);
+                    r.insertCell(1).innerText = row.name;
+                    r.insertCell(2).innerText = formatNum(row.value) + (metric==='lek' ? ' Lek' : ' KG');
+                }});
+            }}
+
+            // Nisja e parë
             updateDashboard();
+
+        }} catch (err) {{
+            const errBox = document.getElementById('error-box');
+            errBox.style.display = 'block';
+            errBox.innerHTML = '⚠️ Ndodhi një gabim në skriptin e Dashboard-it: ' + err.message;
         }}
-
-        function updateDashboard() {{
-            const viti = document.getElementById('fViti').value;
-            const muaji = document.getElementById('fMuaji').value;
-            const agjent = document.getElementById('fAgjent').value;
-            const metric = document.getElementById('fMetrika').value;
-
-            let filtered = rawData.filter(d => {{
-                return (viti === 'all' || d.Viti == viti) &&
-                       (muaji === 'all' || d.Muaji === muaji) &&
-                       (agjent === 'all' || d.ForcaShitese === agjent);
-            }});
-
-            // Llogarit KPI-të
-            let totalVal = filtered.reduce((acc, d) => acc + (metric === 'lek' ? d.TotalRresht : d.kg), 0);
-            let fatCount = filtered.length;
-            let klienteUnik = [...new Set(filtered.map(d => d.Klienti))].length;
-
-            document.getElementById('kpiTotal').innerText = formatNum(totalVal) + (metric==='lek' ? ' Lek' : ' KG');
-            document.getElementById('kpiFatura').innerText = fatCount.toLocaleString();
-            document.getElementById('kpiKliente').innerText = klienteUnik.toLocaleString();
-
-            // RENDERIMI I GRAFIKËVE (Sipas logjikës sate Chart.js)
-            renderCharts(filtered, metric, agjent);
-        }}
-
-        function renderCharts(filtered, metric, agjent) {{
-            const colors = ['#1e3a8a', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
-            
-            // 1. Line Chart - Ecuria sipas muajve
-            let labels = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
-            let yearsInDoc = [...new Set(filtered.map(d => d.Viti))].sort();
-            
-            let lineDatasets = [];
-            yearsInDoc.forEach((yr, i) => {{
-                let vals = new Array(12).fill(0);
-                labels.forEach((m, mIdx) => {{
-                    vals[mIdx] = filtered.filter(d => d.Viti == yr && d.Muaji === m)
-                                         .reduce((acc, d) => acc + (metric==='lek' ? d.TotalRresht : d.kg), 0);
-                }});
-                lineDatasets.push({{
-                    label: yr,
-                    data: vals,
-                    borderColor: colors[i % colors.length],
-                    backgroundColor: 'transparent',
-                    borderWidth: 2.5,
-                    tension: 0.2
-                }});
-            }});
-
-            if(lineChart) lineChart.destroy();
-            lineChart = new Chart(document.getElementById('lineChart'), {{
-                type: 'line',
-                data: {{ labels: labels, datasets: lineDatasets }},
-                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ title: {{ display: true, text: 'Ecuria Sipas Muajve dhe Viteve' }} }} }}
-            }});
-
-            // 2. Pie Chart - Kategoritë
-            let catData = {{}};
-            filtered.forEach(d => {{
-                let val = (metric === 'lek' ? d.TotalRresht : d.kg);
-                catData[d.Kategoria_Finale] = (catData[d.Kategoria_Finale] || 0) + val;
-            }});
-            let catLabels = Object.keys(catData);
-            let catVals = Object.values(catData);
-
-            if(pieChart) pieChart.destroy();
-            pieChart = new Chart(document.getElementById('pieChart'), {{
-                type: 'doughnut',
-                data: {{ labels: catLabels, datasets: [{{ data: catVals, backgroundColor: colors }}] }},
-                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'right' }} }} }}
-            }});
-
-            // 3. Tabela Top Klientë ose Top Agjentë
-            const showKlientet = agjent !== 'all' || filtered.length < 500;
-            document.getElementById('tableDynamicHeader').innerText = showKlientet ? "Top Klientët" : "Top Agjentët";
-            
-            let tableData = {{}};
-            filtered.forEach(d => {{
-                let key = showKlientet ? d.Klienti : d.ForcaShitese;
-                let val = (metric === 'lek' ? d.TotalRresht : d.kg);
-                tableData[key] = (tableData[key] || 0) + val;
-            }});
-
-            let sortedTable = Object.keys(tableData).map(k => ({{ name: k, value: tableData[k] }}))
-                                                   .sort((a,b) => b.value - a.value).slice(0, 10);
-
-            let tbody = document.getElementById('topTable').getElementsByTagName('tbody')[0];
-            tbody.innerHTML = '';
-            sortedTable.forEach((row, idx) => {{
-                let r = tbody.insertRow();
-                r.insertCell(0).innerText = "#" + (idx + 1);
-                r.insertCell(1).innerText = row.name;
-                r.insertCell(2).innerText = formatNum(row.value) + (metric==='lek' ? ' Lek' : ' KG');
-            }});
-        }}
-
-        // Nisja e parë
-        updateDashboard();
     </script>
     </body>
     </html>
     """
 
-    # Renderimi në mënyrë të sigurt brenda Streamlit pa bërë faqe të bardhë
+    # Renderimi i saktë
     components.html(html_template, height=950, scroller=True)
