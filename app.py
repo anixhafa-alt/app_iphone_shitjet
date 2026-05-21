@@ -140,7 +140,7 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
     [
-        "🎯 Plani Ditor",          # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
+        "🎯 Plani Ditor",  # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
         "Shitjet Ditore",
         "Realizimi",
         "Planifikimi",
@@ -514,8 +514,9 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # MODULI I RI I UNIFIKUAR: PLANI DITOR (v3.0)
 # ---------------------------------------------------------
 if page == "🎯 Plani Ditor":
-    render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
-                      start_date, end_date, rritja)
+    render_plan_ditor(
+        df_raw, df_klientet_regjistri, agj_sel, start_date, end_date, rritja
+    )
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
@@ -1644,12 +1645,6 @@ elif page == "Shitjet Ditore":
         st.error("Të dhënat nuk u ngarkuan dot.")
 
 
-
-# ---------------------------------------------------------
-# MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
-# ---------------------------------------------------------
-
-
 # 1. HAPI I PARË: Deklarojmë funksionin në mënyrë që Python ta njohë
 def shfaq_modul_planifikimi_artikujve(df_baze_sales):
     st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
@@ -2008,6 +2003,3 @@ if page == "🎯 Plani sipas Strukturës B":
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
 # endregion
-# -----------------------------------------------------------------
-# MODULI: ROUTE PLAN & ANALIZA E KLIENTËVE TË HUMBUR (I SAKTËSUAR)
-# -----------------------------------------------------------------
