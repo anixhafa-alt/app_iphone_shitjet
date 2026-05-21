@@ -6,3 +6,8 @@ openpyxl
 plotly
 xlsxwriter
 weasyprint
+numpy
+# Opsionale — për përmbledhjen strategjike LLM në "Asistenti AI"
+# Zgjidh njërin nga të dy provider-at sipas asaj që ke konfiguruar te secrets.toml:
+anthropic
+# openai
