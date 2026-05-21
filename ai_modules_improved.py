@@ -23,6 +23,29 @@ import os
 
 
 # =========================================================
+# HELPER-A TË VEGJËL: konvertim i sigurt nga NaN -> int/float
+# =========================================================
+def _safe_int(val, default=0):
+    """Kthen int(val) ose default nëse val është NaN/i pavlefshëm."""
+    try:
+        if pd.isna(val):
+            return default
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(val, default=0.0):
+    """Kthen float(val) ose default nëse val është NaN/i pavlefshëm."""
+    try:
+        if pd.isna(val):
+            return default
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
+# =========================================================
 # HELPER: LLM PËRMBLEDHJE STRATEGJIKE (Claude / OpenAI)
 # ---------------------------------------------------------
 # Provider-i përcaktohet nga `secrets.toml` ose ENV.
@@ -1119,22 +1142,6 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     else:
         rendor_iter = kandidatet.assign(Rendi=range(1, len(kandidatet) + 1)).iterrows()
 
-    def _safe_int(val, default=0):
-        try:
-            if pd.isna(val):
-                return default
-            return int(val)
-        except (ValueError, TypeError):
-            return default
-
-    def _safe_float(val, default=0.0):
-        try:
-            if pd.isna(val):
-                return default
-            return float(val)
-        except (ValueError, TypeError):
-            return default
-
     for _, rresht in rendor_iter:
         klienti = rresht["klienti"]
         mbetja = _safe_float(rresht.get("Mbetja_KG", 0))
@@ -1238,6 +1245,12 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
                 "klientet_me_konflikt": int(df_plan["Konflikt"].apply(lambda x: bool(x)).sum()),
                 "top_5_klientet": df_plan.head(5)[
                     ["Klienti", "Priority", "Segment", "Mbetja KG", "Produktet për Ofertë"]
+                ].to_dict(orient="records"),
+            }
+            permbledhja = gjenero_permbledhje_llm(kontekst_llm, agjenti=agj_sel)
+        st.markdown("### 🤖 Përmbledhje Strategjike")
+        st.markdown(permbledhja)
+"Segment", "Mbetja KG", "Produktet për Ofertë"]
                 ].to_dict(orient="records"),
             }
             permbledhja = gjenero_permbledhje_llm(kontekst_llm, agjenti=agj_sel)
