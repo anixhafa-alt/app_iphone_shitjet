@@ -69,74 +69,43 @@ if not check_password():
 # endregion
 
 # =========================================================
-# 3. LOGO VEKTORIALE (SVG) STRUKTURALE (STILI AXION)
+# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
 # region ==================================================
-import base64
+EMRI_FOTOS = "logo.png"
 
-# Kodi i pastër SVG i logos AXION
-KODI_LOGO_SVG = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 130" width="100%" height="auto">
-    <defs>
-        <style>
-            .logo-text-main {
-                font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-                font-weight: 700;
-                fill: #4FA1A1;
-                font-size: 72px;
-                letter-spacing: 4px;
-            }
-            .logo-text-sub {
-                font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-                font-weight: 400;
-                fill: #566573;
-                font-size: 13.5px;
-                letter-spacing: 0.5px;
-            }
-            .logo-text-highlight {
-                fill: #E5737F;
-                font-weight: 400;
-            }
-            .version-tag {
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-weight: 300;
-                fill: #566573;
-                font-size: 16px;
-                letter-spacing: 1px;
-            }
-        </style>
-    </defs>
-    <text x="20" y="80" class="logo-text-main">AXION</text>
-    <text x="315" y="32" class="version-tag">v.1.1.1</text>
-    <text x="110" y="105" class="logo-text-sub">
-        Intelligent <tspan class="logo-text-highlight">Operations</tspan> Network
-    </text>
-</svg>
-"""
-
-try:
-    # Truku i Sigurt: Enkriptojmë kodin SVG në formatin Base64
-    svg_bytes = KODI_LOGO_SVG.encode("utf-8")
-    svg_base64 = base64.b64encode(svg_bytes).decode("utf-8")
-    data_url = f"data:image/svg+xml;base64,{svg_base64}"
-
-    # E shfaqim përmes funksionit zyrtar të Streamlit (Nuk ka asnjë shans të dalë si kod)
-    st.sidebar.image(data_url, use_container_width=True)
-except Exception as e:
+if os.path.exists(EMRI_FOTOS):
+    try:
+        logo_axion = Image.open(EMRI_FOTOS)
+        st.sidebar.image(logo_axion, use_container_width=True)
+    except Exception as e:
+        st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
+else:
     st.sidebar.title("AXION")
-    st.sidebar.caption("v.1.1.1")
+    st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
 
-# Rregullim i hapësirës poshtë logos në mënyrë të pastër
 st.sidebar.markdown(
     """
     <style>
     [data-testid="stSidebar"] [data-testid="stImage"] {
-        padding-top: 10px !important;
-        padding-bottom: 15px !important;
+        margin-bottom: 0px !important;
+        padding-bottom: 0px !important;
+    }
+    .version-text {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 12px !important;
+        color: #566573 !important;
+        text-align: right;
+        margin-top: -110px !important;
+        margin-bottom: 20px !important;
+        letter-spacing: 1px;
+        font-weight: 500;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+st.sidebar.markdown('<p class="version-text"> v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
 # =========================================================
