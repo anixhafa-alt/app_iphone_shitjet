@@ -1,200 +1,287 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+import json
+import streamlit.components.v1 as components
 
 
 def render_analiza_klienteve(df_raw):
-    st.title("📊 Analiza e Mundësive dhe Rrezikut të Klientëve")
+    st.title("📊 Dashboard Ekzekutiv i Shitjeve")
     st.markdown(
-        "Identifikimi i klientëve të fjetur, në rrezik dhe atyre stabil bazuar në historikun e shitjeve nga databaza."
+        "Analizë e detajuar e shitjeve, volumit në KG dhe kategorive të produkteve."
     )
 
     if df_raw is None or df_raw.empty:
-        st.warning("⚠️ Nuk ka të dhëna të ngarkuara nga skedari SAD-DATAbase1.xlsb.")
+        st.error("❌ Nuk u gjetën të dhënat nga skedari SAD-DATAbase1.xlsb.")
         return
 
-    # --- PASTRIMI DHE FORMATIMI I TË DHËNAVE ---
+    # --- 1. PROCESIMI I TË DHËNAVE (Ekzaktësisht si kodi yt) ---
     df = df_raw.copy()
     df.columns = df.columns.str.strip().str.replace('"', "")
 
-    # Konvertimi i Datës në mënyrë të sigurt
     if pd.api.types.is_numeric_dtype(df["Data"]):
-        df["Data"] = pd.to_datetime(
-            df["Data"], unit="D", origin="1899-12-30"
-        ).dt.normalize()
+        df["Data"] = pd.to_datetime(df["Data"], unit="D", origin="1899-12-30")
     else:
-        df["Data"] = pd.to_datetime(
-            df["Data"], dayfirst=True, errors="coerce"
-        ).dt.normalize()
+        df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors="coerce")
 
-    # Filtro vetëm 3 vitet e fundit (Viti aktual 2026)
-    current_year = 2026
-    start_date_analysis = datetime(current_year - 3, 1, 1)
-    df = df[df["Data"] >= start_date_analysis]
+    df = df.dropna(subset=["Data"])
 
-    # Konvertimi i kolonave numerike kritike
-    for col in ["TotalRresht", "kg"]:
-        if col in df.columns:
-            if df[col].dtype == "object":
-                df[col] = df[col].astype(str).str.replace(",", "", regex=False)
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    # Konvertimet numerike
+    cols_numerike = ["TotalRresht", "Sasia", "kg"]
+    for c in cols_numerike:
+        if c in df.columns:
+            if df[c].dtype == "object":
+                df[c] = df[c].astype(str).str.replace(",", "", regex=False)
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         else:
-            df[col] = 0.0
+            df[c] = 0.0
 
-    # Mbajmë vetëm transaksionet pozitive
-    df = df[df["TotalRresht"] > 0]
+    # Krijimi i kolonave të kohës si te kodi yt
+    df["Viti"] = df["Data"].dt.year
+    df["Muaji_Nr"] = df["Data"].dt.month
 
-    if df.empty:
-        st.error("❌ Nuk ka transaksione valide (me vlerë mbi 0) pas filtrimit.")
-        return
+    muajt_shqip = {
+        1: "Janar",
+        2: "Shkurt",
+        3: "Mars",
+        4: "Prill",
+        5: "Maj",
+        6: "Qershor",
+        7: "Korrik",
+        8: "Gusht",
+        9: "Shtator",
+        10: "Tetor",
+        11: "Nëntor",
+        12: "Dhjetor",
+    }
+    df["Muaji"] = df["Muaji_Nr"].map(muajt_shqip)
 
-    # --- LOGJIKA E PROCESIMIT (Analiza jote origjinale) ---
-    max_date = df["Data"].max()
+    # Sigurohemi që ka kolonë Kategoria_Finale ose KATEG.
+    if "Kategoria_Finale" not in df.columns and "KATEG." in df.columns:
+        df["Kategoria_Finale"] = df["KATEG."]
+    elif "Kategoria_Finale" not in df.columns:
+        df["Kategoria_Finale"] = "ETJ"
 
-    # Agregimi sipas Agjentit (ForcaShitese) dhe Klientit
-    client_stats = (
-        df.groupby(["ForcaShitese", "Klienti"])
-        .agg(
-            Last_Date=("Data", "max"),
-            First_Date=("Data", "min"),
-            Total_Sales=("TotalRresht", "sum"),
-            Sales_Count=("TotalRresht", "count"),
-        )
-        .reset_index()
+    # Përgatitja e të dhënave për JSON (Heqim thonjëzat që thyejnë JS)
+    df["Klienti"] = (
+        df["Klienti"].astype(str).str.replace("'", "\\'").str.replace('"', '\\"')
+    )
+    df["ForcaShitese"] = (
+        df["ForcaShitese"].astype(str).str.replace("'", "\\'").str.replace('"', '\\"')
+    )
+    df["Kategoria_Finale"] = (
+        df["Kategoria_Finale"]
+        .astype(str)
+        .str.replace("'", "\\'")
+        .str.replace('"', '\\"')
     )
 
-    client_stats["Days_Inactive"] = (max_date - client_stats["Last_Date"]).dt.days
-    client_stats["Months_Active"] = (
-        (client_stats["Last_Date"] - client_stats["First_Date"]).dt.days / 30
-    ).astype(int)
-    client_stats["Months_Active"] = client_stats["Months_Active"].replace(0, 1)
-    client_stats["Avg_Monthly"] = (
-        client_stats["Total_Sales"] / client_stats["Months_Active"]
-    )
+    # Eksporti në formatin JSON që pret kodi yt në HTML
+    json_cols = [
+        "Data",
+        "Viti",
+        "Muaji",
+        "Muaji_Nr",
+        "ForcaShitese",
+        "Klienti",
+        "Kategoria_Finale",
+        "TotalRresht",
+        "kg",
+    ]
+    records = df[json_cols].copy()
+    records["Data"] = records["Data"].dt.strftime("%Y-%m-%d")
 
-    # 1. Klientët e Fjetur
-    churn_clients = client_stats[
-        (client_stats["Days_Inactive"] > 60) & (client_stats["Total_Sales"] > 50000)
-    ].copy()
-    churn_clients["Status"] = "Fjetur"
+    json_data_str = records.to_json(orient="records")
 
-    # 2. Klientët në Rrezik Rënieje (90 ditët e fundit)
-    last_90_days = max_date - timedelta(days=90)
-    recent_sales = (
-        df[df["Data"] >= last_90_days]
-        .groupby(["ForcaShitese", "Klienti"])["TotalRresht"]
-        .sum()
-        .reset_index()
-    )
-    recent_sales.rename(columns={"TotalRresht": "Recent_Sales"}, inplace=True)
+    # --- 2. INTERFEJSI HTML / JS / CHART.JS (100% i joti, pa asnjë ndryshim) ---
+    html_template = f"""
+    <!DOCTYPE html>
+    <html lang="sq">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            :root {{ --primary: #1e3a8a; --bg: #f8fafc; --card: #ffffff; --text: #0f172a; }}
+            body {{ font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin:0; padding:10px; }}
+            .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 15px; }}
+            .card {{ background: var(--card); padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }}
+            .card-title {{ font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; }}
+            .card-value {{ font-size: 1.6rem; font-weight: 700; color: var(--primary); margin-top: 5px; }}
+            .chart-container {{ position: relative; height: 320px; width: 100%; background: white; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; }}
+            .flex-charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            select, input {{ padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; box-sizing: border-box; font-size: 0.9rem; }}
+            .filter-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; background: white; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; }}
+            table {{ width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; font-size: 0.9rem; }}
+            th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }}
+            th {{ background: #f1f5f9; font-weight: 600; color: #334155; }}
+            .home-btn {{ background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 5px; }}
+        </style>
+    </head>
+    <body>
 
-    risk_analysis = pd.merge(
-        client_stats, recent_sales, on=["ForcaShitese", "Klienti"], how="left"
-    ).fillna(0)
-    risk_clients = risk_analysis[
-        (risk_analysis["Days_Inactive"] <= 45)
-        & (risk_analysis["Recent_Sales"] < (risk_analysis["Avg_Monthly"] * 3 * 0.6))
-        & (risk_analysis["Avg_Monthly"] > 5000)
-    ].copy()
-    risk_clients["Status"] = "Rrezik"
+        <button class="home-btn" onclick="resetFilters()"><i class="fa-solid fa-house"></i> Reset Filters</button>
 
-    # 3. Klientët Stabilë
-    all_analyzed = pd.concat([churn_clients, risk_clients])
-    stable_clients = client_stats[
-        ~client_stats["Klienti"].isin(all_analyzed["Klienti"])
-    ].copy()
-    stable_clients["Status"] = "Stabil"
+        <div class="filter-grid">
+            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">VITI</label><select id="fViti" onchange="updateDashboard()"><option value="all">Gjithë Vitet</option></select></div>
+            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">MUAJI</label><select id="fMuaji" onchange="updateDashboard()"><option value="all">Gjithë Muajt</option></select></div>
+            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">AGJENTI</label><select id="fAgjent" onchange="updateDashboard()"><option value="all">Gjithë Agjentët</option></select></div>
+            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">METRIKA</label><select id="fMetrika" onchange="updateDashboard()"><option value="lek">Lek (Vlerë)</option><option value="kg">KG (Volum)</option></select></div>
+        </div>
 
-    # --- RENDITJA ---
-    churn_clients = churn_clients.sort_values(by="Total_Sales", ascending=False)
-    risk_clients = risk_clients.sort_values(by="Avg_Monthly", ascending=False)
-    stable_clients = stable_clients.sort_values(by="Total_Sales", ascending=False)
+        <div class="grid">
+            <div class="card"><div class="card-title">Xhiro / Volumi Total</div><div class="card-value" id="kpiTotal">0</div></div>
+            <div class="card"><div class="card-title">Numri i Faturave</div><div class="card-value" id="kpiFatura">0</div></div>
+            <div class="card"><div class="card-title">Klientë Aktivë</div><div class="card-value" id="kpiKliente">0</div></div>
+        </div>
 
-    # --- NDËRFAQJA GRAFIKE (TABS) ---
-    tab1, tab2, tab3 = st.tabs(
-        ["🔴 Ri-aktivizim (Fjetur)", "🟡 Në Rrezik (Rënie)", "🟢 Klientë Stabilë"]
-    )
+        <div class="flex-charts">
+            <div class="chart-container"><canvas id="lineChart"></canvas></div>
+            <div class="chart-container"><canvas id="pieChart"></canvas></div>
+        </div>
 
-    with tab1:
-        st.subheader(f"Klientët e Fjetur ({len(churn_clients)})")
-        st.info(
-            "💡 Klientë me blerje historike të larta (>50k Lek), por që nuk kanë blerë asgjë në 60 ditët e fundit."
-        )
-        if not churn_clients.empty:
-            # Formatimi i kolonës së parave për shfaqje më të bukur
-            churn_display = churn_clients[
-                ["ForcaShitese", "Klienti", "Days_Inactive", "Total_Sales"]
-            ].copy()
-            churn_display["Total_Sales"] = churn_display["Total_Sales"].map(
-                "{:,.2f} Lek".format
-            )
+        <div class="card" style="padding:0; overflow-x:auto;">
+            <table id="topTable">
+                <thead><tr><th>Renditja</th><th id="tableDynamicHeader">Klienti / Agjenti</th><th>Ecuria Lokale</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
 
-            st.dataframe(
-                churn_display.rename(
-                    columns={
-                        "ForcaShitese": "Agjenti",
-                        "Days_Inactive": "Ditë pa Blerë",
-                        "Total_Sales": "Totali Historik",
-                    }
-                ),
-                use_container_width=True,
-            )
-        else:
-            st.success("✅ Shkëlqyeshëm! Nuk ka klientë të fjetur.")
+    <script>
+        const rawData = {json_data_str};
+        let lineChart, pieChart;
 
-    with tab2:
-        st.subheader(f"Klientët në Rrezik Rënieje ({len(risk_clients)})")
-        st.warning(
-            "⚠️ Klientë aktivë, por që xhiroja e tyre në 90 ditët e fundit ka rënë nën 60% të mesatares së tyre normale."
-        )
-        if not risk_clients.empty:
-            risk_display = risk_clients[
-                ["ForcaShitese", "Klienti", "Avg_Monthly", "Recent_Sales"]
-            ].copy()
-            risk_display["Avg_Monthly"] = risk_display["Avg_Monthly"].map(
-                "{:,.2f} Lek".format
-            )
-            risk_display["Recent_Sales"] = risk_display["Recent_Sales"].map(
-                "{:,.2f} Lek".format
-            )
+        // Mbush filtrat dinamikisht
+        const vitet = [...new Set(rawData.map(d => d.Viti))].sort((a,b)=>b-a);
+        const agjentet = [...new Set(rawData.map(d => d.ForcaShitese))].sort();
+        const muajt = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
 
-            st.dataframe(
-                risk_display.rename(
-                    columns={
-                        "ForcaShitese": "Agjenti",
-                        "Avg_Monthly": "Mesatarja Mujore",
-                        "Recent_Sales": "Shitjet 90 Ditët e Fundit",
-                    }
-                ),
-                use_container_width=True,
-            )
-        else:
-            st.success("✅ Nuk ka klientë në rrezik aktualisht.")
+        const selViti = document.getElementById('fViti');
+        vitet.forEach(v => selViti.add(new Option(v, v)));
 
-    with tab3:
-        st.subheader(f"Klientët Stabilë ({len(stable_clients)})")
-        st.success(
-            "🟢 Klientë që mbajnë ritëm të rregullt blerjesh dhe janë jashtë zonës së rrezikut."
-        )
-        if not stable_clients.empty:
-            stable_display = stable_clients[
-                ["ForcaShitese", "Klienti", "Total_Sales", "Last_Date"]
-            ].copy()
-            stable_display["Total_Sales"] = stable_display["Total_Sales"].map(
-                "{:,.2f} Lek".format
-            )
-            stable_display["Last_Date"] = stable_display["Last_Date"].dt.strftime(
-                "%d/%m/%Y"
-            )
+        const selMuaji = document.getElementById('fMuaji');
+        muajt.forEach(m => selMuaji.add(new Option(m, m)));
 
-            st.dataframe(
-                stable_display.rename(
-                    columns={
-                        "ForcaShitese": "Agjenti",
-                        "Total_Sales": "Totali i Shitjeve",
-                        "Last_Date": "Blerja e Fundit",
-                    }
-                ),
-                use_container_width=True,
-            )
+        const selAgjent = document.getElementById('fAgjent');
+        agjentet.forEach(a => selAgjent.add(new Option(a, a)));
+
+        function formatNum(n) {{
+            if(n >= 1000000) return (n/1000000).toFixed(2) + ' M';
+            if(n >= 1000) return (n/1000).toFixed(1) + ' k';
+            return n.toLocaleString('de-DE', {{maximumFractionDigits:0}});
+        }}
+
+        function resetFilters() {{
+            document.getElementById('fViti').value = 'all';
+            document.getElementById('fMuaji').value = 'all';
+            document.getElementById('fAgjent').value = 'all';
+            document.getElementById('fMetrika').value = 'lek';
+            updateDashboard();
+        }}
+
+        function updateDashboard() {{
+            const viti = document.getElementById('fViti').value;
+            const muaji = document.getElementById('fMuaji').value;
+            const agjent = document.getElementById('fAgjent').value;
+            const metric = document.getElementById('fMetrika').value;
+
+            let filtered = rawData.filter(d => {{
+                return (viti === 'all' || d.Viti == viti) &&
+                       (muaji === 'all' || d.Muaji === muaji) &&
+                       (agjent === 'all' || d.ForcaShitese === agjent);
+            }});
+
+            // Llogarit KPI-të
+            let totalVal = filtered.reduce((acc, d) => acc + (metric === 'lek' ? d.TotalRresht : d.kg), 0);
+            let fatCount = filtered.length;
+            let klienteUnik = [...new Set(filtered.map(d => d.Klienti))].length;
+
+            document.getElementById('kpiTotal').innerText = formatNum(totalVal) + (metric==='lek' ? ' Lek' : ' KG');
+            document.getElementById('kpiFatura').innerText = fatCount.toLocaleString();
+            document.getElementById('kpiKliente').innerText = klienteUnik.toLocaleString();
+
+            // RENDERIMI I GRAFIKËVE (Sipas logjikës sate Chart.js)
+            renderCharts(filtered, metric, agjent);
+        }}
+
+        function renderCharts(filtered, metric, agjent) {{
+            const colors = ['#1e3a8a', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+            
+            // 1. Line Chart - Ecuria sipas muajve
+            let labels = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
+            let yearsInDoc = [...new Set(filtered.map(d => d.Viti))].sort();
+            
+            let lineDatasets = [];
+            yearsInDoc.forEach((yr, i) => {{
+                let vals = new Array(12).fill(0);
+                labels.forEach((m, mIdx) => {{
+                    vals[mIdx] = filtered.filter(d => d.Viti == yr && d.Muaji === m)
+                                         .reduce((acc, d) => acc + (metric==='lek' ? d.TotalRresht : d.kg), 0);
+                }});
+                lineDatasets.push({{
+                    label: yr,
+                    data: vals,
+                    borderColor: colors[i % colors.length],
+                    backgroundColor: 'transparent',
+                    borderWidth: 2.5,
+                    tension: 0.2
+                }});
+            }});
+
+            if(lineChart) lineChart.destroy();
+            lineChart = new Chart(document.getElementById('lineChart'), {{
+                type: 'line',
+                data: {{ labels: labels, datasets: lineDatasets }},
+                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ title: {{ display: true, text: 'Ecuria Sipas Muajve dhe Viteve' }} }} }}
+            }});
+
+            // 2. Pie Chart - Kategoritë
+            let catData = {{}};
+            filtered.forEach(d => {{
+                let val = (metric === 'lek' ? d.TotalRresht : d.kg);
+                catData[d.Kategoria_Finale] = (catData[d.Kategoria_Finale] || 0) + val;
+            }});
+            let catLabels = Object.keys(catData);
+            let catVals = Object.values(catData);
+
+            if(pieChart) pieChart.destroy();
+            pieChart = new Chart(document.getElementById('pieChart'), {{
+                type: 'doughnut',
+                data: {{ labels: catLabels, datasets: [{{ data: catVals, backgroundColor: colors }}] }},
+                options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'right' }} }} }}
+            }});
+
+            // 3. Tabela Top Klientë ose Top Agjentë
+            const showKlientet = agjent !== 'all' || filtered.length < 500;
+            document.getElementById('tableDynamicHeader').innerText = showKlientet ? "Top Klientët" : "Top Agjentët";
+            
+            let tableData = {{}};
+            filtered.forEach(d => {{
+                let key = showKlientet ? d.Klienti : d.ForcaShitese;
+                let val = (metric === 'lek' ? d.TotalRresht : d.kg);
+                tableData[key] = (tableData[key] || 0) + val;
+            }});
+
+            let sortedTable = Object.keys(tableData).map(k => ({{ name: k, value: tableData[k] }}))
+                                                   .sort((a,b) => b.value - a.value).slice(0, 10);
+
+            let tbody = document.getElementById('topTable').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = '';
+            sortedTable.forEach((row, idx) => {{
+                let r = tbody.insertRow();
+                r.insertCell(0).innerText = "#" + (idx + 1);
+                r.insertCell(1).innerText = row.name;
+                r.insertCell(2).innerText = formatNum(row.value) + (metric==='lek' ? ' Lek' : ' KG');
+            }});
+        }}
+
+        // Nisja e parë
+        updateDashboard();
+    </script>
+    </body>
+    </html>
+    """
+
+    # Renderimi në mënyrë të sigurt brenda Streamlit pa bërë faqe të bardhë
+    components.html(html_template, height=950, scroller=True)
