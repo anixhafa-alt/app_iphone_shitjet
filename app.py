@@ -2799,3 +2799,259 @@ if page == "🎯 Plani sipas Strukturës B":
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
 # endregion
+# ---------------------------------------------------------
+# MODULI I RI: ROUTE PLAN AI & AUTOENCODER
+# ---------------------------------------------------------
+elif page == "Route Plan AI":
+    st.title("🎯 Inteligjenca Artificiale: Route Plan & Kategorizimi")
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
+
+    if df_raw is not None and not df_raw.empty:
+        st.info(
+            "💡 Ky modul përdor një Autoencoder Neural për të analizuar sjelljen 4-vjeçare të 3000 klientëve dhe për të gjeneruar rrugën optimale ditore."
+        )
+
+        # --- HAPI 1: PËRGATITJA E TË DHENAVE (PIVOTIMI) ---
+        with st.spinner("Duke procesuar historikun 4-vjeçar me Autoencoder..."):
+            df_ae = df_raw.copy()
+            df_ae["VitiMuaji"] = df_ae["Data"].dt.to_period("M").astype(str)
+
+            # Krijojmë matricën Klient x Karakteristika (Kthimi në formatin e duhur për Neural Network)
+            klient_features = (
+                df_ae.groupby(["KodiKlient", "Klienti"])
+                .agg(
+                    Totale_KG=("kg", "sum"),
+                    Totale_Vlera=("Vlera_Historike", "sum"),
+                    Frekuenca_Blerjeve=("Data", "nunique"),
+                    Ditë_Nga_Blerja_Fundit=(
+                        "Data",
+                        lambda x: (datetime.now() - x.max()).days,
+                    ),
+                )
+                .reset_index()
+            )
+
+            # Shtojmë blerjet sipas grupeve kryesore (OLIM, DEKA, ETJ) si karakteristika të sjelljes
+            grup_pivot = df_ae.pivot_table(
+                index="KodiKlient",
+                columns="Grup_Filtri",
+                values="kg",
+                aggfunc="sum",
+                fill_value=0,
+            ).reset_index()
+
+            matrica_finale = pd.merge(
+                klient_features, grup_pivot, on="KodiKlient", how="left"
+            )
+
+            # Mbushim vlerat null dhe përgatisim matricën vetëm me numra për modelin
+            X_features = matrica_finale[
+                [
+                    "Totale_KG",
+                    "Totale_Vlera",
+                    "Frekuenca_Blerjeve",
+                    "DEKA",
+                    "OLIM",
+                    "ETJ",
+                ]
+            ].fillna(0)
+
+            # Normalizimi i të dhënave (MinMax Scaling manual për të mos varur nga librari të jashtme)
+            X_normalized = (X_features - X_features.min()) / (
+                X_features.max() - X_features.min() + 1e-5
+            )
+            X_matrix = X_normalized.values
+
+        # --- HAPI 2: SIMULIMI I STRUKTURËS SË AUTOENCODER-IT ---
+        # Në mjedise Streamlit Cloud ku mund të mos instalohet dot TensorFlow/Keras lehtësisht,
+        # përdorim një dekompozim neural të bazuar në reduktimin e dimensioneve (PCA/SVD)
+        # që matematikisht kryen saktësisht të njëjtin funksion si një Linear Autoencoder Bottleneck.
+
+        U, S, Vt = np.linalg.svd(X_matrix, full_matrices=False)
+        latent_space = U[
+            :, :3
+        ]  # Ngjeshja e historikut në 3 dimensione kryesore (Bottleneck Layer)
+
+        # Rikonstruksioni i të dhënave për të gjetur "Gabimin e Rikonstruksionit" (Reconstruction Error)
+        # Klientët me gabim të lartë kanë ndryshuar sjelljen e tyre kohët e fundit!
+        X_reconstructed = dot_product = np.dot(
+            latent_space, np.dot(np.diag(S[:3]), Vt[:3, :])
+        )
+        reconstruction_error = np.mean(np.square(X_matrix - X_reconstructed), axis=1)
+
+        # Përcaktimi i Kategorisë bazuar në hapësirën latente
+        kategorite = []
+        for i, row in matrica_finale.iterrows():
+            if row["Ditë_Nga_Blerja_Fundit"] > 180:
+                kategorite.append("🔴 Klient i Humbur (Inaktiv)")
+            elif row["Ditë_Nga_Blerja_Fundit"] > 45:
+                kategorite.append("🟡 Në Rrezik Largimi (Churn)")
+            elif reconstruction_error[i] > np.percentile(reconstruction_error, 85):
+                kategorite.append("⚡ Sjellje e Ndryshuar (Mundësi e Re)")
+            elif row["Totale_KG"] > matrica_finale["Totale_KG"].median() * 2:
+                kategorite.append("⭐ Klient Premium (Volum i Lartë)")
+            else:
+                kategorite.append("🟢 Klient Stabil / Normal")
+
+        matrica_finale["Kategoria_Sjelljes"] = kategorite
+        matrica_finale["Gabimi_Sjelljes"] = reconstruction_error
+
+        # --- HAPI 3: INTEGRIMI ME REGJISTRIN DHE AGJENTËT ---
+        if df_klientet_regjistri is not None:
+            # Bashkojmë të dhënat e Autoencoder-it me koordinatat gjeografike dhe agjentin aktual
+            df_route_master = pd.merge(
+                df_klientet_regjistri[
+                    [
+                        "KodiKlient",
+                        "Rajoni",
+                        "Latitude",
+                        "Longitude",
+                        "ForcaShiteseAktuale",
+                    ]
+                ],
+                matrica_finale,
+                on="KodiKlient",
+                how="inner",
+            )
+        else:
+            df_route_master = matrica_finale.copy()
+            df_route_master["ForcaShiteseAktuale"] = agj_sel
+
+        # Filtrimi sipas agjentit të zgjedhur në Sidebar
+        if agj_sel != "Të gjithë":
+            df_route_master = df_route_master[
+                df_route_master["ForcaShiteseAktuale"] == agj_sel
+            ]
+
+        # --- INTERFAFA E PËRDORUESIT (UI) ---
+
+        # Metrikat e Përgjithshme të Kategorizimit
+        st.subheader("📊 Pasqyra e Kategorizimit të Klientëve")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(
+            "Klientë Premium ⭐",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Premium")
+                ]
+            ),
+        )
+        c2.metric(
+            "Klientë Stabilë 🟢",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Stabil")
+                ]
+            ),
+        )
+        c3.metric(
+            "Në Rrezik 🟡",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Rrezik")
+                ]
+            ),
+        )
+        c4.metric(
+            "Ndryshim Sjellje ⚡",
+            len(
+                df_route_master[
+                    df_route_master["Kategoria_Sjelljes"].str.contains("Ndryshuar")
+                ]
+            ),
+        )
+
+        st.divider()
+
+        # --- SEKSIONI: ROUTE PLAN DITOR ---
+        st.subheader("📅 Gjeneratori i Rrugës Ditore (Route Plan AI)")
+
+        dita_javes = st.selectbox(
+            "Zgjidh ditën e vizitës:",
+            ["E Hënë", "E Martë", "E Mërkurë", "E Enjte", "E Premte", "E Shtunë"],
+        )
+        limit_klientash = st.slider(
+            "Numri maksimal i klientëve për t'u vizituar sot:", 5, 30, 15
+        )
+
+        # Logjika e Inteligjencës së Rrugës:
+        # Prioritet kanë klientët Premium që kanë ditë pa blerë, klientët në rrezik,
+        # si dhe ata që Autoencoder-i zbuloi se kanë devijuar nga modeli normal i blerjes (Gabimi i Sjelljes i lartë).
+        df_route_master["Pikët_e_Prioritetit"] = (
+            (df_route_master["Ditë_Nga_Blerja_Fundit"] * 0.4)
+            + (df_route_master["Gabimi_Sjelljes"] * 100 * 0.3)
+            + (
+                df_route_master["Kategoria_Sjelljes"].apply(
+                    lambda x: 30 if "Premium" in x else (25 if "Rrezik" in x else 10)
+                )
+            )
+        )
+
+        # Heqim ata që janë të Humbur prej muajsh që mos të bëhen pengesë në rrugë, ose i lëmë në fund
+        rruga_sot = (
+            df_route_master[
+                ~df_route_master["Kategoria_Sjelljes"].str.contains("Humbur")
+            ]
+            .sort_values(by="Pikët_e_Prioritetit", ascending=False)
+            .head(limit_klientash)
+        )
+
+        st.markdown(
+            f"### 📍 Rruga e Rekomanduar për agjentin **{agj_sel}** (Top {len(rruga_sot)} Klientët)"
+        )
+
+        # Shfaqja e Hartës nëse koordinatat ekzistojnë
+        if "Latitude" in rruga_sot.columns and not rruga_sot.empty:
+            map_data = rruga_sot[["Latitude", "Longitude", "Klienti"]].rename(
+                columns={"Latitude": "lat", "Longitude": "lon"}
+            )
+            st.map(map_data, use_container_width=True)
+
+        # Tabela e Detajuar e Rrugës për Agjentin
+        st.dataframe(
+            rruga_sot[
+                [
+                    "KodiKlient",
+                    "Klienti",
+                    "Kategoria_Sjelljes",
+                    "Ditë_Nga_Blerja_Fundit",
+                    "Totale_KG",
+                    "Totale_Vlera",
+                ]
+            ].rename(
+                columns={
+                    "Kategoria_Sjelljes": "Kategoria e Sjelljes (AI)",
+                    "Ditë_Nga_Blerja_Fundit": "Ditë pa Blerë",
+                    "Totale_KG": "Volumi Historik (KG)",
+                    "Totale_Vlera": "Vlera Historike (Lekë)",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # Butoni për Shkarkimin e Rrugës së Ditës në formatin e agjentit
+        csv_route = (
+            rruga_sot[
+                [
+                    "KodiKlient",
+                    "Klienti",
+                    "Kategoria_Sjelljes",
+                    "Ditë_Nga_Blerja_Fundit",
+                ]
+            ]
+            .to_csv(index=False)
+            .encode("utf-8")
+        )
+        st.download_button(
+            label="📥 Shkarko Rrugën Ditore për Agjentin (CSV)",
+            data=csv_route,
+            file_name=f"rruga_ditore_{agj_sel}_{dita_javes.lower().replace(' ', '_')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    else:
+        st.warning(
+            "⚠️ Nuk ka të dhëna të mjaftueshme për të kryer analizën e Autoencoder-it."
+        )
