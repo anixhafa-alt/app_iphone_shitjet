@@ -6,12 +6,8 @@ import os
 import numpy as np
 import time
 
-# --- Modulet AI të rishkruara (v2.0) ---
-from ai_modules_improved import (
-    render_asistenti_ai,
-    render_route_plan_ai,
-    render_route_plan_ai_2,
-)
+# --- Moduli i unifikuar AI (v3.0) ---
+from ai_modules_improved import render_plan_ditor
 
 # =========================================================
 # region ==================================================
@@ -144,16 +140,13 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
     [
+        "🎯 Plani Ditor",          # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
         "Shitjet Ditore",
         "Realizimi",
-        "Planifikimi",  # Ky mbetet moduli yt ekzistues (grafikët, etj.)
-        "🎯 Plani sipas Strukturës B",  # Moduli i ri inteligjent
+        "Planifikimi",
+        "🎯 Plani sipas Strukturës B",
         "Mundësitë",
         "Historiku",
-        "Klientët me shumë Agjentë",
-        "Asistenti AI",
-        "Route Plan AI",
-        "Route Plan AI-2",
     ],
 )
 # endregion
@@ -518,9 +511,16 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # 10. MODULET
 # region ==================================================
 # ---------------------------------------------------------
+# MODULI I RI I UNIFIKUAR: PLANI DITOR (v3.0)
+# ---------------------------------------------------------
+if page == "🎯 Plani Ditor":
+    render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
+                      start_date, end_date, rritja)
+
+# ---------------------------------------------------------
 # MODULI: HISTORIKU
 # ---------------------------------------------------------
-if page == "Historiku":
+elif page == "Historiku":
     # st.title("📚 Historiku i Shitjeve & Analiza e Artikujve")
     st.title("Historiku i Shitjeve & Analiza e Artikujve")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
@@ -1419,18 +1419,6 @@ elif page == "Mundësitë":
                 st.metric("Artikulli më i harruar", top_a)
         else:
             st.success("✅ Nuk u gjet asnjë 'Gap' në shitje për këtë përzgjedhje.")
-# ---------------------------------------------------------
-# MODULI: ASISTENTI AI (v2.0 — RFM segmentim + raport smart)
-# ---------------------------------------------------------
-elif page == "Asistenti AI":
-    render_asistenti_ai(df_raw, agj_sel, start_date, end_date, rritja)
-
-
-# ---------------------------------------------------------
-# MODULI: ROUTE PLAN AI (v2.0 — Optimizim real i rrugës me Nearest-Neighbor)
-# ---------------------------------------------------------
-elif page == "Route Plan AI":
-    render_route_plan_ai(df_klientet_regjistri)
 
 
 # ---------------------------------------------------------
@@ -1655,467 +1643,7 @@ elif page == "Shitjet Ditore":
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
 
-# ---------------------------------------------------------
-# MODULI: KLIENTËT ME SHUMË AGJENTË (Sipas Kodit të Klientit)
-# --------------------------------------------------------
-elif page == "Klientët me shumë Agjentë" and df_raw is not None:
-    st.title("👥 Klientët e Furnizuar nga Më Shumë se Një Agjent")
-    st.markdown(
-        "Ky modul analizon përplasjet e agjentëve duke u bazuar te **Kodi Unik i Klientit** për periudhën e zgjedhur."
-    )
 
-    # Kontrolli i sigurisë nëse kolona ekziston në tabelën df_raw
-    if "KodiKlient" not in df_raw.columns:
-        st.error(
-            "❌ Gabim strukturor: Kolona 'KodiKlient' nuk u gjet në të dhënat e shkarkuara nga SQL Server. Ju lutem kontrolloni nëse e keni shtuar te load_all_data()."
-        )
-    else:
-        # 1. Krijojmë përzgjedhësit e periudhës në formë muaj-vit
-        df_raw["VitiMuaji"] = df_raw["Data"].dt.to_period("M")
-        lista_muajve = sorted(df_raw["VitiMuaji"].unique())
-        opsionet_muajve = {
-            m: f"{muajt_sq.get(m.month, m.month)} {m.year}" for m in lista_muajve
-        }
-
-        st.subheader("🔍 Zgjidh Periudhën e Analizës")
-        col1, col2 = st.columns(2)
-        with col1:
-            muaji_fillimit = st.selectbox(
-                "Nga Muaji:",
-                options=lista_muajve,
-                index=0,
-                format_func=lambda x: opsionet_muajve[x],
-            )
-        with col2:
-            muaji_mbarimit = st.selectbox(
-                "Deri te Muaji:",
-                options=lista_muajve,
-                index=len(lista_muajve) - 1,
-                format_func=lambda x: opsionet_muajve[x],
-            )
-
-        if muaji_fillimit > muaji_mbarimit:
-            st.error(
-                "❌ Gabim: 'Nga Muaji' nuk mund të jetë më i madh se 'Deri te Muaji'!"
-            )
-        else:
-            # 2. Filtrimi i të dhënave bazë
-            df_filtri = df_raw[
-                (df_raw["VitiMuaji"] >= muaji_fillimit)
-                & (df_raw["VitiMuaji"] <= muaji_mbarimit)
-            ].copy()
-
-            # Sigurohemi që kolonat kyçe nuk janë boshe
-            df_filtri = df_filtri[
-                df_filtri["KodiKlient"].notna() & df_filtri["ForcaShitese"].notna()
-            ]
-
-            # 3. Agregimi: Grupojmë sipas 'KodiKlient' dhe marrim emrin e parë që gjejmë për atë kod
-            raporti_df = (
-                df_filtri.groupby("KodiKlient")
-                .agg(
-                    EmriKlientit=(
-                        "Klienti",
-                        "first",
-                    ),  # Merr emrin e parë për atë kod klienti
-                    Agjentet=("ForcaShitese", lambda x: ", ".join(sorted(x.unique()))),
-                    Numri_Agjenteve=("ForcaShitese", "nunique"),
-                    Totale_KG=("kg", "sum"),
-                    Vlera_Totale=("Vlera_Historike", "sum"),
-                )
-                .reset_index()
-            )
-
-            # 4. Filtri Kyç: Vetëm kodet që kanë më shumë se 1 agjent unik
-            raporti_final = raporti_df[raporti_df["Numri_Agjenteve"] > 1].sort_values(
-                by="Numri_Agjenteve", ascending=False
-            )
-
-            # Llogarisim numrin total të klientëve unikë që kanë blerë në këtë periudhë historike
-            total_kliente_aktive = df_filtri["KodiKlient"].nunique()
-
-            # Llogarisim përqindjen e klientëve në konflikt
-            perqindja_konflikt = (
-                (len(raporti_final) / total_kliente_aktive * 100)
-                if total_kliente_aktive > 0
-                else 0
-            )
-
-            # 5. Shfaqja e Metrikave të Përgjithshme (Shtuar numri i klientëve aktualë live)
-            st.divider()
-            m0, m1, m2, m3, m4 = st.columns(5)
-
-            # METRIKA E RE E KËRKUAR: Merr numrin total të klientëve nga regjistri live i SQL
-            if df_klientet_regjistri is not None:
-                total_regjister_live = len(df_klientet_regjistri)
-                m0.metric(
-                    label="📋 Regjistri i Klientëve",
-                    value=f"{total_regjister_live:,}",
-                    help="Numri total i klientëve që ekzistojnë aktualisht në pamjen dbo.KlientetListView në SQL Server.",
-                )
-            else:
-                m0.metric(label="📋 Regjistri i Klientëve", value="Nuk u ngarkua")
-
-            m1.metric(
-                label="🏪 Klientë me Blerje",
-                value=f"{total_kliente_aktive:,}",
-                help="Numri i klientëve unikë që kanë kryer të paktën një blerje gjatë periudhës së zgjedhur.",
-            )
-            m2.metric(
-                label="⚠️ Klientë në Konflikt",
-                value=f"{len(raporti_final):,}",
-                delta=f"{perqindja_konflikt:.1f}% e totalit",
-                delta_color="inverse",
-            )
-            m3.metric(
-                label="⚖️ Total KG e Prekur",
-                value=f"{raporti_final['Totale_KG'].sum():,.0f} kg",
-            )
-            m4.metric(
-                label="💰 Vlera në Konflikt",
-                value=f"{raporti_final['Vlera_Totale'].sum():,.0f} L",
-            )
-
-            # ---------------------------------------------------------
-            # 5.5 GRAFIKU AVANCUAR: I PASTRUAR DHE ME EMËRTIME TË REJA
-            # ---------------------------------------------------------
-
-            # 1. Agregimi bazë për klientët unikë dhe agjentët unikë në muaj
-            st.divider()
-            st.subheader("Analiza Korelative")
-            df_baze = (
-                df_filtri.groupby("VitiMuaji")
-                .agg(
-                    Kliente_Aktive=("KodiKlient", "nunique"),
-                    Nr_Agjenteve=("ForcaShitese", "nunique"),
-                )
-                .reset_index()
-            )
-
-            # 2. Agregimi për sasinë totale, vetëm DEKA dhe vetëm OLIM
-            df_total_kg = (
-                df_filtri.groupby("VitiMuaji")["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "KG_Total"})
-            )
-            df_deka_kg = (
-                df_filtri[df_filtri["Grup_Filtri"] == "DEKA"]
-                .groupby("VitiMuaji")["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "KG_Deka"})
-            )
-            df_olim_kg = (
-                df_filtri[df_filtri["Grup_Filtri"] == "OLIM"]
-                .groupby("VitiMuaji")["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "KG_Olim"})
-            )
-
-            # Bashkojmë të gjitha të dhënat në një DataFrame të vetëm
-            df_grafiku = pd.merge(df_baze, df_total_kg, on="VitiMuaji", how="left")
-            df_grafiku = pd.merge(df_grafiku, df_deka_kg, on="VitiMuaji", how="left")
-            df_grafiku = pd.merge(df_grafiku, df_olim_kg, on="VitiMuaji", how="left")
-            df_grafiku.fillna(0, inplace=True)
-
-            # Renditim të dhënat sipas muajit
-            df_grafiku = df_grafiku.sort_values(by="VitiMuaji").reset_index(drop=True)
-
-            # Kthejmë periudhën në etiketë në shqip
-            df_grafiku["Muaji_Etiketa"] = df_grafiku["VitiMuaji"].apply(
-                lambda x: f"{muajt_sq.get(x.month, x.month)} {x.year}"
-            )
-
-            # --- PANEL KONTROLLI I DYFISHTË (I PASTRUAR NGA TEKSTET) ---
-            # Ndryshuar emërtimi në 'Agjentë Aktivë'
-            opsionet_serive = {
-                "Klientë Aktivë": {
-                    "kolona": "Kliente_Aktive",
-                    "emri": "🏪 Klientë Aktivë",
-                    "ngjyra": "#1f77b4",
-                },
-                "Agjentë Aktivë": {
-                    "kolona": "Nr_Agjenteve",
-                    "emri": "👤 Agjentë Aktivë",
-                    "ngjyra": "#aec7e8",
-                },
-                "Sasia Totale (KG)": {
-                    "kolona": "KG_Total",
-                    "emri": "📦 Sasia Totale (KG)",
-                    "ngjyra": "#2ca02c",
-                },
-                "Sasia DEKA (KG)": {
-                    "kolona": "KG_Deka",
-                    "emri": "🔴 Sasia DEKA (KG)",
-                    "ngjyra": "#d62728",
-                },
-                "Sasia OLIM (KG)": {
-                    "kolona": "KG_Olim",
-                    "emri": "🟡 Sasia OLIM (KG)",
-                    "ngjyra": "#ffbb78",
-                },
-            }
-
-            col_b1, col_b2 = st.columns(2)
-
-            with col_b1:
-                primar_zgjedhur = st.multiselect(
-                    label="Zgjidh seritë e majta:",
-                    options=list(opsionet_serive.keys()),
-                    default=[
-                        "Agjentë Aktivë"
-                    ],  # Vendosur si default i ri sipas screenshot-it tënd
-                    label_visibility="collapsed",
-                )
-
-            with col_b2:
-                sekondar_zgjedhur = st.multiselect(
-                    label="Zgjidh seritë e djathta:",
-                    options=list(opsionet_serive.keys()),
-                    default=[
-                        "Sasia Totale (KG)"
-                    ],  # Vendosur si default i ri sipas screenshot-it tënd
-                    label_visibility="collapsed",
-                )
-
-            # --- MULTI-OPSIONI I SHKALLËZIMIT (I PASTRUAR NGA DIVIDER DHE TITULLI) ---
-            lloji_shkallezimit = st.radio(
-                label="Lloji i Shkallëzimit:",
-                options=[
-                    "Vlera Absolute (Shkallë Lineare standarde)",
-                    "Vlera Absolute (Shkallë Logaritmike - për diferenca të mëdha)",
-                    "Normalizim në % (Çdo seri nistet nga 100% te muaji i parë)",
-                ],
-                index=0,
-                horizontal=True,
-                label_visibility="collapsed",  # Fsheh titullin e radio button-it
-            )
-
-            perdor_log = "Logaritmike" in lloji_shkallezimit
-            perdor_pct = "Normalizim" in lloji_shkallezimit
-
-            # --- LOGJIKA E NORMALIZIMIT NË % ---
-            df_vizualizimi = df_grafiku.copy()
-            if perdor_pct and len(df_vizualizimi) > 0:
-                rreshti_pare = df_vizualizimi.iloc[0]
-                for kategoria, info in opsionet_serive.items():
-                    vlera_baze = rreshti_pare[info["kolona"]]
-                    if vlera_baze > 0:
-                        df_vizualizimi[info["kolona"]] = (
-                            df_vizualizimi[info["kolona"]] / vlera_baze
-                        ) * 100
-                    else:
-                        df_vizualizimi[info["kolona"]] = 100.0
-
-            # --- NDËRTIMI I GRAFIKUT ME PLOTLY ---
-            from plotly.subplots import make_subplots
-            import plotly.graph_objects as go
-
-            fig_universal = make_subplots(specs=[[{"secondary_y": not perdor_pct}]])
-
-            # 1. SERITË PËR BOSHTIN PRIMAR (MAJTAS)
-            for kategoria in primar_zgjedhur:
-                info = opsionet_serive[kategoria]
-                custom_hover = (
-                    f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.1f}}%<br>Vlera Reale: %{{customdata:,.0f}}<extra></extra>"
-                    if perdor_pct
-                    else f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>"
-                )
-
-                fig_universal.add_trace(
-                    go.Bar(
-                        x=df_vizualizimi["Muaji_Etiketa"],
-                        y=df_vizualizimi[info["kolona"]],
-                        customdata=df_grafiku[info["kolona"]],
-                        name=f"{info['emri']}"
-                        + (" (% )" if perdor_pct else " (Majtas)"),
-                        text=(
-                            df_vizualizimi[info["kolona"]].apply(
-                                lambda x: f"{x:,.0f}" if x > 1000 else f"{x}"
-                            )
-                            if (not perdor_log and not perdor_pct)
-                            else None
-                        ),
-                        textposition="outside",
-                        marker_color=info["ngjyra"],
-                        hovertemplate=custom_hover,
-                    ),
-                    secondary_y=False,
-                )
-
-            # 2. SERITË PËR BOSHTIN SEKONDAR (DJATHTAS)
-            for kategoria in sekondar_zgjedhur:
-                info = opsionet_serive[kategoria]
-                stili_vijes = "solid"
-                if "DEKA" in kategoria:
-                    stili_vijes = "dash"
-                elif "OLIM" in kategoria:
-                    stili_vijes = "dashdot"
-                elif "Aktivë" in kategoria or "Agjentë" in kategoria:
-                    stili_vijes = "dot"
-
-                custom_hover = (
-                    f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.1f}}%<br>Vlera Reale: %{{customdata:,.0f}}<extra></extra>"
-                    if perdor_pct
-                    else f"<b>%{{x}}</b><br>{info['emri']}: %{{y:,.0f}}<extra></extra>"
-                )
-
-                fig_universal.add_trace(
-                    go.Scatter(
-                        x=df_vizualizimi["Muaji_Etiketa"],
-                        y=df_vizualizimi[info["kolona"]],
-                        customdata=df_grafiku[info["kolona"]],
-                        name=f"{info['emri']}"
-                        + (" (% )" if perdor_pct else " (Djathtas)"),
-                        mode="lines+markers",
-                        line=dict(color=info["ngjyra"], width=3, dash=stili_vijes),
-                        marker=dict(size=8),
-                        hovertemplate=custom_hover,
-                    ),
-                    secondary_y=not perdor_pct,
-                )
-
-            # --- KONFIGURIMI I TIPIT TË BOSHTIT ---
-            lloji_boshtit = "log" if perdor_log else "linear"
-
-            fig_universal.update_layout(
-                xaxis_title=None,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                margin=dict(
-                    l=20, r=20, t=10, b=20
-                ),  # Ulur marzhi lart pasi hoqëm titujt
-                height=480,
-                legend=dict(
-                    orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5
-                ),
-                barmode="group",
-            )
-
-            # Përditësimi i boshteve dhe emërtimeve anësore
-            if perdor_pct:
-                fig_universal.update_yaxes(
-                    title_text="Ecuria Relative (%)",
-                    type=lloji_boshtit,
-                    showgrid=bool(primar_zgjedhur),
-                    gridcolor="rgba(200,200,200,0.15)",
-                    secondary_y=False,
-                )
-            else:
-                titulli_majtas = ", ".join(primar_zgjedhur) if primar_zgjedhur else ""
-                fig_universal.update_yaxes(
-                    title_text=titulli_majtas,
-                    type=lloji_boshtit,
-                    showgrid=bool(primar_zgjedhur),
-                    gridcolor="rgba(200,200,200,0.15)",
-                    secondary_y=False,
-                )
-
-                if sekondar_zgjedhur:
-                    titulli_djathtas = ", ".join(sekondar_zgjedhur)
-                    fig_universal.update_yaxes(
-                        title_text=titulli_djathtas,
-                        type=lloji_boshtit,
-                        showgrid=False,
-                        secondary_y=True,
-                    )
-
-            # Shfaqja e grafikut final
-            if primar_zgjedhur or sekondar_zgjedhur:
-                st.plotly_chart(fig_universal, use_container_width=True)
-            else:
-                st.warning(
-                    "⚠️ Ju lutem zgjidhni të paktën një seri për të vizatuar grafikun."
-                )
-
-            # 6. Shfaqja e Tabelës Kryesore
-            st.subheader("📋 Lista e Kodeve të Klientëve me Përplasje Agjentësh")
-
-            if not raporti_final.empty:
-                config_kolonave_konflikt = {
-                    "KodiKlient": st.column_config.TextColumn("🔑 Kodi Klientit"),
-                    "EmriKlientit": st.column_config.TextColumn("🏪 Emri i Klientit"),
-                    "Agjentet": st.column_config.TextColumn("👤 Agjentët Furnizues"),
-                    "Numri_Agjenteve": st.column_config.NumberColumn(
-                        "🔢 Nr. Agjentëve", format="%d"
-                    ),
-                    "Totale_KG": st.column_config.NumberColumn(
-                        "⚖️ Totale KG", format="%d"
-                    ),
-                    "Vlera_Totale": st.column_config.NumberColumn(
-                        "💰 Vlera Totale (Lekë)", format="%d"
-                    ),
-                }
-
-                # Rregullojmë radhën e kolonave
-                raporti_final = raporti_final[
-                    [
-                        "KodiKlient",
-                        "EmriKlientit",
-                        "Agjentet",
-                        "Numri_Agjenteve",
-                        "Totale_KG",
-                        "Vlera_Totale",
-                    ]
-                ]
-
-                st.dataframe(
-                    raporti_final,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config=config_kolonave_konflikt,
-                    height=450,
-                )
-
-                # 7. Mundësia për shkarkim në CSV
-                csv_konflikt = raporti_final.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="📥 Shkarko Raportin e Konflikteve (CSV)",
-                    data=csv_konflikt,
-                    file_name=f"konfliktet_sipas_kodit_{muaji_fillimit}_{muaji_mbarimit}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-
-                # 8. Detajimi në nivel artikulli (Drill-down sipas Kodit)
-                st.divider()
-                st.subheader("🔍 Analizë e Detajuar për një Klient specifik")
-
-                # Krijojmë një listë përzgjedhjeje që tregon "Kodi - Emri" për menaxherin
-                raporti_final["Kodi_Emri"] = (
-                    raporti_final["KodiKlient"].astype(str)
-                    + " - "
-                    + raporti_final["EmriKlientit"]
-                )
-                klienti_zgjedhur_opsion = st.selectbox(
-                    "Zgjidh Kodin dhe Emrin e klientit:",
-                    options=raporti_final["Kodi_Emri"].unique(),
-                )
-
-                if klienti_zgjedhur_opsion:
-                    # Shkëputim kodin e pastër nga stringu i përzgjedhur
-                    kodi_per_filtrim = klienti_zgjedhur_opsion.split(" - ")[0]
-
-                    df_detaje = (
-                        df_filtri[df_filtri["KodiKlient"] == kodi_per_filtrim]
-                        .groupby(["ForcaShitese", "kat", "Artikulli"])
-                        .agg(Sasia_KG=("kg", "sum"), Vlera=("Vlera_Historike", "sum"))
-                        .reset_index()
-                    )
-
-                    st.dataframe(
-                        df_detaje.style.format(
-                            {"Sasia_KG": "{:,.1f}", "Vlera": "{:,.0f} L"}
-                        ),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-            else:
-                st.success(
-                    "🟢 Nuk u gjet asnjë kod klienti i furnizuar nga më shumë se një agjent për këtë periudhë."
-                )
 
 # ---------------------------------------------------------
 # MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
@@ -2483,5 +2011,3 @@ if page == "🎯 Plani sipas Strukturës B":
 # -----------------------------------------------------------------
 # MODULI: ROUTE PLAN & ANALIZA E KLIENTËVE TË HUMBUR (I SAKTËSUAR)
 # -----------------------------------------------------------------
-elif page == "Route Plan AI-2":
-    render_route_plan_ai_2(df_raw)
