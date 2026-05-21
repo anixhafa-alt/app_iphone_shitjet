@@ -608,7 +608,7 @@ elif page == "Historiku":
         )
 
         # Mundësia për shkarkim në Excel
-        csv = tabela_artikujt.to_csv().encode("utf-8")
+        csv = tabela_artikujt.to_csv().encode("utf-8-sig")
         st.download_button(
             label="📥 Shkarko Listën e Plotë (CSV)",
             data=csv,
