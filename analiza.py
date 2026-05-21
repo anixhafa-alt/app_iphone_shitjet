@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import json
-import streamlit.components.v1 as components
+import plotly.express as px
+import plotly.graph_objects as go
 
 
 def render_analiza_klienteve(df_raw):
@@ -15,11 +15,11 @@ def render_analiza_klienteve(df_raw):
         st.error("❌ Nuk u gjetën të dhëna valide nga skedari SAD-DATAbase1.xlsb.")
         return
 
-    # --- 1. PROCESIMI I TË DHËNAVE ---
+    # --- 1. PASTRIMI DHE FORMATIMI I TË DHËNAVE ---
     df = df_raw.copy()
     df.columns = df.columns.str.strip().str.replace('"', "")
 
-    # Konvertimi i Datës në mënyrë të sigurt
+    # Konvertimi i Datës
     if pd.api.types.is_numeric_dtype(df["Data"]):
         df["Data"] = pd.to_datetime(df["Data"], unit="D", origin="1899-12-30")
     else:
@@ -37,7 +37,7 @@ def render_analiza_klienteve(df_raw):
         else:
             df[c] = 0.0
 
-    # Krijimi i kolonave të kohës si te kodi yt
+    # Krijimi i kolonave të kohës
     df["Viti"] = df["Data"].dt.year.astype(int)
     df["Muaji_Nr"] = df["Data"].dt.month.astype(int)
 
@@ -57,251 +57,131 @@ def render_analiza_klienteve(df_raw):
     }
     df["Muaji"] = df["Muaji_Nr"].map(muajt_shqip)
 
-    # Sigurohemi që ekziston kolona e Kategorisë
     if "Kategoria_Finale" not in df.columns:
         if "KATEG." in df.columns:
             df["Kategoria_Finale"] = df["KATEG."]
         else:
             df["Kategoria_Finale"] = "ETJ"
 
-    # --- PASTRIM STRUKTURAL PËR JSON (Mbrojtje ndaj thonjëzave dhe karakterve speciale) ---
-    df["Klienti"] = (
-        df["Klienti"]
-        .astype(str)
-        .str.replace("'", " ", regex=False)
-        .str.replace('"', " ", regex=False)
-        .str.strip()
-    )
-    df["ForcaShitese"] = (
-        df["ForcaShitese"]
-        .astype(str)
-        .str.replace("'", " ", regex=False)
-        .str.replace('"', " ", regex=False)
-        .str.strip()
-    )
-    df["Kategoria_Finale"] = (
-        df["Kategoria_Finale"]
-        .astype(str)
-        .str.replace("'", " ", regex=False)
-        .str.replace('"', " ", regex=False)
-        .str.strip()
+    # --- 2. FILTRAT DIREKT NË STREAMLIT (Pa JS që bën crash) ---
+    st.sidebar.markdown("### 🎛️ Filtrat e Dashboard-it")
+
+    vitet_opsione = sorted(df["Viti"].unique(), reverse=True)
+    viti_sel = st.sidebar.selectbox(
+        "Zgjidh Vitin", ["Gjithë Vitet"] + list(vitet_opsione)
     )
 
-    # Përgatitja e rreshtave të pastër për JSON
-    json_cols = [
-        "Viti",
-        "Muaji",
-        "Muaji_Nr",
-        "ForcaShitese",
-        "Klienti",
-        "Kategoria_Finale",
-        "TotalRresht",
-        "kg",
+    muajt_opsione = [
+        "Janar",
+        "Shkurt",
+        "Mars",
+        "Prill",
+        "Maj",
+        "Qershor",
+        "Korrik",
+        "Gusht",
+        "Shtator",
+        "Tetor",
+        "Nëntor",
+        "Dhjetor",
     ]
-    records = df[json_cols].copy()
+    muaji_sel = st.sidebar.selectbox("Zgjidh Muajin", ["Gjithë Muajt"] + muajt_opsione)
 
-    # Sigurohemi që nuk ka mbetur asnjë NaN përpara konvertimit në JSON
-    records["TotalRresht"] = records["TotalRresht"].fillna(0).astype(float)
-    records["kg"] = records["kg"].fillna(0).astype(float)
+    agjentet_opsione = sorted(df["ForcaShitese"].astype(str).unique())
+    agjent_sel = st.sidebar.selectbox(
+        "Zgjidh Agjentin", ["Gjithë Agjentët"] + list(agjentet_opsione)
+    )
 
-    json_data_str = json.dumps(records.to_dict(orient="records"))
+    metrika_sel = st.sidebar.radio("Zgjidh Metrikën", ["Lek (Vlerë)", "KG (Volum)"])
+    kolona_metrike = "TotalRresht" if metrika_sel == "Lek (Vlerë)" else "kg"
 
-    # --- 2. INTERFEJSI HTML / JS / CHART.JS ---
-    html_template = f"""
-    <!DOCTYPE html>
-    <html lang="sq">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <style>
-            :root {{ --primary: #1e3a8a; --bg: #f8fafc; --card: #ffffff; --text: #0f172a; }}
-            body {{ font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin:0; padding:10px; }}
-            .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 15px; }}
-            .card {{ background: var(--card); padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }}
-            .card-title {{ font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; }}
-            .card-value {{ font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-top: 5px; }}
-            .chart-container {{ position: relative; height: 320px; width: 100%; background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; box-sizing: border-box; }}
-            .flex-charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 15px; margin-bottom: 20px; }}
-            select {{ padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; box-sizing: border-box; font-size: 0.9rem; background: #fff; }}
-            .filter-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; background: white; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; }}
-            table {{ width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; font-size: 0.9rem; }}
-            th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }}
-            th {{ background: #f1f5f9; font-weight: 600; color: #334155; }}
-            .home-btn {{ background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 5px; }}
-            #error-box {{ display: none; background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; border-left: 5px solid #ef4444; }}
-        </style>
-    </head>
-    <body>
+    # Aplikimi i filtrave mbi DataFrame
+    df_filtered = df.copy()
+    if viti_sel != "Gjithë Vitet":
+        df_filtered = df_filtered[df_filtered["Viti"] == int(viti_sel)]
+    if muaji_sel != "Gjithë Muajt":
+        df_filtered = df_filtered[df_filtered["Muaji"] == muaji_sel]
+    if agjent_sel != "Gjithë Agjentët":
+        df_filtered = df_filtered[df_filtered["ForcaShitese"] == agjent_sel]
 
-        <div id="error-box"></div>
+    # --- 3. SHFAQA E KPI-ve ---
+    total_vlerë = df_filtered[kolona_metrike].sum()
+    faturat_count = len(df_filtered)
+    kliente_unik = df_filtered["Klienti"].nunique()
 
-        <button class="home-btn" onclick="resetFilters()"><i class="fa-solid fa-house"></i> Reset Filters</button>
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label=f"{metrika_sel} Total", value=f"{total_vlerë:,.2f}")
+    with col2:
+        st.metric(label="Numri i Transaksioneve", value=f"{faturat_count:,}")
+    with col3:
+        st.metric(label="Klientë Aktivë", value=f"{kliente_unik:,}")
 
-        <div class="filter-grid">
-            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">VITI</label><select id="fViti" onchange="updateDashboard()"><option value="all">Gjithë Vitet</option></select></div>
-            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">MUAJI</label><select id="fMuaji" onchange="updateDashboard()"><option value="all">Gjithë Muajt</option></select></div>
-            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">AGJENTI</label><select id="fAgjent" onchange="updateDashboard()"><option value="all">Gjithë Agjentët</option></select></div>
-            <div><label style="font-size:0.75rem; font-weight:600; color:#64748b;">METRIKA</label><select id="fMetrika" onchange="updateDashboard()"><option value="lek">Lek (Vlerë)</option><option value="kg">KG (Volum)</option></select></div>
-        </div>
+    st.markdown("---")
 
-        <div class="grid">
-            <div class="card"><div class="card-title">Xhiro / Volumi Total</div><div class="card-value" id="kpiTotal">0</div></div>
-            <div class="card"><div class="card-title">Numri i Faturave</div><div class="card-value" id="kpiFatura">0</div></div>
-            <div class="card"><div class="card-title">Klientë Aktivë</div><div class="card-value" id="kpiKliente">0</div></div>
-        </div>
+    # --- 4. GRAFIKËT REALIZUAR ME PLOTLY (Native & Fast) ---
+    col_g1, col_g2 = st.columns(2)
 
-        <div class="flex-charts">
-            <div class="chart-container"><canvas id="lineChart"></canvas></div>
-            <div class="chart-container"><canvas id="pieChart"></canvas></div>
-        </div>
+    with col_g1:
+        st.subheader("📈 Ecuria sipas Muajve")
+        # Agregimi sipas Vitit dhe Muajit për grafikun linear
+        df_line = (
+            df_filtered.groupby(["Viti", "Muaji_Nr", "Muaji"])[kolona_metrike]
+            .sum()
+            .reset_index()
+        )
+        df_line = df_line.sort_values(by=["Viti", "Muaji_Nr"])
 
-        <div class="card" style="padding:0; overflow-x:auto;">
-            <table id="topTable">
-                <thead><tr><th>Renditja</th><th id="tableDynamicHeader">Klienti / Agjenti</th><th>Ecuria</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        fig_line = px.line(
+            df_line,
+            x="Muaji",
+            y=kolona_metrike,
+            color=df_line["Viti"].astype(str),
+            markers=True,
+            labels={kolona_metrike: metrika_sel, "x": "Muaji"},
+            template="plotly_white",
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
 
-    <script>
-        try {{
-            const rawData = {json_data_str};
-            let lineChart, pieChart;
+    with col_g2:
+        st.subheader("🍕 Ndarja sipas Kategorive")
+        df_pie = (
+            df_filtered.groupby("Kategoria_Finale")[kolona_metrike].sum().reset_index()
+        )
 
-            // Ndërtimi i filtrave
-            const vitet = [...new Set(rawData.map(d => d.Viti))].sort((a,b)=>b-a);
-            const agjentet = [...new Set(rawData.map(d => d.ForcaShitese))].sort();
-            const muajt = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
+        fig_pie = px.pie(
+            df_pie,
+            values=kolona_metrike,
+            names="Kategoria_Finale",
+            hole=0.4,
+            template="plotly_white",
+        )
+        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-            const selViti = document.getElementById('fViti');
-            vitet.forEach(v => selViti.add(new Option(v, v)));
+    # --- 5. TABELA DINAMIKE (Top 15 Klientët ose Agjentët) ---
+    st.markdown("---")
+    shfaq_klientet = agjent_sel != "Gjithë Agjentët" or len(df_filtered) < 2000
 
-            const selMuaji = document.getElementById('fMuaji');
-            muajt.forEach(m => selMuaji.add(new Option(m, m)));
+    if shfaq_klientet:
+        st.subheader("🏆 Top 15 Klientët më të Mëdhenj")
+        kolona_grupimi = "Klienti"
+    else:
+        st.subheader("💼 Renditja e Agjentëve (Forca Shitëse)")
+        kolona_grupimi = "ForcaShitese"
 
-            const selAgjent = document.getElementById('fAgjent');
-            agjentet.forEach(a => selAgjent.add(new Option(a, a)));
+    df_table = df_filtered.groupby(kolona_grupimi)[kolona_metrike].sum().reset_index()
+    df_table = (
+        df_table.sort_values(
+            by=metrika_sel if metrika_sel in df_table.columns else kolona_metrike,
+            ascending=False,
+        )
+        .head(15)
+        .reset_index(drop=True)
+    )
+    df_table.index = df_table.index + 1  # Renditja fillon nga 1
 
-            function formatNum(n) {{
-                if(n >= 1000000) return (n/1000000).toFixed(2) + ' M';
-                if(n >= 1000) return (n/1000).toFixed(1) + ' k';
-                return n.toLocaleString('de-DE', {{maximumFractionDigits:0}});
-            }}
+    # Formatimi i kolonës së parave/volumit për tabelë
+    df_table[metrika_sel] = df_table[kolona_metrike].map("{:,.2f}".format)
 
-            window.resetFilters = function() {{
-                document.getElementById('fViti').value = 'all';
-                document.getElementById('fMuaji').value = 'all';
-                document.getElementById('fAgjent').value = 'all';
-                document.getElementById('fMetrika').value = 'lek';
-                updateDashboard();
-            }}
-
-            window.updateDashboard = function() {{
-                const viti = document.getElementById('fViti').value;
-                const muaji = document.getElementById('fMuaji').value;
-                const agjent = document.getElementById('fAgjent').value;
-                const metric = document.getElementById('fMetrika').value;
-
-                let filtered = rawData.filter(d => {{
-                    return (viti === 'all' || d.Viti == viti) &&
-                           (muaji === 'all' || d.Muaji === muaji) &&
-                           (agjent === 'all' || d.ForcaShitese === agjent);
-                }});
-
-                let totalVal = filtered.reduce((acc, d) => acc + (metric === 'lek' ? d.TotalRresht : d.kg), 0);
-                let fatCount = filtered.length;
-                let klienteUnik = [...new Set(filtered.map(d => d.Klienti))].length;
-
-                document.getElementById('kpiTotal').innerText = formatNum(totalVal) + (metric==='lek' ? ' Lek' : ' KG');
-                document.getElementById('kpiFatura').innerText = fatCount.toLocaleString();
-                document.getElementById('kpiKliente').innerText = klienteUnik.toLocaleString();
-
-                renderCharts(filtered, metric, agjent);
-            }}
-
-            function renderCharts(filtered, metric, agjent) {{
-                const colors = ['#1e3a8a', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
-                let labels = ["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
-                
-                // 1. LINE CHART
-                let yearsInDoc = [...new Set(filtered.map(d => d.Viti))].sort();
-                let lineDatasets = [];
-                yearsInDoc.forEach((yr, i) => {{
-                    let vals = new Array(12).fill(0);
-                    labels.forEach((m, mIdx) => {{
-                        vals[mIdx] = filtered.filter(d => d.Viti == yr && d.Muaji === m)
-                                             .reduce((acc, d) => acc + (metric==='lek' ? d.TotalRresht : d.kg), 0);
-                    }});
-                    lineDatasets.push({{
-                        label: yr,
-                        data: vals,
-                        borderColor: colors[i % colors.length],
-                        backgroundColor: 'transparent',
-                        borderWidth: 2.5,
-                        tension: 0.2
-                    }});
-                }});
-
-                if(lineChart) lineChart.destroy();
-                lineChart = new Chart(document.getElementById('lineChart'), {{
-                    type: 'line',
-                    data: {{ labels: labels, datasets: lineDatasets }},
-                    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ title: {{ display: true, text: 'Ecuria Sipas Muajve' }} }} }}
-                }});
-
-                // 2. PIE CHART
-                let catData = {{}};
-                filtered.forEach(d => {{
-                    let val = (metric === 'lek' ? d.TotalRresht : d.kg);
-                    catData[d.Kategoria_Finale] = (catData[d.Kategoria_Finale] || 0) + val;
-                }});
-                let catLabels = Object.keys(catData);
-                let catVals = Object.values(catData);
-
-                if(pieChart) pieChart.destroy();
-                pieChart = new Chart(document.getElementById('pieChart'), {{
-                    type: 'doughnut',
-                    data: {{ labels: catLabels, datasets: [{{ data: catVals, backgroundColor: colors }}] }},
-                    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'right' }} }} }}
-                }});
-
-                // 3. TABELA DINAMIKE
-                const showKlientet = agjent !== 'all' || filtered.length < 1000;
-                document.getElementById('tableDynamicHeader').innerText = showKlientet ? "Top Klientët" : "Top Agjentët";
-                
-                let tableData = {{}};
-                filtered.forEach(d => {{
-                    let key = showKlientet ? d.Klienti : d.ForcaShitese;
-                    let val = (metric === 'lek' ? d.TotalRresht : d.kg);
-                    tableData[key] = (tableData[key] || 0) + val;
-                }});
-
-                let sortedTable = Object.keys(tableData).map(k => ({{ name: k, value: tableData[k] }}))
-                                                       .sort((a,b) => b.value - a.value).slice(0, 15);
-
-                let tbody = document.getElementById('topTable').getElementsByTagName('tbody')[0];
-                tbody.innerHTML = '';
-                sortedTable.forEach((row, idx) => {{
-                    let r = tbody.insertRow();
-                    r.insertCell(0).innerText = "#" + (idx + 1);
-                    r.insertCell(1).innerText = row.name;
-                    r.insertCell(2).innerText = formatNum(row.value) + (metric==='lek' ? ' Lek' : ' KG');
-                }});
-            }}
-
-            // Nisja e parë
-            updateDashboard();
-
-        }} catch (err) {{
-            const errBox = document.getElementById('error-box');
-            errBox.style.display = 'block';
-            errBox.innerHTML = '⚠️ Ndodhi një gabim në skriptin e Dashboard-it: ' + err.message;
-        }}
-    </script>
-    </body>
-    </html>
-    """
-
-    # Renderimi i saktë
-    components.html(html_template, height=950, scroller=True)
+    st.dataframe(df_table[[kolona_grupimi, metrika_sel]], use_container_width=True)
