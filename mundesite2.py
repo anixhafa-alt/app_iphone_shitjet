@@ -1,4 +1,4 @@
-mport pandas as pd
+import pandas as pd
 import numpy as np
 import time
 import json
@@ -6,6 +6,7 @@ import sys
 import os
 from datetime import datetime, timedelta
 
+def render_mundesite_shitjes(df):
 # --- KONFIGURIME ---
 FILE_NAME_XLSB = 'SAD-DATAbase1.xlsb'
 
