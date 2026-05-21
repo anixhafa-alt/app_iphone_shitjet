@@ -69,8 +69,9 @@ if not check_password():
 # endregion
 
 # =========================================================
-# 3. LOGO VEKTORIALE (SVG) DHE VERSIONI (STILI AXION)
+# 3. LOGO VEKTORIALE (SVG) STRUKTURALE (STILI AXION)
 # region ==================================================
+import base64
 
 # Kodi i pastër SVG i logos AXION
 KODI_LOGO_SVG = """
@@ -78,14 +79,14 @@ KODI_LOGO_SVG = """
     <defs>
         <style>
             .logo-text-main {
-                font-family: 'Montserrat', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+                font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
                 font-weight: 700;
                 fill: #4FA1A1;
                 font-size: 72px;
                 letter-spacing: 4px;
             }
             .logo-text-sub {
-                font-family: 'Montserrat', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+                font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
                 font-weight: 400;
                 fill: #566573;
                 font-size: 13.5px;
@@ -104,47 +105,33 @@ KODI_LOGO_SVG = """
             }
         </style>
     </defs>
-
     <text x="20" y="80" class="logo-text-main">AXION</text>
-    
     <text x="315" y="32" class="version-tag">v.1.1.1</text>
-    
     <text x="110" y="105" class="logo-text-sub">
         Intelligent <tspan class="logo-text-highlight">Operations</tspan> Network
     </text>
 </svg>
 """
 
-# Bashkimi i kodit pa përdorur f-string që të shmangim përplasjen e kllapave {}
-html_pako = (
-    """
-<div style="width: auto; text-align: center; padding: 15px 0 5px 0; box-sizing: border-box;">
-    <style>
-        .axion-logo-svg-container {
-            width: auto !important;
-            max-width: 250px !important;
-            height: auto !important;
-            display: inline-block;
-        }
-    </style>
-    <div class="axion-logo-svg-container">
-"""
-    + KODI_LOGO_SVG
-    + """
-    </div>
-</div>
-"""
-)
+try:
+    # Truku i Sigurt: Enkriptojmë kodin SVG në formatin Base64
+    svg_bytes = KODI_LOGO_SVG.encode("utf-8")
+    svg_base64 = base64.b64encode(svg_bytes).decode("utf-8")
+    data_url = f"data:image/svg+xml;base64,{svg_base64}"
 
-# Shfaqja zyrtare në sidebar
-st.sidebar.markdown(html_pako, unsafe_allow_html=True)
+    # E shfaqim përmes funksionit zyrtar të Streamlit (Nuk ka asnjë shans të dalë si kod)
+    st.sidebar.image(data_url, use_container_width=True)
+except Exception as e:
+    st.sidebar.title("AXION")
+    st.sidebar.caption("v.1.1.1")
 
-# Rregullim i hapësirave të tepërta të Streamlit në mënyrë të pastër
+# Rregullim i hapësirës poshtë logos në mënyrë të pastër
 st.sidebar.markdown(
     """
     <style>
-    [data-testid="stSidebar"] .element-container {
-        margin-bottom: 5px !important;
+    [data-testid="stSidebar"] [data-testid="stImage"] {
+        padding-top: 10px !important;
+        padding-bottom: 15px !important;
     }
     </style>
     """,
