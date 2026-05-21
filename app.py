@@ -145,7 +145,7 @@ page = st.sidebar.radio(
         "Historiku",
         "Klientët me shumë Agjentë",
         "Asistenti AI",
-        "Route Plan AI",
+        "Route Plan AI-2",
     ],
 )
 # endregion
