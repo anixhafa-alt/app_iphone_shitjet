@@ -871,13 +871,13 @@ def _llogarit_priority_score(full_map: pd.DataFrame, rfm: pd.DataFrame,
     else:
         df["k_mbetja"] = 0
 
-    # Skori final i peshuar
+    # Skori final i peshuar — fillna(0) për të shmangur IntCastingNaNError
     df["Priority_Score"] = (
-        0.30 * df["k_ecuria"]
-        + 0.30 * df["k_recency"]
-        + 0.20 * df["k_segment"]
-        + 0.20 * df["k_mbetja"]
-    ).round(0).astype(int)
+        0.30 * df["k_ecuria"].fillna(0)
+        + 0.30 * df["k_recency"].fillna(0)
+        + 0.20 * df["k_segment"].fillna(40)
+        + 0.20 * df["k_mbetja"].fillna(0)
+    ).fillna(0).round(0).astype(int)
 
     return df.drop(columns=["k_ecuria", "k_recency", "k_segment", "k_mbetja"])
 
@@ -986,10 +986,13 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
 
     full_map = pd.merge(kl_target, statusi_real, on="klienti",
                         how="left", suffixes=("_target", "_real")).fillna(0)
-    full_map["Ecuria"] = (full_map["kg_real"] / full_map["Target_Muaj"] * 100).replace(
-        [np.inf, -np.inf], 0
+    # 0/0 jep NaN — fillna(0) e kap; .replace pastron inf-të (kg_real/0)
+    full_map["Ecuria"] = (
+        (full_map["kg_real"] / full_map["Target_Muaj"] * 100)
+        .replace([np.inf, -np.inf], 0)
+        .fillna(0)
     )
-    full_map["Mbetja_KG"] = (full_map["Target_Muaj"] - full_map["kg_real"]).clip(lower=0)
+    full_map["Mbetja_KG"] = (full_map["Target_Muaj"] - full_map["kg_real"]).clip(lower=0).fillna(0)
 
     # ----- 4. SEGMENTIMI RFM -----
     rfm = llogarit_rfm(df_agj, kolona_klienti="klienti")
@@ -1116,22 +1119,38 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     else:
         rendor_iter = kandidatet.assign(Rendi=range(1, len(kandidatet) + 1)).iterrows()
 
+    def _safe_int(val, default=0):
+        try:
+            if pd.isna(val):
+                return default
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
+    def _safe_float(val, default=0.0):
+        try:
+            if pd.isna(val):
+                return default
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
     for _, rresht in rendor_iter:
         klienti = rresht["klienti"]
-        mbetja = float(rresht.get("Mbetja_KG", 0))
+        mbetja = _safe_float(rresht.get("Mbetja_KG", 0))
         sugj = _sugjero_produkte(df, klienti, mbetja, sot, top_n=3)
         produktet_tekst = " | ".join(
             [f"{s['artikulli']} ({s['sasia_kg']:.0f}kg)" for s in sugj]
         ) if sugj else "—"
 
         plan_rrjeshtor.append({
-            "#": int(rresht.get("Rendi", 0)),
+            "#": _safe_int(rresht.get("Rendi", 0)),
             "Klienti": klienti,
-            "Priority": int(rresht.get("Priority_Score", 0)),
-            "Segment": rresht.get("Segmenti", ""),
+            "Priority": _safe_int(rresht.get("Priority_Score", 0)),
+            "Segment": rresht.get("Segmenti", "") if not pd.isna(rresht.get("Segmenti", "")) else "",
             "Konflikt": "⚠️" if rresht.get("ka_konflikt", False) else "",
             "Mbetja KG": round(mbetja, 1),
-            "Distanca (km)": round(float(rresht.get("Distanca_km", 0)), 2) if "Distanca_km" in rresht else 0,
+            "Distanca (km)": round(_safe_float(rresht.get("Distanca_km", 0)), 2) if "Distanca_km" in rresht else 0,
             "Produktet për Ofertë": produktet_tekst,
         })
 
@@ -1201,6 +1220,18 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
                 "agjenti": agj_sel,
                 "data_plani": data_plani.strftime("%d/%m/%Y"),
                 "klientet_ne_plan": len(df_plan),
+                "target_kg_per_dite": float(df_plan["Mbetja KG"].sum()),
+                "distanca_km": float(df_opt["Kumulative_km"].iloc[-1])
+                    if not df_opt.empty else 0,
+                "klientet_me_konflikt": int(df_plan["Konflikt"].apply(lambda x: bool(x)).sum()),
+                "top_5_klientet": df_plan.head(5)[
+                    ["Klienti", "Priority", "Segment", "Mbetja KG", "Produktet për Ofertë"]
+                ].to_dict(orient="records"),
+            }
+            permbledhja = gjenero_permbledhje_llm(kontekst_llm, agjenti=agj_sel)
+        st.markdown("### 🤖 Përmbledhje Strategjike")
+        st.markdown(permbledhja)
+         "klientet_ne_plan": len(df_plan),
                 "target_kg_per_dite": float(df_plan["Mbetja KG"].sum()),
                 "distanca_km": float(df_opt["Kumulative_km"].iloc[-1])
                     if not df_opt.empty else 0,
