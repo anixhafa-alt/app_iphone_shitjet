@@ -11,7 +11,7 @@ from ai_modules_improved import render_plan_ditor
 
 # Importet ekzistuese të modulit të ri
 from ai_modules_improved import render_plan_ditor
-from mundesite2 import render_mundesite_v3
+from analiza import render_analiza_klienteve
 
 # =========================================================
 # region ==================================================
@@ -150,8 +150,8 @@ page = st.sidebar.radio(
         "Planifikimi",
         "🎯 Plani sipas Strukturës B",
         "Mundësitë",
-        "Analiza e Mundësive",
         "Historiku",
+        "Historiku2",
     ],
 )
 # endregion
@@ -2007,8 +2007,7 @@ if page == "🎯 Plani sipas Strukturës B":
     shfaq_modul_planifikimi_artikujve(df_raw)
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
-if page == "🔍 Analiza e Mundësive":
-    # Kalojmë direkt df_raw ose DataFrame-in kryesor që lexon nga XLSB tuaj
-    render_mundesite_v3(df_raw)
+if page == "historiku2":
+    render_analiza_klienteve(df_raw)
 
 # endregion
