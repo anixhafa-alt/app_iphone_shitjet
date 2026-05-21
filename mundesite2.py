@@ -6,9 +6,13 @@ import sys
 import os
 from datetime import datetime, timedelta
 
+
 def render_mundesite_shitjes(df):
+    pass
+
+
 # --- KONFIGURIME ---
-FILE_NAME_XLSB = 'SAD-DATAbase1.xlsb'
+FILE_NAME_XLSB = "SAD-DATAbase1.xlsb"
 
 start_time = time.time()
 print("--- FILLOI ANALIZA E MUNDËSIVE V3 (DEFAULT COLLAPSED) ---")
@@ -16,82 +20,120 @@ print("--- FILLOI ANALIZA E MUNDËSIVE V3 (DEFAULT COLLAPSED) ---")
 # 1. LEXIMI
 print(f"Duke lexuar {FILE_NAME_XLSB}...")
 try:
-    df = pd.read_excel(FILE_NAME_XLSB, engine='pyxlsb', sheet_name='Sheet1')
+    df = pd.read_excel(FILE_NAME_XLSB, engine="pyxlsb", sheet_name="Sheet1")
     print(f"✅ U lexua XLSB: {len(df)} rreshta.")
 except:
     print(f"❌ Gabim: Nuk u gjet fajli '{FILE_NAME_XLSB}'.")
     sys.exit()
 
 # 2. PASTRIMI
-df.columns = df.columns.str.strip().str.replace('"', '')
+df.columns = df.columns.str.strip().str.replace('"', "")
 
-if pd.api.types.is_numeric_dtype(df['Data']):
-    df['Data'] = pd.to_datetime(df['Data'], unit='D', origin='1899-12-30').dt.normalize()
+if pd.api.types.is_numeric_dtype(df["Data"]):
+    df["Data"] = pd.to_datetime(
+        df["Data"], unit="D", origin="1899-12-30"
+    ).dt.normalize()
 else:
-    df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce').dt.normalize()
+    df["Data"] = pd.to_datetime(
+        df["Data"], dayfirst=True, errors="coerce"
+    ).dt.normalize()
 
 current_year = datetime.now().year
 start_date_analysis = datetime(current_year - 3, 1, 1)
-df = df[df['Data'] >= start_date_analysis]
+df = df[df["Data"] >= start_date_analysis]
 
-for col in ['TotalRresht', 'kg']:
+for col in ["TotalRresht", "kg"]:
     if col in df.columns:
-        if df[col].dtype == 'object':
-             df[col] = df[col].astype(str).str.replace(',', '', regex=False)
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        if df[col].dtype == "object":
+            df[col] = df[col].astype(str).str.replace(",", "", regex=False)
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     else:
         df[col] = 0.0
 
-df = df[df['TotalRresht'] > 0]
+df = df[df["TotalRresht"] > 0]
 
 # 3. ANALIZA
 print("Duke analizuar sjelljen e klientëve...")
-max_date = df['Data'].max()
+max_date = df["Data"].max()
 
-client_stats = df.groupby(['ForcaShitese', 'Klienti']).agg(
-    Last_Date=('Data', 'max'),
-    First_Date=('Data', 'min'),
-    Total_Sales=('TotalRresht', 'sum'),
-    Sales_Count=('TotalRresht', 'count')
-).reset_index()
+client_stats = (
+    df.groupby(["ForcaShitese", "Klienti"])
+    .agg(
+        Last_Date=("Data", "max"),
+        First_Date=("Data", "min"),
+        Total_Sales=("TotalRresht", "sum"),
+        Sales_Count=("TotalRresht", "count"),
+    )
+    .reset_index()
+)
 
-client_stats['Days_Inactive'] = (max_date - client_stats['Last_Date']).dt.days
-client_stats['Months_Active'] = ((client_stats['Last_Date'] - client_stats['First_Date']).dt.days / 30).astype(int)
-client_stats['Months_Active'] = client_stats['Months_Active'].replace(0, 1)
-client_stats['Avg_Monthly'] = client_stats['Total_Sales'] / client_stats['Months_Active']
+client_stats["Days_Inactive"] = (max_date - client_stats["Last_Date"]).dt.days
+client_stats["Months_Active"] = (
+    (client_stats["Last_Date"] - client_stats["First_Date"]).dt.days / 30
+).astype(int)
+client_stats["Months_Active"] = client_stats["Months_Active"].replace(0, 1)
+client_stats["Avg_Monthly"] = (
+    client_stats["Total_Sales"] / client_stats["Months_Active"]
+)
 
 # --- SEGMENTET ---
 # 1. Të Fjetur
 churn_clients = client_stats[
-    (client_stats['Days_Inactive'] > 60) & 
-    (client_stats['Total_Sales'] > 50000)
+    (client_stats["Days_Inactive"] > 60) & (client_stats["Total_Sales"] > 50000)
 ].copy()
-churn_clients['Status'] = 'Fjetur'
+churn_clients["Status"] = "Fjetur"
 
 # 2. Në Rrezik
 last_90_days = max_date - timedelta(days=90)
-recent_sales = df[df['Data'] >= last_90_days].groupby(['ForcaShitese', 'Klienti'])['TotalRresht'].sum().reset_index()
-recent_sales.rename(columns={'TotalRresht': 'Recent_Sales'}, inplace=True)
+recent_sales = (
+    df[df["Data"] >= last_90_days]
+    .groupby(["ForcaShitese", "Klienti"])["TotalRresht"]
+    .sum()
+    .reset_index()
+)
+recent_sales.rename(columns={"TotalRresht": "Recent_Sales"}, inplace=True)
 
-risk_analysis = pd.merge(client_stats, recent_sales, on=['ForcaShitese', 'Klienti'], how='left').fillna(0)
+risk_analysis = pd.merge(
+    client_stats, recent_sales, on=["ForcaShitese", "Klienti"], how="left"
+).fillna(0)
 
 risk_clients = risk_analysis[
-    (risk_analysis['Days_Inactive'] <= 45) & 
-    (risk_analysis['Recent_Sales'] < (risk_analysis['Avg_Monthly'] * 3 * 0.6)) & 
-    (risk_analysis['Avg_Monthly'] > 5000)
+    (risk_analysis["Days_Inactive"] <= 45)
+    & (risk_analysis["Recent_Sales"] < (risk_analysis["Avg_Monthly"] * 3 * 0.6))
+    & (risk_analysis["Avg_Monthly"] > 5000)
 ].copy()
-risk_clients['Status'] = 'Rrezik'
+risk_clients["Status"] = "Rrezik"
 
-final_opps = pd.concat([
-    churn_clients[['ForcaShitese', 'Klienti', 'Last_Date', 'Total_Sales', 'Days_Inactive', 'Status']],
-    risk_clients[['ForcaShitese', 'Klienti', 'Last_Date', 'Total_Sales', 'Days_Inactive', 'Status']]
-])
+final_opps = pd.concat(
+    [
+        churn_clients[
+            [
+                "ForcaShitese",
+                "Klienti",
+                "Last_Date",
+                "Total_Sales",
+                "Days_Inactive",
+                "Status",
+            ]
+        ],
+        risk_clients[
+            [
+                "ForcaShitese",
+                "Klienti",
+                "Last_Date",
+                "Total_Sales",
+                "Days_Inactive",
+                "Status",
+            ]
+        ],
+    ]
+)
 
-final_opps['Last_Date'] = final_opps['Last_Date'].dt.strftime('%d/%m/%Y')
-final_opps = final_opps.sort_values(by='Total_Sales', ascending=False)
+final_opps["Last_Date"] = final_opps["Last_Date"].dt.strftime("%d/%m/%Y")
+final_opps = final_opps.sort_values(by="Total_Sales", ascending=False)
 
-json_str = final_opps.to_json(orient='records')
-agjentet_unike = sorted(final_opps['ForcaShitese'].unique())
+json_str = final_opps.to_json(orient="records")
+agjentet_unike = sorted(final_opps["ForcaShitese"].unique())
 
 # 4. HTML
 print("Duke ndërtuar ndërfaqen e grupuar (Collapsed)...")
@@ -300,7 +342,7 @@ renderList();
 </html>
 """
 
-#with open('MUNDESITE.html', "w", encoding="utf-8") as f:
-    #f.write(html_content)
+# with open('MUNDESITE.html', "w", encoding="utf-8") as f:
+# f.write(html_content)
 
-#print(f"--- SUCCESS! U krijua: 'MUNDESITE.html' ---")
+# print(f"--- SUCCESS! U krijua: 'MUNDESITE.html' ---")
