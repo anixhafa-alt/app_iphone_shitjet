@@ -69,43 +69,84 @@ if not check_password():
 # endregion
 
 # =========================================================
-# 3. LOGO DHE CSS I VERSIONIT (STILI AXION)
+# 3. LOGO VEKTORIALE (SVG) DHE VERSIONI (STILI AXION)
 # region ==================================================
-EMRI_FOTOS = "logo.png"
 
-if os.path.exists(EMRI_FOTOS):
-    try:
-        logo_axion = Image.open(EMRI_FOTOS)
-        st.sidebar.image(logo_axion, use_container_width=True)
-    except Exception as e:
-        st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
-else:
-    st.sidebar.title("AXION")
-    st.sidebar.error(f"❌ Skedari '{EMRI_FOTOS}' nuk u gjet në server.")
+# Kodi i pastër SVG i logos AXION me sfond transparent
+KODI_LOGO_SVG = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 130" width="100%" height="auto">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&amp;display=swap');
+            .logo-text-main {
+                font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+                font-weight: 700;
+                fill: #4FA1A1;
+                font-size: 72px;
+                letter-spacing: 4px;
+            }
+            .logo-text-sub {
+                font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+                font-weight: 400;
+                fill: #566573;
+                font-size: 13.5px;
+                letter-spacing: 0.5px;
+            }
+            .logo-text-highlight {
+                fill: #E5737F;
+                font-weight: 400;
+            }
+            .version-tag {
+                font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+                font-weight: 300;
+                fill: #566573;
+                font-size: 16px;
+                letter-spacing: 1px;
+            }
+        </style>
+    </defs>
 
+    <text x="20" y="80" class="logo-text-main">AXION</text>
+    
+    <text x="315" y="32" class="version-tag">v.1.1.1</text>
+    
+    <text x="110" y="105" class="logo-text-sub">
+        Intelligent <tspan class="logo-text-highlight">Operations</tspan> Network
+    </text>
+</svg>
+"""
+
+# Injektimi i logos direkt në Sidebar me përmasa të kontrolluara
+st.sidebar.markdown(
+    f"""
+    <div style="width: 100%; text-align: center; padding: 15px 0 5px 0; box-sizing: border-box;">
+        <style>
+            .axion-logo-svg-container {{
+                width: 100% !important;
+                max-width: 250px !important;
+                height: auto !important;
+                display: inline-block;
+            }}
+        </style>
+        <div class="axion-logo-svg-container">
+            {KODI_LOGO_SVG}
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Rregullim i veshjes së Streamlit për të eliminuar hapësirat e tepërta boshe në Sidebar
 st.sidebar.markdown(
     """
     <style>
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        margin-bottom: 0px !important;
-        padding-bottom: 0px !important;
-    }
-    .version-text {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 12px !important;
-        color: #566573 !important;
-        text-align: right;
-        margin-top: -110px !important;
-        margin-bottom: 20px !important;
-        letter-spacing: 1px;
-        font-weight: 500;
+    [data-testid="stSidebar"] .element-container {
+        margin-bottom: 5px !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
-st.sidebar.markdown('<p class="version-text"> v.1.1.0</p>', unsafe_allow_html=True)
 # endregion
 
 # =========================================================
