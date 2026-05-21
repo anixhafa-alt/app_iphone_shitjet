@@ -2981,7 +2981,7 @@ def shfaq_itinerarin_e_agjenteve(df):
 
     # Supozojmë që kolonat në DataFrame janë: 'Agjenti', 'Klienti', 'Data'
     # Nëse kolonat e tua kanë emra të tjerë (psh 'Data_Fatures', 'Emër Agjenti'), ndryshoji poshtë:
-    kolona_agjenti = "Agjenti"
+    kolona_agjenti = "ForcaShitese"
     kolona_klienti = "Klienti"
     kolona_data = "Data"
 
