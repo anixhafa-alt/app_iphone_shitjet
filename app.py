@@ -72,7 +72,7 @@ if not check_password():
 # 3. LOGO VEKTORIALE (SVG) DHE VERSIONI (STILI AXION)
 # region ==================================================
 
-# Kemi hequr @import dhe çdo simbol '%' që bllokonte Streamlit-in
+# Kodi i pastër SVG i logos AXION
 KODI_LOGO_SVG = """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 130" width="100%" height="auto">
     <defs>
@@ -115,27 +115,31 @@ KODI_LOGO_SVG = """
 </svg>
 """
 
-# Kemi zëvendësuar gjerësitë me vlerat "vw" ose auto në vend të "%" për të shmangur ngrirjen
-st.sidebar.markdown(
-    f"""
-    <div style="width: auto; text-align: center; padding: 15px 0 5px 0; box-sizing: border-box;">
-        <style>
-            .axion-logo-svg-container {{
-                width: auto !important;
-                max-width: 250px !important;
-                height: auto !important;
-                display: inline-block;
-            }}
-        </style>
-        <div class="axion-logo-svg-container">
-            {KODI_LOGO_SVG}
-        </div>
+# Bashkimi i kodit pa përdorur f-string që të shmangim përplasjen e kllapave {}
+html_pako = (
+    """
+<div style="width: auto; text-align: center; padding: 15px 0 5px 0; box-sizing: border-box;">
+    <style>
+        .axion-logo-svg-container {
+            width: auto !important;
+            max-width: 250px !important;
+            height: auto !important;
+            display: inline-block;
+        }
+    </style>
+    <div class="axion-logo-svg-container">
+"""
+    + KODI_LOGO_SVG
+    + """
     </div>
-    """,
-    unsafe_allow_html=True,
+</div>
+"""
 )
 
-# Rregullim i hapësirës së Streamlit pa përdorur simbole %
+# Shfaqja zyrtare në sidebar
+st.sidebar.markdown(html_pako, unsafe_allow_html=True)
+
+# Rregullim i hapësirave të tepërta të Streamlit në mënyrë të pastër
 st.sidebar.markdown(
     """
     <style>
