@@ -9,6 +9,10 @@ import time
 # --- Moduli i unifikuar AI (v3.0) ---
 from ai_modules_improved import render_plan_ditor
 
+# Importet ekzistuese të modulit të ri
+from ai_modules_improved import render_plan_ditor
+from mundesite_module import render_mundesite_shitjes  # <-- SHTO KËTË LINE
+
 # =========================================================
 # region ==================================================
 st.set_page_config(page_title="Sistemi i Planifikimit - DEKA SQL", layout="wide")
@@ -146,6 +150,7 @@ page = st.sidebar.radio(
         "Planifikimi",
         "🎯 Plani sipas Strukturës B",
         "Mundësitë",
+        "Analiza e Mundësive",
         "Historiku",
     ],
 )
@@ -2001,5 +2006,9 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
 if page == "🎯 Plani sipas Strukturës B":
     shfaq_modul_planifikimi_artikujve(df_raw)
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
+
+if page == "🔍 Analiza e Mundësive":
+    # df_raw është DataFrame që aplikacioni yt lexon nga SQL ose Exceli
+    render_mundesite_shitjes(df_raw)
 
 # endregion
