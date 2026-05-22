@@ -523,7 +523,7 @@ if page == "🎯 Plani Ditor":
 # MODULI: ANALIZA (Dashboard)
 # ---------------------------------------------------------
 elif page == "📊 Analiza":
-    render_analiza(df_raw)
+    render_analiza()
 
 # ---------------------------------------------------------
 # MODULI: HISTORIKU
