@@ -1,0 +1,155 @@
+============================================================
+  AXION - INSTRUKSIONE PER PERDITESIM TE DHENASH (XLSB)
+============================================================
+
+Kur te dhenat ne SAD-DATAbase1.xlsb ndryshojne (data te reja,
+shitje te reja, etj.), ndjek keto hapa:
+
+
+----------------------------------------------------------
+  HAPI 1: AZHORNO XLSB-NE LOKALISHT
+----------------------------------------------------------
+
+Vendos versionin e ri te SAD-DATAbase1.xlsb te folderi:
+
+    C:\Users\User\Desktop\SHITJET HTML\pdf py\
+
+Zevendeso versionin e vjeter. Sigurohu qe emri eshte
+SAKTESISHT: SAD-DATAbase1.xlsb (pa hapesira ekstra, etj.)
+
+
+----------------------------------------------------------
+  HAPI 2: HAP TERMINALIN NE FOLDERIN E PROJEKTIT
+----------------------------------------------------------
+
+Hap PowerShell ose CMD dhe vendos:
+
+    cd "C:\Users\User\Desktop\SHITJET HTML\pdf py"
+
+ALTERNATIVE: Hap File Explorer aty, klik te shiriti i
+adreses lart, shkruaj "powershell" dhe shtyp Enter.
+
+
+----------------------------------------------------------
+  HAPI 3: EKZEKUTO KONVERTIMIN
+----------------------------------------------------------
+
+Ekzekuto skriptin:
+
+    python convert_xlsb_to_parquet.py
+
+Do duhen rreth 60-90 sekonda. Ne fund do shohesh:
+
+    OK - X.Xs
+    Madhesia: XLSB XX.X MB | Parquet XX.X MB
+    Leximi nga Parquet: 0.4s
+
+Eshte krijuar SAD-DATAbase1.parquet ne te njejtin folder.
+
+
+----------------------------------------------------------
+  HAPI 4: PUSH PARQUET-IN NE GITHUB
+----------------------------------------------------------
+
+Te i njejti terminal:
+
+    git add SAD-DATAbase1.parquet
+    git commit -m "update: te dhena te reja"
+    git push
+
+KUJDES: MOS bej git add per SAD-DATAbase1.xlsb!
+Ai s'duhet me te jete ne GitHub (eshte i madh dhe i ngadalte).
+
+
+----------------------------------------------------------
+  HAPI 5: VERIFIKO NE STREAMLIT CLOUD
+----------------------------------------------------------
+
+1. Hap aplikacionin ne Streamlit Cloud
+2. Shko te moduli "Analiza"
+3. Duhet te shohesh siper tabeles:
+
+    "Burimi: Parquet (i shpejte) - XXX,XXX rreshta"
+
+4. Nese tregohet "Burimi: XLSB", do te thote qe Parquet-i
+   s'u ngarkua ne GitHub si duhet. Riprovo Hapin 4.
+
+
+----------------------------------------------------------
+  HAPI 6: PASTRO CACHE-IN E STREAMLIT (NESE DUHET)
+----------------------------------------------------------
+
+Streamlit ruan te dhenat ne cache per 1 ore. Per te detyruar
+nje rifreskim te menjehershem:
+
+    Manage app (poshte djathtas) -> Reboot app
+
+Ose: prit 1 ore dhe rifreskohet vete.
+
+
+============================================================
+  PROBLEME TE SHPESHTA
+============================================================
+
+
+PROBLEM: "python s'eshte i njohur si komande"
+ZGJIDHJA:
+  Sigurohu qe Python eshte i instaluar dhe ne PATH.
+  Provo: py convert_xlsb_to_parquet.py
+
+
+PROBLEM: "ModuleNotFoundError: No module named 'pyxlsb'"
+ZGJIDHJA:
+  Instalo paketat:
+    pip install pyxlsb pyarrow
+
+
+PROBLEM: "ArrowTypeError: Expected bytes, got 'int'"
+ZGJIDHJA:
+  Skripti i fundit e zgjidh kete automatikisht. Sigurohu
+  qe ke versionin e ri te convert_xlsb_to_parquet.py
+  (duhet te kete bllokun "Duke normalizuar tipat...").
+
+
+PROBLEM: GitHub refuzon push: "file too large"
+ZGJIDHJA:
+  GitHub limit 100 MB per skedar. Nese Parquet-i e tejkalon:
+  - Provo te konvertosh me kompression me te forte:
+    Te skripti, ndrysho "snappy" ne "gzip"
+  - Ose: ndaje te dhenat ne disa skedare (p.sh. per vit)
+
+
+PROBLEM: App-i nuk merr te dhenat e reja edhe pas push-it
+ZGJIDHJA:
+  1. Konfirmo te GitHub qe SAD-DATAbase1.parquet u ndryshua
+     (klikoje, shiko datën e modifikimit)
+  2. Te Streamlit Cloud -> Manage app -> Reboot app
+  3. Hap modulin Analiza dhe shiko numrin e rreshtave
+
+
+============================================================
+  CHECKLIST I SHKURTER (PER REFERENCE TE SHPEJTE)
+============================================================
+
+[ ] Vendos XLSB-ne e re lokalisht
+[ ] cd te folderi i projektit
+[ ] python convert_xlsb_to_parquet.py
+[ ] git add SAD-DATAbase1.parquet
+[ ] git commit -m "update: te dhena te reja"
+[ ] git push
+[ ] Verifiko ne Streamlit Cloud (burimi = Parquet)
+
+
+============================================================
+  KUR DUHET TE REKONFIGUROSH KOLONAT
+============================================================
+
+Nese ndryshojne emrat e kolonave ne XLSB (p.sh. shtohet
+nje kolone e re ose riemerohet "TotalRresht" ne dicka tjeter):
+
+1. Modifiko analiza_module.py per ta perdorur emrin e ri
+2. Modifiko convert_xlsb_to_parquet.py njejt
+3. Riekzekuto konvertimin dhe push-in
+
+
+============================================================
