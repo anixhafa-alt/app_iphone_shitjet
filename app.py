@@ -141,14 +141,14 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "Zgjidh Modulin:",
     [
-        "🎯 Plani Ditor",          # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
-        "📊 Analiza",              # Dashboard interaktiv (trendet, top kategorite, agjentet)
         "Shitjet Ditore",
         "Realizimi",
-        "Planifikimi",
+        "🎯 Plani Ditor",  # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
         "🎯 Plani sipas Strukturës B",
+        "Planifikimi",
         "Mundësitë",
         "Historiku",
+        "Analiza nga 2020",  # Dashboard interaktiv (trendet, top kategorite, agjentet)
     ],
 )
 # endregion
@@ -516,9 +516,16 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # MODULI I RI I UNIFIKUAR: PLANI DITOR (v3.0)
 # ---------------------------------------------------------
 if page == "🎯 Plani Ditor":
-    render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
-                      start_date, end_date, rritja,
-                      grup_sel=grup_sel, klientet_selected=klientet_selected)
+    render_plan_ditor(
+        df_raw,
+        df_klientet_regjistri,
+        agj_sel,
+        start_date,
+        end_date,
+        rritja,
+        grup_sel=grup_sel,
+        klientet_selected=klientet_selected,
+    )
 
 # ---------------------------------------------------------
 # MODULI: ANALIZA (Dashboard)
@@ -1651,7 +1658,6 @@ elif page == "Shitjet Ditore":
 
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
-
 
 
 # ---------------------------------------------------------
