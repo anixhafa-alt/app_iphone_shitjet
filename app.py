@@ -530,7 +530,7 @@ if page == "🎯 Plani Ditor":
 # ---------------------------------------------------------
 # MODULI: ANALIZA (Dashboard) databaza xlsb/paquet nga 2020
 # ---------------------------------------------------------
-elif page == ""Analiza nga 2020"":
+elif page == "Analiza nga 2020":
     render_analiza()
 
 # ---------------------------------------------------------
