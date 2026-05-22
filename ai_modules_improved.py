@@ -1,9 +1,9 @@
 # =========================================================
-# AXION - Modulet AI (v3.1 — i pastruar dhe me Gemini)
+# AXION - Modulet AI (v3.2 - me filtra sidebar dhe mode 'Te gjithe')
 # =========================================================
-# Eksporton: render_plan_ditor (moduli kryesor i unifikuar)
+# Eksporton: render_plan_ditor
 #
-# Provider-at e mbeshtetur per LLM (zgjidh ne secrets.toml):
+# Provider-at LLM (zgjidh ne secrets.toml):
 #   LLM_PROVIDER = "anthropic"  -> ANTHROPIC_API_KEY
 #   LLM_PROVIDER = "openai"     -> OPENAI_API_KEY
 #   LLM_PROVIDER = "gemini"     -> GEMINI_API_KEY
@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import plotly.graph_objects as go
+import plotly.express as px
 import json
 import os
 
@@ -40,7 +41,7 @@ def _safe_float(val, default=0.0):
 
 
 # =========================================================
-# LLM: Claude / OpenAI / Gemini
+# LLM
 # =========================================================
 def _merr_konfigurimin_llm():
     try:
@@ -75,25 +76,18 @@ def _merr_konfigurimin_llm():
 def gjenero_permbledhje_llm(konteksti, agjenti):
     provider, api_key = _merr_konfigurimin_llm()
     if not provider or not api_key:
-        return (
-            "LLM nuk eshte konfiguruar. Shto ne `.streamlit/secrets.toml`:\n\n"
-            "```toml\n"
-            'LLM_PROVIDER = "gemini"\n'
-            'GEMINI_API_KEY = "..."\n'
-            "```\n"
-            "Provider-at e mbeshtetur: anthropic, openai, gemini."
-        )
+        return "LLM nuk eshte konfiguruar. Shto LLM_PROVIDER dhe API key te secrets.toml."
 
     prompt_sistemi = (
         "Je nje konsulent shitjesh qe ndihmon menaxheret e shitjeve ne Shqiperi. "
-        "Pergjigju gjithmone ne shqip. Jep keshilla konkrete, jo gjenerale. "
-        "Strukturo si: (1) Diagnoza, (2) 3 Prioritetet, (3) Klientet kyc per t'u kontaktuar. "
-        "Mos shpik te dhena qe s'jane ne kontekst. Maks. 250 fjale."
+        "Pergjigju gjithmone ne shqip. Jep keshilla konkrete. "
+        "Strukturo si: (1) Diagnoza, (2) 3 Prioritetet, (3) Klientet kyc. "
+        "Maks. 250 fjale."
     )
     prompt_perdoruesi = (
         "Te dhenat per agjentin " + str(agjenti) + ":\n\n"
         "```json\n" + json.dumps(konteksti, ensure_ascii=False, indent=2) + "\n```\n\n"
-        "Hartoji nje plan strategjik per kete dite."
+        "Hartoji nje plan strategjik."
     )
 
     try:
@@ -107,7 +101,6 @@ def gjenero_permbledhje_llm(konteksti, agjenti):
                 messages=[{"role": "user", "content": prompt_perdoruesi}],
             )
             return msg.content[0].text
-
         elif provider == "openai":
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
@@ -120,7 +113,6 @@ def gjenero_permbledhje_llm(konteksti, agjenti):
                 ],
             )
             return resp.choices[0].message.content
-
         elif provider == "gemini":
             import google.generativeai as genai
             genai.configure(api_key=api_key)
@@ -130,10 +122,8 @@ def gjenero_permbledhje_llm(konteksti, agjenti):
             )
             resp = model.generate_content(prompt_perdoruesi)
             return resp.text
-
         else:
             return "Provider i panjohur: " + str(provider)
-
     except ImportError as e:
         paketa = {"anthropic": "anthropic", "openai": "openai",
                   "gemini": "google-generativeai"}.get(provider, "?")
@@ -143,7 +133,7 @@ def gjenero_permbledhje_llm(konteksti, agjenti):
 
 
 # =========================================================
-# RFM SEGMENTIMI
+# RFM
 # =========================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def llogarit_rfm(df, kolona_klienti="klienti"):
@@ -186,21 +176,13 @@ def llogarit_rfm(df, kolona_klienti="klienti"):
     rfm["RFM_Score"] = rfm["R_Skor"] + rfm["F_Skor"] + rfm["M_Skor"]
 
     def kategorizo(row):
-        r = row["R_Skor"]
-        f = row["F_Skor"]
-        m = row["M_Skor"]
-        if r >= 4 and f >= 4 and m >= 4:
-            return "Kampionet"
-        if r >= 4 and f >= 3:
-            return "Besnike"
-        if r >= 4 and f <= 2:
-            return "Te Rinj"
-        if r <= 2 and f >= 4 and m >= 4:
-            return "Ne Rrezik (VIP)"
-        if r <= 2 and f >= 3:
-            return "Po humbasin"
-        if r <= 2 and f <= 2:
-            return "Te Humbur"
+        r, f, m = row["R_Skor"], row["F_Skor"], row["M_Skor"]
+        if r >= 4 and f >= 4 and m >= 4: return "Kampionet"
+        if r >= 4 and f >= 3: return "Besnike"
+        if r >= 4 and f <= 2: return "Te Rinj"
+        if r <= 2 and f >= 4 and m >= 4: return "Ne Rrezik (VIP)"
+        if r <= 2 and f >= 3: return "Po humbasin"
+        if r <= 2 and f <= 2: return "Te Humbur"
         return "Standard"
 
     rfm["Segmenti"] = rfm.apply(kategorizo, axis=1)
@@ -208,7 +190,7 @@ def llogarit_rfm(df, kolona_klienti="klienti"):
 
 
 # =========================================================
-# OPTIMIZIMI I RRUGES (Nearest-Neighbor TSP)
+# TSP NEAREST-NEIGHBOR
 # =========================================================
 def distance_km(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -222,7 +204,6 @@ def distance_km(lat1, lon1, lat2, lon2):
 def optimizo_rrugen_nn(df_pikat, start_lat=None, start_lon=None):
     if df_pikat.empty:
         return df_pikat
-
     pts = df_pikat.reset_index(drop=True).copy()
     n = len(pts)
     visited = [False] * n
@@ -253,17 +234,17 @@ def optimizo_rrugen_nn(df_pikat, start_lat=None, start_lon=None):
         last_lat = pts.loc[nxt, "latitude"]
         last_lon = pts.loc[nxt, "longitude"]
 
-    rezultati = pts.iloc[order].reset_index(drop=True)
-    rezultati["Rendi"] = range(1, len(rezultati) + 1)
-    rezultati["Distanca_km"] = distances
-    rezultati["Kumulative_km"] = np.cumsum(distances)
-    return rezultati
+    rez = pts.iloc[order].reset_index(drop=True)
+    rez["Rendi"] = range(1, len(rez) + 1)
+    rez["Distanca_km"] = distances
+    rez["Kumulative_km"] = np.cumsum(distances)
+    return rez
 
 
 # =========================================================
 # PRIORITY SCORE
 # =========================================================
-def _llogarit_priority_score(full_map, rfm, df_agj, sot):
+def _llogarit_priority_score(full_map, df_agj, sot):
     df = full_map.copy()
 
     blerja_fundit = df_agj.groupby("klienti")["data"].max().reset_index()
@@ -275,14 +256,9 @@ def _llogarit_priority_score(full_map, rfm, df_agj, sot):
     df["k_recency"] = (df["dite_pa_blere"] / 60 * 100).clip(0, 100)
 
     seg_bonus = {
-        "Ne Rrezik (VIP)": 100,
-        "Po humbasin": 85,
-        "Kampionet": 70,
-        "Besnike": 55,
-        "Te Humbur": 60,
-        "Standard": 40,
-        "Te Rinj": 30,
-        "Pak te dhena": 20,
+        "Ne Rrezik (VIP)": 100, "Po humbasin": 85, "Kampionet": 70,
+        "Besnike": 55, "Te Humbur": 60, "Standard": 40,
+        "Te Rinj": 30, "Pak te dhena": 20,
     }
     df["k_segment"] = df["Segmenti"].map(seg_bonus).fillna(40)
 
@@ -302,19 +278,14 @@ def _llogarit_priority_score(full_map, rfm, df_agj, sot):
     return df.drop(columns=["k_ecuria", "k_recency", "k_segment", "k_mbetja"])
 
 
-# =========================================================
-# SUGJERIMET E PRODUKTEVE (Gap analysis i peshuar)
-# =========================================================
 def _sugjero_produkte(df_full, klienti, mbetja_kg, sot, top_n=3):
     kufiri = sot - pd.Timedelta(days=90)
     df_k = df_full[df_full["klienti"] == klienti]
     if df_k.empty:
         return []
-
     hist = df_k[df_k["data"] < kufiri]
     akt = df_k[df_k["data"] >= kufiri]
     sugjerime = []
-
     if not hist.empty:
         freq = hist.groupby("artikulli")["data"].nunique()
         artikuj_akt = set(akt["artikulli"].unique())
@@ -329,7 +300,6 @@ def _sugjero_produkte(df_full, klienti, mbetja_kg, sot, top_n=3):
                     "sasia_kg": round(float(sasia), 1),
                     "arsyeja": "Gap (90 dite)",
                 })
-
     if not sugjerime and not df_k.empty:
         top_sellers = df_k.groupby("artikulli")["kg"].sum().sort_values(ascending=False).head(top_n)
         shuma = top_sellers.sum()
@@ -340,51 +310,19 @@ def _sugjero_produkte(df_full, klienti, mbetja_kg, sot, top_n=3):
                 "sasia_kg": round(float(sasia), 1),
                 "arsyeja": "Top seller historik",
             })
-
     return sugjerime
 
 
 # =========================================================
-# MODULI KRYESOR: PLANI DITOR I AGJENTIT
+# BRENDIA PER NJE AGJENT
 # =========================================================
-def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
-                       start_date, end_date, rritja):
-    st.title("Plani Ditor i Agjentit")
-    st.markdown(
-        "Ky modul bashkon prioritizimin, optimizimin e rruges dhe sugjerimet "
-        "e produkteve ne nje rrjedhe te vetme."
-    )
-
-    if agj_sel == "Te gjithe":
-        st.warning("Zgjidh nje agjent specifik ne sidebar.")
-        return
-
-    if df_raw is None or df_raw.empty:
-        st.error("Nuk u gjeten te dhena.")
-        return
-
-    # 1. Konfigurimi
-    col1, col2, col3 = st.columns([1, 1, 2])
-    maks_vizita = col1.slider("Maks. vizita / dite", 10, 25, 18)
-    data_plani = col2.date_input("Data e planit", value=datetime.now().date())
-    treg_konflikte = col3.checkbox(
-        "Shfaq flag-un e konfliktit (agjente te ndare)", value=True,
-    )
-
-    # 2. Pergatitja
-    sot = pd.Timestamp(data_plani)
-    df = df_raw.copy()
-    df.columns = [c.lower() for c in df.columns]
-    df_agj = df[df["forcashitese"] == agj_sel].copy()
-    if df_agj.empty:
-        st.warning("Asnje e dhene per agjentin " + str(agj_sel) + ".")
-        return
-
-    # 3. Target dhe realizimi
+def _ndertoj_full_map_agjent(df, df_agj, agj_sel, start_date, end_date, rritja, sot):
+    """Llogarit full_map (target, realizim, ecuria, mbetja, segment, konflikt, priority) per agjent."""
     mask_ref = (df["data"].dt.date >= start_date) & (df["data"].dt.date <= end_date)
     df_ref = df[mask_ref & (df["forcashitese"] == agj_sel)]
     n_months = max(1, (end_date.year - start_date.year) * 12
                    + (end_date.month - start_date.month))
+
     kl_target = df_ref.groupby("klienti")["kg"].sum().reset_index()
     kl_target["Target_Muaj"] = (kl_target["kg"] / n_months) * (1 + rritja / 100)
 
@@ -396,12 +334,10 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
                         how="left", suffixes=("_target", "_real")).fillna(0)
     full_map["Ecuria"] = (
         (full_map["kg_real"] / full_map["Target_Muaj"] * 100)
-        .replace([np.inf, -np.inf], 0)
-        .fillna(0)
+        .replace([np.inf, -np.inf], 0).fillna(0)
     )
     full_map["Mbetja_KG"] = (full_map["Target_Muaj"] - full_map["kg_real"]).clip(lower=0).fillna(0)
 
-    # 4. RFM
     rfm = llogarit_rfm(df_agj, kolona_klienti="klienti")
     if not rfm.empty:
         full_map = full_map.merge(rfm[["klienti", "Segmenti", "RFM_Score"]],
@@ -412,63 +348,68 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     full_map["Segmenti"] = full_map["Segmenti"].fillna("Pak te dhena")
     full_map["RFM_Score"] = full_map["RFM_Score"].fillna(0)
 
-    # 5. Konfliktet
-    konflikti = df_ref.groupby("klienti")["forcashitese"].nunique().reset_index()
-    konflikti["ka_konflikt"] = konflikti["forcashitese"] > 1
-    full_map = full_map.merge(konflikti[["klienti", "ka_konflikt"]],
+    # Konflikt: kliente qe gjenden ne dataframe-in e plote per >= 2 agjente
+    konflikti_global = df[mask_ref].groupby("klienti")["forcashitese"].nunique().reset_index()
+    konflikti_global["ka_konflikt"] = konflikti_global["forcashitese"] > 1
+    full_map = full_map.merge(konflikti_global[["klienti", "ka_konflikt"]],
                               on="klienti", how="left")
     full_map["ka_konflikt"] = full_map["ka_konflikt"].fillna(False)
 
-    # 6. Priority Score
-    full_map = _llogarit_priority_score(full_map, rfm, df_agj, sot)
+    full_map = _llogarit_priority_score(full_map, df_agj, sot)
+    return full_map
 
-    # 7. Koordinatat
-    if df_klientet_regjistri is not None and not df_klientet_regjistri.empty:
-        reg = df_klientet_regjistri[["Klienti", "Latitude", "Longitude", "Rajoni"]].copy()
-        reg.columns = ["klienti", "latitude", "longitude", "rajoni"]
-        reg["klienti_k"] = reg["klienti"].astype(str).str.strip().str.upper()
-        full_map["klienti_k"] = full_map["klienti"].astype(str).str.strip().str.upper()
-        full_map = full_map.merge(
-            reg[["klienti_k", "latitude", "longitude", "rajoni"]],
-            on="klienti_k", how="left"
-        ).drop(columns=["klienti_k"])
-    else:
+
+def _shtoj_koordinatat(full_map, df_klientet_regjistri):
+    if df_klientet_regjistri is None or df_klientet_regjistri.empty:
         full_map["latitude"] = np.nan
         full_map["longitude"] = np.nan
         full_map["rajoni"] = ""
+        return full_map
+    reg = df_klientet_regjistri[["Klienti", "Latitude", "Longitude", "Rajoni"]].copy()
+    reg.columns = ["klienti", "latitude", "longitude", "rajoni"]
+    reg["klienti_k"] = reg["klienti"].astype(str).str.strip().str.upper()
+    full_map["klienti_k"] = full_map["klienti"].astype(str).str.strip().str.upper()
+    full_map = full_map.merge(
+        reg[["klienti_k", "latitude", "longitude", "rajoni"]],
+        on="klienti_k", how="left"
+    ).drop(columns=["klienti_k"])
+    return full_map
 
-    # 8. Top N
+
+# =========================================================
+# RENDER: PER NJE AGJENT
+# =========================================================
+def _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
+                       maks_vizita, data_plani, treg_konflikte):
+    sot = pd.Timestamp(data_plani)
+    df_agj = df[df["forcashitese"] == agj_sel].copy()
+    if df_agj.empty:
+        st.warning("Asnje e dhene per agjentin " + str(agj_sel) + ".")
+        return
+
+    full_map = _ndertoj_full_map_agjent(df, df_agj, agj_sel, start_date, end_date, rritja, sot)
+    full_map = _shtoj_koordinatat(full_map, df_klientet_regjistri)
+
     kandidatet = full_map.sort_values("Priority_Score", ascending=False).head(maks_vizita).copy()
-    kandidatet_me_geo = kandidatet.dropna(subset=["latitude", "longitude"]).copy()
+    kandidatet_geo = kandidatet.dropna(subset=["latitude", "longitude"]).copy()
 
-    # 9. Metrikat
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Klientet ne Plan", len(kandidatet))
     m2.metric("Target KG i Mbetjes", "{:,.0f}".format(kandidatet["Mbetja_KG"].sum()))
-    konfl_n = int(kandidatet["ka_konflikt"].sum())
-    m3.metric("Konflikte", konfl_n)
-    pa_geo = len(kandidatet) - len(kandidatet_me_geo)
-    m4.metric("Pa Gjeolokacion", pa_geo)
+    m3.metric("Konflikte", int(kandidatet["ka_konflikt"].sum()))
+    m4.metric("Pa Gjeolokacion", len(kandidatet) - len(kandidatet_geo))
     st.divider()
 
-    # 10. Optimizimi
     df_opt = pd.DataFrame()
-    if not kandidatet_me_geo.empty:
+    if not kandidatet_geo.empty:
         kolonat = ["klienti", "rajoni", "latitude", "longitude",
                    "Priority_Score", "Mbetja_KG", "Segmenti",
                    "ka_konflikt", "Target_Muaj", "Ecuria"]
-        df_opt = optimizo_rrugen_nn(
-            kandidatet_me_geo[kolonat],
-            start_lat=None, start_lon=None,
-        )
+        df_opt = optimizo_rrugen_nn(kandidatet_geo[kolonat])
         total_km = df_opt["Kumulative_km"].iloc[-1] if not df_opt.empty else 0
-        st.success(
-            "Plani u krijua: {} klientet, {:,.0f} kg per te shitur, distance {:.1f} km".format(
-                len(df_opt), df_opt["Mbetja_KG"].sum(), total_km
-            )
-        )
+        st.success("Plani: {} kliente, {:,.0f} kg, {:.1f} km".format(
+            len(df_opt), df_opt["Mbetja_KG"].sum(), total_km))
 
-        # 11. Harta
         st.subheader("Itinerari Optimal i Dites")
         fig = go.Figure()
         for ka_konfl, ngjyra, emri in [(True, "#d32f2f", "Konflikt"),
@@ -496,44 +437,35 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
         fig.update_layout(
             mapbox_style="open-street-map",
             mapbox_zoom=11,
-            mapbox_center=dict(
-                lat=float(df_opt["latitude"].mean()),
-                lon=float(df_opt["longitude"].mean()),
-            ),
-            height=550,
-            margin=dict(l=0, r=0, t=0, b=0),
+            mapbox_center=dict(lat=float(df_opt["latitude"].mean()),
+                               lon=float(df_opt["longitude"].mean())),
+            height=550, margin=dict(l=0, r=0, t=0, b=0),
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Asnje klient ne plan nuk ka koordinata.")
 
-    # 12. Tabela e plote me produkte
+    # Tabela me produkte
     st.subheader("Plani i Vizitave + Produktet per Oferte")
     plan_rrjeshtor = []
     if not df_opt.empty:
         rendor_iter = df_opt.iterrows()
     else:
-        kand_temp = kandidatet.copy()
-        kand_temp["Rendi"] = range(1, len(kand_temp) + 1)
-        rendor_iter = kand_temp.iterrows()
+        kand_tmp = kandidatet.copy()
+        kand_tmp["Rendi"] = range(1, len(kand_tmp) + 1)
+        rendor_iter = kand_tmp.iterrows()
 
     for _, rresht in rendor_iter:
         klienti = rresht["klienti"]
         mbetja = _safe_float(rresht.get("Mbetja_KG", 0))
         sugj = _sugjero_produkte(df, klienti, mbetja, sot, top_n=3)
-        if sugj:
-            produktet_tekst = " | ".join(
-                ["{} ({:.0f}kg)".format(s["artikulli"], s["sasia_kg"]) for s in sugj]
-            )
-        else:
-            produktet_tekst = "-"
-
+        produktet_tekst = " | ".join(
+            ["{} ({:.0f}kg)".format(s["artikulli"], s["sasia_kg"]) for s in sugj]
+        ) if sugj else "-"
         segm = rresht.get("Segmenti", "")
         if pd.isna(segm):
             segm = ""
-
-        konfl_val = rresht.get("ka_konflikt", False)
-        konfl_str = "Konflikt" if konfl_val else ""
+        konfl_str = "Konflikt" if rresht.get("ka_konflikt", False) else ""
 
         plan_rrjeshtor.append({
             "Rendi": _safe_int(rresht.get("Rendi", 0)),
@@ -549,58 +481,244 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     df_plan = pd.DataFrame(plan_rrjeshtor)
     st.dataframe(df_plan, use_container_width=True, hide_index=True)
 
-    # 13. Eksporti
+    # Eksporti
     col_e1, col_e2, col_e3 = st.columns(3)
     csv_data = df_plan.to_csv(index=False).encode("utf-8-sig")
     col_e1.download_button(
-        "Shkarko CSV",
-        csv_data,
+        "Shkarko CSV", csv_data,
         "plan_ditor_" + str(agj_sel) + "_" + data_plani.strftime("%Y%m%d") + ".csv",
-        "text/csv",
-        use_container_width=True,
+        "text/csv", use_container_width=True,
     )
 
-    detaj_rrjeshta = []
+    detaj = []
     for p in plan_rrjeshtor:
         sugj = _sugjero_produkte(df, p["Klienti"], p["Mbetja_KG"], sot, top_n=3)
         if sugj:
             for s in sugj:
-                detaj_rrjeshta.append({
-                    "Rendi": p["Rendi"],
-                    "Klienti": p["Klienti"],
-                    "Artikulli": s["artikulli"],
-                    "Sasia_KG": s["sasia_kg"],
+                detaj.append({
+                    "Rendi": p["Rendi"], "Klienti": p["Klienti"],
+                    "Artikulli": s["artikulli"], "Sasia_KG": s["sasia_kg"],
                     "Arsyeja": s["arsyeja"],
                 })
         else:
-            detaj_rrjeshta.append({
-                "Rendi": p["Rendi"], "Klienti": p["Klienti"],
-                "Artikulli": "-", "Sasia_KG": 0, "Arsyeja": "Pa sugjerim",
-            })
+            detaj.append({"Rendi": p["Rendi"], "Klienti": p["Klienti"],
+                          "Artikulli": "-", "Sasia_KG": 0, "Arsyeja": "Pa sugjerim"})
 
-    csv_detaj = pd.DataFrame(detaj_rrjeshta).to_csv(index=False).encode("utf-8-sig")
+    csv_detaj = pd.DataFrame(detaj).to_csv(index=False).encode("utf-8-sig")
     col_e2.download_button(
-        "Shkarko Detaj (CSV)",
-        csv_detaj,
+        "Shkarko Detaj (CSV)", csv_detaj,
         "plan_detaj_" + str(agj_sel) + "_" + data_plani.strftime("%Y%m%d") + ".csv",
-        "text/csv",
-        use_container_width=True,
+        "text/csv", use_container_width=True,
     )
 
-    # 14. LLM
     if col_e3.button("Permbledhje AI", use_container_width=True):
         with st.spinner("Po therras LLM..."):
-            kontekst_llm = {
+            kontekst = {
                 "agjenti": str(agj_sel),
                 "data_plani": data_plani.strftime("%d/%m/%Y"),
                 "klientet_ne_plan": len(df_plan),
-                "target_kg_per_dite": float(df_plan["Mbetja_KG"].sum()),
+                "target_kg": float(df_plan["Mbetja_KG"].sum()),
                 "distanca_km": float(df_opt["Kumulative_km"].iloc[-1]) if not df_opt.empty else 0,
-                "klientet_me_konflikt": int((df_plan["Konflikt"] == "Konflikt").sum()),
+                "konflikte": int((df_plan["Konflikt"] == "Konflikt").sum()),
                 "top_5_klientet": df_plan.head(5)[
                     ["Klienti", "Priority", "Segment", "Mbetja_KG", "Produktet"]
                 ].to_dict(orient="records"),
             }
-            permbledhja = gjenero_permbledhje_llm(kontekst_llm, agjenti=agj_sel)
+            permbledhja = gjenero_permbledhje_llm(kontekst, agjenti=agj_sel)
         st.markdown("### Permbledhje Strategjike")
         st.markdown(permbledhja)
+
+
+# =========================================================
+# RENDER: PER TE GJITHE AGJENTET
+# =========================================================
+def _render_globale(df, df_klientet_regjistri, start_date, end_date, rritja,
+                    maks_vizita, data_plani):
+    sot = pd.Timestamp(data_plani)
+    agjentet = sorted([a for a in df["forcashitese"].dropna().astype(str).unique() if a])
+    if not agjentet:
+        st.error("Asnje agjent ne te dhena.")
+        return
+
+    permbledhja_agj = []
+    top_per_agj = []  # per harten globale
+
+    progress = st.progress(0, text="Duke llogaritur per cdo agjent...")
+    for i, agj in enumerate(agjentet):
+        df_agj = df[df["forcashitese"] == agj].copy()
+        if df_agj.empty:
+            continue
+        try:
+            fm = _ndertoj_full_map_agjent(df, df_agj, agj, start_date, end_date, rritja, sot)
+            fm = _shtoj_koordinatat(fm, df_klientet_regjistri)
+        except Exception as e:
+            st.caption("Gabim per agjentin " + agj + ": " + str(e))
+            continue
+
+        top_k = fm.sort_values("Priority_Score", ascending=False).head(maks_vizita)
+        # Segment dominant
+        if not top_k.empty:
+            seg_count = top_k["Segmenti"].value_counts()
+            top_segment = seg_count.index[0] if not seg_count.empty else "-"
+        else:
+            top_segment = "-"
+
+        permbledhja_agj.append({
+            "Agjenti": agj,
+            "Klientet_ne_Plan": len(top_k),
+            "Target_KG_Mbetjes": round(float(top_k["Mbetja_KG"].sum()), 0),
+            "Konflikte": int(top_k["ka_konflikt"].sum()),
+            "Top_Segment": top_segment,
+            "Priority_Mes": round(float(top_k["Priority_Score"].mean()), 0) if not top_k.empty else 0,
+        })
+
+        # Per harten — merr top 10 te ketij agjenti me koordinata
+        top_geo = top_k.dropna(subset=["latitude", "longitude"]).head(10).copy()
+        top_geo["agjenti"] = agj
+        top_per_agj.append(top_geo)
+
+        progress.progress((i + 1) / len(agjentet),
+                          text="Llogaritja: {}/{}".format(i + 1, len(agjentet)))
+
+    progress.empty()
+    df_sum = pd.DataFrame(permbledhja_agj).sort_values("Target_KG_Mbetjes", ascending=False)
+
+    if df_sum.empty:
+        st.warning("Asnje agjent nuk ka te dhena te vlefshme.")
+        return
+
+    # KPI globale
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Agjente Aktive", len(df_sum))
+    m2.metric("Total Klientet ne Plane", "{:,.0f}".format(df_sum["Klientet_ne_Plan"].sum()))
+    m3.metric("Total Target KG", "{:,.0f}".format(df_sum["Target_KG_Mbetjes"].sum()))
+    m4.metric("Total Konflikte", int(df_sum["Konflikte"].sum()))
+    st.divider()
+
+    # Tabela e agjenteve
+    st.subheader("Permbledhje per Agjent")
+    st.dataframe(
+        df_sum.style.format({
+            "Target_KG_Mbetjes": "{:,.0f}",
+            "Klientet_ne_Plan": "{:,.0f}",
+            "Konflikte": "{:,.0f}",
+            "Priority_Mes": "{:.0f}",
+        }),
+        use_container_width=True, hide_index=True,
+    )
+
+    # Bar chart
+    st.subheader("Krahasimi i Agjenteve sipas Target KG")
+    fig_bar = px.bar(
+        df_sum.head(25), x="Agjenti", y="Target_KG_Mbetjes",
+        color="Konflikte", color_continuous_scale="Reds",
+        hover_data=["Klientet_ne_Plan", "Top_Segment", "Priority_Mes"],
+    )
+    fig_bar.update_layout(xaxis_tickangle=-45, height=450)
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Harta globale me ngjyra per agjent
+    if top_per_agj:
+        df_geo = pd.concat(top_per_agj, ignore_index=True)
+        if not df_geo.empty:
+            st.subheader("Harta Globale: Top Kliente per Agjent")
+            fig = go.Figure()
+            # Ngjyra te paracaktuara per agjent
+            agjentet_geo = df_geo["agjenti"].unique()
+            paleta = px.colors.qualitative.Plotly + px.colors.qualitative.Set2
+            for i, agj in enumerate(agjentet_geo):
+                df_a = df_geo[df_geo["agjenti"] == agj]
+                ngjyra = paleta[i % len(paleta)]
+                fig.add_trace(go.Scattermapbox(
+                    lat=df_a["latitude"], lon=df_a["longitude"],
+                    mode="markers",
+                    marker=dict(size=10, color=ngjyra),
+                    name=agj,
+                    hovertext=(df_a["klienti"].astype(str) + " (Pr: "
+                               + df_a["Priority_Score"].astype(str) + ")"),
+                    hoverinfo="text",
+                ))
+            fig.update_layout(
+                mapbox_style="open-street-map",
+                mapbox_zoom=8,
+                mapbox_center=dict(
+                    lat=float(df_geo["latitude"].mean()),
+                    lon=float(df_geo["longitude"].mean()),
+                ),
+                height=600, margin=dict(l=0, r=0, t=0, b=0),
+                legend=dict(orientation="v", x=1.01, y=1),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Eksporti
+    csv_sum = df_sum.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        "Shkarko Permbledhjen Globale (CSV)",
+        csv_sum,
+        "plan_global_" + data_plani.strftime("%Y%m%d") + ".csv",
+        "text/csv", use_container_width=True,
+    )
+
+
+# =========================================================
+# FUNKSIONI KRYESOR
+# =========================================================
+def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
+                       start_date, end_date, rritja,
+                       grup_sel="Te gjitha", klientet_selected=None):
+    """
+    Plani Ditor — i lidhur me filtrat e sidebar-it.
+    Nese agj_sel == 'Te gjithe', shfaq raportin global.
+    """
+    # Titulli dinamik
+    titulli = "Plani Ditor"
+    if agj_sel and str(agj_sel).strip().lower() not in ("te gjithe", "të gjithë"):
+        titulli += " - " + str(agj_sel)
+    st.title(titulli)
+
+    # Filter info
+    info_pjeset = []
+    if grup_sel and str(grup_sel).strip().lower() not in ("te gjitha", "të gjitha"):
+        info_pjeset.append("Grupi: " + str(grup_sel))
+    if klientet_selected:
+        info_pjeset.append(str(len(klientet_selected)) + " kliente te zgjedhur")
+    if agj_sel and str(agj_sel).strip().lower() in ("te gjithe", "të gjithë"):
+        info_pjeset.append("Mode: Raport global per te gjithe agjentet")
+    if info_pjeset:
+        st.info(" | ".join(info_pjeset))
+
+    if df_raw is None or df_raw.empty:
+        st.error("Nuk u gjeten te dhena.")
+        return
+
+    # Konfigurimi
+    col1, col2, col3 = st.columns([1, 1, 2])
+    maks_vizita = col1.slider("Maks. vizita / dite", 10, 25, 18)
+    data_plani = col2.date_input("Data e planit", value=datetime.now().date())
+    treg_konflikte = col3.checkbox("Shfaq flag-un e konfliktit", value=True)
+
+    # Pergatitja: lowercase kolonat dhe apliko filtrat
+    df = df_raw.copy()
+    df.columns = [c.lower() for c in df.columns]
+
+    if grup_sel and str(grup_sel).strip().lower() not in ("te gjitha", "të gjitha") and "grup_filtri" in df.columns:
+        df = df[df["grup_filtri"] == grup_sel]
+
+    if klientet_selected:
+        df = df[df["klienti"].isin(klientet_selected)]
+
+    if df.empty:
+        st.warning("Asnje e dhene per filtrat e zgjedhur.")
+        return
+
+    # Branch
+    if str(agj_sel).strip().lower() in ("te gjithe", "të gjithë"):
+        _render_globale(df, df_klientet_regjistri, start_date, end_date, rritja,
+                        maks_vizita, data_plani)
+    else:
+        _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
+                           maks_vizita, data_plani, treg_konflikte)
+                        maks_vizita, data_plani)
+    else:
+        _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
+                           maks_vizita, data_plani, treg_konflikte)
