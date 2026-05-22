@@ -845,8 +845,3 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     else:
         _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
                            maks_vizita, data_plani, treg_konflikte)
-, start_date, end_date, rritja,
-                        maks_vizita, data_plani)
-    else:
-        _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
-                           maks_vizita, data_plani, treg_konflikte)
