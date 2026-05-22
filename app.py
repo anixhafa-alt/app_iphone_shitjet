@@ -517,7 +517,8 @@ start_date, end_date, rritja, grup_sel, agj_sel, klientet_selected = nderto_side
 # ---------------------------------------------------------
 if page == "🎯 Plani Ditor":
     render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
-                      start_date, end_date, rritja)
+                      start_date, end_date, rritja,
+                      grup_sel=grup_sel, klientet_selected=klientet_selected)
 
 # ---------------------------------------------------------
 # MODULI: ANALIZA (Dashboard)
