@@ -4,6 +4,7 @@ pymssql
 sqlalchemy
 openpyxl
 pyxlsb
+pyarrow
 plotly
 xlsxwriter
 weasyprint
