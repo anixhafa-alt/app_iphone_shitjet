@@ -41,8 +41,8 @@ def _normalize_sq(s):
         return ""
     return (
         str(s).strip().lower()
-        .replace("ë", "e").replace("Ë", "e")
-        .replace("ç", "c").replace("Ç", "c")
+        .replace(chr(235), "e").replace(chr(203), "e")
+        .replace(chr(231), "c").replace(chr(199), "c")
     )
 
 
@@ -760,10 +760,6 @@ def render_plan_ditor(df_raw, df_klientet_regjistri, agj_sel,
     if _eshte_te_gjithe(agj_sel):
         _render_globale(df, df_klientet_regjistri, start_date, end_date, rritja,
                         maks_vizita, data_plani)
-    else:
-        _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
-                           maks_vizita, data_plani, treg_konflikte)
-                       maks_vizita, data_plani)
     else:
         _render_per_agjent(df, df_klientet_regjistri, agj_sel, start_date, end_date, rritja,
                            maks_vizita, data_plani, treg_konflikte)
