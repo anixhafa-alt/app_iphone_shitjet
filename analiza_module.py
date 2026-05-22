@@ -1,17 +1,22 @@
 # =========================================================
 # AXION - Moduli "Analiza" (Dashboard interaktiv)
 # =========================================================
-# Eksporton: render_analiza(df_raw)
+# Eksporton: render_analiza()
 #
-# Replikon funksionalitetin e HTML dashboard-it origjinal (analiza.py)
-# por nativ ne Streamlit me Plotly. Perdor df_raw qe eshte tashme i ngarkuar.
+# Ngarkon te dhenat nga SAD-DATAbase1.xlsb (perdor engine pyxlsb)
+# dhe replikon dashboard-in e analiza.py origjinale ne Streamlit native.
+#
+# DEPENDENCE: pip install pyxlsb  (shtoje te requirements.txt)
 # =========================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import os
 
+
+FILE_NAME_XLSB = "SAD-DATAbase1.xlsb"
 
 MUAJT_SQ = {
     1: "Jan", 2: "Shk", 3: "Mar", 4: "Pri",
@@ -20,40 +25,98 @@ MUAJT_SQ = {
 }
 
 
-def render_analiza(df_raw):
+@st.cache_data(ttl=1800, show_spinner="Duke lexuar SAD-DATAbase1.xlsb...")
+def _ngarko_xlsb(file_path):
+    """Lexon dhe pastron skedarin XLSB. Cache per 30 minuta."""
+    if not os.path.exists(file_path):
+        return None, "Skedari '" + file_path + "' nuk u gjet ne deshmi."
+
+    try:
+        df = pd.read_excel(file_path, engine="pyxlsb", sheet_name="Sheet1")
+    except ImportError:
+        return None, "Paketa 'pyxlsb' mungon. Shto 'pyxlsb' te requirements.txt."
+    except Exception as e:
+        return None, "Gabim gjate leximit te XLSB: " + str(e)
+
+    # Pastrimi i kolonave
+    df.columns = df.columns.str.strip().str.replace('"', "", regex=False)
+
+    # Konvertimi i dates (numerike Excel ose tekst)
+    if "Data" not in df.columns:
+        return None, "Kolona 'Data' nuk u gjet ne skedar."
+
+    if pd.api.types.is_numeric_dtype(df["Data"]):
+        df["Data"] = pd.to_datetime(df["Data"], unit="D", origin="1899-12-30")
+    else:
+        df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors="coerce")
+
+    df = df.dropna(subset=["Data"])
+    df = df[df["Data"].dt.year >= 2000]
+
+    # Kolona numerike
+    for col in ["TotalRresht", "Sasia", "kg"]:
+        if col in df.columns:
+            if df[col].dtype == "object":
+                df[col] = df[col].astype(str).str.replace(",", "", regex=False)
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        else:
+            df[col] = 0.0
+
+    # Kategoria finale (Kategoria > GrupiArtikullit)
+    df["Kategoria_Finale"] = "Tjera"
+    if "Kategoria" in df.columns:
+        df["Kategoria"] = df["Kategoria"].astype(str).replace("nan", "")
+        if "GrupiArtikullit" in df.columns:
+            df["GrupiArtikullit"] = df["GrupiArtikullit"].astype(str).replace("nan", "")
+            df["Kategoria_Finale"] = np.where(
+                df["Kategoria"] == "",
+                df["GrupiArtikullit"],
+                df["Kategoria"],
+            )
+        else:
+            df["Kategoria_Finale"] = df["Kategoria"]
+    elif "GrupiArtikullit" in df.columns:
+        df["Kategoria_Finale"] = df["GrupiArtikullit"].fillna("Tjera").astype(str)
+    df["Kategoria_Finale"] = df["Kategoria_Finale"].replace(["", "nan", "0"], "Tjera")
+
+    # Supervizori
+    if "Supervizori" not in df.columns:
+        df["Supervizori"] = "Pa Caktuar"
+    else:
+        df["Supervizori"] = df["Supervizori"].fillna("Pa Caktuar").astype(str)
+
+    # Anulluar
+    if "Anulluar" in df.columns:
+        df = df[df["Anulluar"].astype(str).str.lower() != "true"]
+
+    # Filtro rreshtat me vlere 0
+    df = df[(df["TotalRresht"] > 0) | (df["kg"] > 0)]
+
+    # Shtoji kolonat e kohes
+    df["Viti"] = df["Data"].dt.year
+    df["Muaji_Nr"] = df["Data"].dt.month
+    df["Muaji_Viti"] = df["Data"].dt.strftime("%Y-%m")
+    df["Muaji"] = df["Muaji_Nr"].map(MUAJT_SQ)
+
+    return df, None
+
+
+def render_analiza():
     st.title("Analiza e Shitjeve")
     st.markdown("Dashboard interaktiv per trendet, kategorite dhe performancen e agjenteve.")
 
-    if df_raw is None or df_raw.empty:
-        st.error("Nuk u gjeten te dhena.")
+    # Ngarko te dhenat
+    df, err = _ngarko_xlsb(FILE_NAME_XLSB)
+    if err:
+        st.error(err)
+        st.info(
+            "Sigurohu qe **" + FILE_NAME_XLSB + "** eshte ne te njejten dosje "
+            "me app.py te repo, dhe qe `pyxlsb` eshte ne requirements.txt."
+        )
         return
-
-    df = df_raw.copy()
-    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-    df = df.dropna(subset=["Data"])
-    df["Viti"] = df["Data"].dt.year
-    df["Muaji_Nr"] = df["Data"].dt.month
-    df["Muaji"] = df["Muaji_Nr"].map(MUAJT_SQ)
-
-    # Identifiko kolonen e vleres
-    vlera_col = None
-    for cand in ["VleraRresht", "TotalRresht", "Vlera_Historike"]:
-        if cand in df.columns:
-            vlera_col = cand
-            break
-    if vlera_col is None:
-        st.error("Nuk u gjet kolona e vleres (VleraRresht / TotalRresht).")
+    if df is None or df.empty:
+        st.error("Skedari u lexua, por nuk ka te dhena te vlefshme.")
         return
-
-    # Identifiko kolonen e kategorise
-    kat_col = None
-    for cand in ["kat", "Kategoria_Finale", "Kategoria"]:
-        if cand in df.columns:
-            kat_col = cand
-            break
-
-    # Sigurohu qe ka kolone "Sasia"
-    sasia_col = "Sasia" if "Sasia" in df.columns else None
 
     # --- Switch metrike ---
     metric_label = st.radio(
@@ -62,7 +125,7 @@ def render_analiza(df_raw):
         horizontal=True,
         key="anl_metric",
     )
-    metric_col = vlera_col if metric_label == "Vlera (LEK)" else "kg"
+    metric_col = "TotalRresht" if metric_label == "Vlera (LEK)" else "kg"
     metric_emri = "Vlera" if metric_label == "Vlera (LEK)" else "KG"
 
     # --- Filtrat ---
@@ -70,44 +133,53 @@ def render_analiza(df_raw):
         c1, c2, c3, c4 = st.columns(4)
 
         vitet = sorted(df["Viti"].dropna().unique().tolist())
-        sel_vitet = c1.multiselect("Viti", vitet, default=vitet[-2:] if len(vitet) > 1 else vitet)
+        default_vitet = vitet[-2:] if len(vitet) > 1 else vitet
+        sel_vitet = c1.multiselect("Viti", vitet, default=default_vitet)
 
-        if "Grup_Filtri" in df.columns:
-            grupet = sorted(df["Grup_Filtri"].dropna().unique().tolist())
-            sel_grupet = c2.multiselect("Grupi", grupet, default=grupet)
+        # Supervizori (i filtruar sipas viteve te zgjedhura)
+        df_per_filtra = df[df["Viti"].isin(sel_vitet)] if sel_vitet else df
+        supervizoret = sorted(df_per_filtra["Supervizori"].dropna().unique().tolist())
+        sel_sup = c2.multiselect("Rajoni (Supervizori)", supervizoret, default=supervizoret)
+
+        # Agjenti
+        if "ForcaShitese" in df.columns:
+            df_pf2 = df_per_filtra[df_per_filtra["Supervizori"].isin(sel_sup)] if sel_sup else df_per_filtra
+            agjentet = sorted(df_pf2["ForcaShitese"].dropna().astype(str).unique().tolist())
+            sel_agj = c3.multiselect("Agjenti", agjentet, default=agjentet)
         else:
-            sel_grupet = None
-            c2.caption("Pa kolone Grupi")
+            sel_agj = None
+            c3.caption("Pa kolone ForcaShitese")
 
-        agjentet = sorted(df["ForcaShitese"].dropna().astype(str).unique().tolist())
-        sel_agjentet = c3.multiselect("Agjenti", agjentet, default=agjentet)
-
-        if kat_col:
-            kategorite = sorted(df[kat_col].dropna().astype(str).unique().tolist())
-            sel_kat = c4.multiselect("Kategoria", kategorite, default=kategorite)
-        else:
-            sel_kat = None
-            c4.caption("Pa kolone Kategorie")
+        # Kategoria
+        df_pf3 = df_per_filtra
+        if sel_sup:
+            df_pf3 = df_pf3[df_pf3["Supervizori"].isin(sel_sup)]
+        if sel_agj is not None:
+            df_pf3 = df_pf3[df_pf3["ForcaShitese"].astype(str).isin(sel_agj)]
+        kategorite = sorted(df_pf3["Kategoria_Finale"].dropna().astype(str).unique().tolist())
+        sel_kat = c4.multiselect("Kategoria", kategorite, default=kategorite)
 
     # --- Apliko filtrat ---
-    df_f = df[df["Viti"].isin(sel_vitet) & df["ForcaShitese"].astype(str).isin(sel_agjentet)]
-    if sel_grupet is not None:
-        df_f = df_f[df_f["Grup_Filtri"].isin(sel_grupet)]
-    if sel_kat is not None and kat_col:
-        df_f = df_f[df_f[kat_col].astype(str).isin(sel_kat)]
+    df_f = df.copy()
+    if sel_vitet:
+        df_f = df_f[df_f["Viti"].isin(sel_vitet)]
+    if sel_sup:
+        df_f = df_f[df_f["Supervizori"].isin(sel_sup)]
+    if sel_agj is not None:
+        df_f = df_f[df_f["ForcaShitese"].astype(str).isin(sel_agj)]
+    if sel_kat:
+        df_f = df_f[df_f["Kategoria_Finale"].astype(str).isin(sel_kat)]
 
     if df_f.empty:
         st.warning("Asnje e dhene per filtrat e zgjedhur.")
         return
 
     # --- KPI metrika ---
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Vlera (LEK)", "{:,.0f}".format(df_f[vlera_col].sum()))
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Vlera (LEK)", "{:,.0f}".format(df_f["TotalRresht"].sum()))
     m2.metric("Total KG", "{:,.0f}".format(df_f["kg"].sum()))
-    if sasia_col:
-        m3.metric("Total Sasia", "{:,.0f}".format(df_f[sasia_col].sum()))
-    else:
-        m3.metric("Klientet Unike", df_f["Klienti"].nunique() if "Klienti" in df_f.columns else 0)
+    m3.metric("Total Sasia", "{:,.0f}".format(df_f["Sasia"].sum()))
+    m4.metric("Numri Rreshtave", "{:,.0f}".format(len(df_f)))
 
     st.divider()
 
@@ -121,8 +193,8 @@ def render_analiza(df_raw):
             markers=True,
             title="Ecuria: " + str(sel_vitet[0]),
         )
-        fig.update_traces(line=dict(width=3))
-        fig.update_layout(yaxis_title=metric_emri, xaxis_title="Muaji")
+        fig.update_traces(line=dict(width=3, color="#2ecc71"))
+        fig.update_layout(yaxis_title=metric_emri, xaxis_title="Muaji", height=400)
     else:
         trend = df_f.groupby(["Viti", "Muaji_Nr"])[metric_col].sum().reset_index()
         trend["Muaji"] = trend["Muaji_Nr"].map(MUAJT_SQ)
@@ -132,103 +204,116 @@ def render_analiza(df_raw):
             markers=True, title="Krahasimi Vjetor",
         )
         fig.update_traces(line=dict(width=2))
-        fig.update_layout(yaxis_title=metric_emri, xaxis_title="Muaji")
+        fig.update_layout(yaxis_title=metric_emri, xaxis_title="Muaji", height=400)
     st.plotly_chart(fig, use_container_width=True)
 
     # --- Dy kolona: Pie + Top Kategorite ---
-    if kat_col:
-        col_pie, col_tab = st.columns([1, 1])
+    col_pie, col_tab = st.columns([1, 1])
 
-        with col_pie:
-            st.subheader("Ndarja sipas Kategorive")
-            pie = df_f.groupby(kat_col)[metric_col].sum().reset_index()
-            pie = pie.sort_values(metric_col, ascending=False).head(10)
-            fig_pie = px.pie(
-                pie, values=metric_col, names=kat_col,
-                hole=0.4,
-            )
-            fig_pie.update_traces(textposition="inside", textinfo="percent+label")
-            st.plotly_chart(fig_pie, use_container_width=True)
+    with col_pie:
+        st.subheader("Ndarja sipas Kategorive")
+        pie = df_f.groupby("Kategoria_Finale")[metric_col].sum().reset_index()
+        pie = pie.sort_values(metric_col, ascending=False).head(10)
+        fig_pie = px.pie(
+            pie, values=metric_col, names="Kategoria_Finale",
+            hole=0.4,
+        )
+        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+        fig_pie.update_layout(height=400, showlegend=False)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-        with col_tab:
-            st.subheader("Top Kategorite")
-            agg_dict = {"Vlera": (vlera_col, "sum"), "KG": ("kg", "sum")}
-            if sasia_col:
-                agg_dict["Sasia"] = (sasia_col, "sum")
-            top_kat = (
-                df_f.groupby(kat_col)
-                .agg(**agg_dict)
-                .sort_values("Vlera", ascending=False)
-                .reset_index()
-                .head(15)
+    with col_tab:
+        st.subheader("Top Kategorite")
+        top_kat = (
+            df_f.groupby("Kategoria_Finale")
+            .agg(
+                Vlera=("TotalRresht", "sum"),
+                KG=("kg", "sum"),
+                Sasia=("Sasia", "sum"),
             )
-            top_kat.columns = ["Kategoria"] + list(top_kat.columns[1:])
-            fmt = {"Vlera": "{:,.0f}", "KG": "{:,.0f}"}
-            if "Sasia" in top_kat.columns:
-                fmt["Sasia"] = "{:,.0f}"
-            st.dataframe(
-                top_kat.style.format(fmt),
-                use_container_width=True,
-                hide_index=True,
-                height=400,
-            )
+            .sort_values("Vlera", ascending=False)
+            .reset_index()
+            .head(15)
+        )
+        top_kat.columns = ["Kategoria", "Vlera", "KG", "Sasia"]
+        st.dataframe(
+            top_kat.style.format({
+                "Vlera": "{:,.0f}",
+                "KG": "{:,.0f}",
+                "Sasia": "{:,.0f}",
+            }),
+            use_container_width=True,
+            hide_index=True,
+            height=400,
+        )
 
     # --- Performanca Agjenteve ---
-    st.subheader("Performanca Agjenteve")
-    top_agj = (
-        df_f.groupby("ForcaShitese")
+    if "ForcaShitese" in df_f.columns:
+        st.subheader("Performanca Agjenteve")
+        top_agj = (
+            df_f.groupby("ForcaShitese")
+            .agg(
+                Vlera=("TotalRresht", "sum"),
+                KG=("kg", "sum"),
+            )
+            .sort_values("Vlera", ascending=False)
+            .reset_index()
+        )
+        top_agj.columns = ["Agjenti", "Vlera", "KG"]
+
+        bar_y = "Vlera" if metric_emri == "Vlera" else "KG"
+        fig_bar = px.bar(
+            top_agj.head(20), x="Agjenti", y=bar_y,
+            title="Top 20 Agjente sipas " + metric_emri,
+            color=bar_y,
+            color_continuous_scale="Blues",
+        )
+        fig_bar.update_layout(xaxis_tickangle=-45, showlegend=False, height=450)
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+        st.dataframe(
+            top_agj.style.format({"Vlera": "{:,.0f}", "KG": "{:,.0f}"}),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # --- Performanca Supervizoreve ---
+    st.subheader("Performanca sipas Rajonit (Supervizori)")
+    top_sup = (
+        df_f.groupby("Supervizori")
         .agg(
-            Vlera=(vlera_col, "sum"),
+            Vlera=("TotalRresht", "sum"),
             KG=("kg", "sum"),
-            Klientet=("Klienti", "nunique") if "Klienti" in df_f.columns else (vlera_col, "count"),
         )
         .sort_values("Vlera", ascending=False)
         .reset_index()
     )
-    top_agj.columns = ["Agjenti", "Vlera", "KG", "Klientet"]
-
-    fig_bar = px.bar(
-        top_agj.head(20), x="Agjenti", y="Vlera" if metric_emri == "Vlera" else "KG",
-        title="Top 20 Agjente sipas " + metric_emri,
-        color="Vlera" if metric_emri == "Vlera" else "KG",
-        color_continuous_scale="Blues",
-    )
-    fig_bar.update_layout(xaxis_tickangle=-45, showlegend=False, height=450)
-    st.plotly_chart(fig_bar, use_container_width=True)
-
+    top_sup.columns = ["Supervizori", "Vlera", "KG"]
     st.dataframe(
-        top_agj.style.format({
-            "Vlera": "{:,.0f}",
-            "KG": "{:,.0f}",
-            "Klientet": "{:,.0f}",
-        }),
+        top_sup.style.format({"Vlera": "{:,.0f}", "KG": "{:,.0f}"}),
         use_container_width=True,
         hide_index=True,
     )
 
     # --- Eksporti ---
     st.divider()
-    col_e1, col_e2 = st.columns(2)
-    csv_kat = (
-        df_f.groupby(kat_col if kat_col else "ForcaShitese")
-        .agg(Vlera=(vlera_col, "sum"), KG=("kg", "sum"))
-        .sort_values("Vlera", ascending=False)
-        .reset_index()
-        .to_csv(index=False)
-        .encode("utf-8-sig")
-    )
+    col_e1, col_e2, col_e3 = st.columns(3)
+    csv_kat = top_kat.to_csv(index=False).encode("utf-8-sig")
     col_e1.download_button(
-        "Shkarko Permbledhjen e Kategorive (CSV)",
-        csv_kat,
-        "analiza_kategorite.csv",
-        "text/csv",
+        "Shkarko Kategorite (CSV)",
+        csv_kat, "analiza_kategorite.csv", "text/csv",
         use_container_width=True,
     )
-    csv_agj = top_agj.to_csv(index=False).encode("utf-8-sig")
-    col_e2.download_button(
-        "Shkarko Permbledhjen e Agjenteve (CSV)",
-        csv_agj,
-        "analiza_agjentet.csv",
-        "text/csv",
+    if "ForcaShitese" in df_f.columns:
+        csv_agj = top_agj.to_csv(index=False).encode("utf-8-sig")
+        col_e2.download_button(
+            "Shkarko Agjentet (CSV)",
+            csv_agj, "analiza_agjentet.csv", "text/csv",
+            use_container_width=True,
+        )
+    csv_sup = top_sup.to_csv(index=False).encode("utf-8-sig")
+    col_e3.download_button(
+        "Shkarko Rajonet (CSV)",
+        csv_sup, "analiza_rajonet.csv", "text/csv",
         use_container_width=True,
     )
