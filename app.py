@@ -143,9 +143,9 @@ page = st.sidebar.radio(
     [
         "Shitjet Ditore",
         "Realizimi",
+        "Planifikimi",
         "🎯 Plani Ditor",  # Moduli i ri i unifikuar — zëvendëson 4 modulet AI
         "🎯 Plani sipas Strukturës B",
-        "Planifikimi",
         "Mundësitë",
         "Historiku",
         "Analiza nga 2020",  # Dashboard interaktiv (trendet, top kategorite, agjentet)
