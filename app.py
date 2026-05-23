@@ -1438,7 +1438,7 @@ elif page == "Mundësitë":
 
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (I MODIFIKUAR ME METRIKA TË REJA)
+# MODULI I PLOTË: SHITJET DITORE (I PËRDITËSUAR ME DATËN AKTUALE & TË SHTUNAT)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1446,16 +1446,24 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
-    # Data aktuale e referencës
-    sot = datetime(2026, 5, 16)
+    # Data aktuale e sistemit (Sot: 23 Maj 2026)
+    sot = datetime.now()
     dita_korrente = sot.day
 
     st.title(f"Shitjet Ditore")
+
+    # Shfaqja e datës së sotme ekzakte në raport
     st.markdown(
-        f"<h3 style='color: #1a237e; margin-top:-15px;'>Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year} | 👤 Agjenti: {agj_sel}</h3>",
+        f"""
+        <div style='background-color: #f0f2f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
+            <h3 style='color: #1a237e; margin: 0;'>Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year}</h3>
+            <p style='margin: 5px 0 0 0; color: #555; font-size: 14px;'>
+                📅 Data e gjenerimit të raportit: <strong>{sot.strftime('%d/%m/%Y')}</strong> | 👤 Agjenti: <strong>{agj_sel}</strong>
+            </p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
-    st.divider()
 
     if df_raw is not None and not df_raw.empty:
 
@@ -1509,7 +1517,6 @@ elif page == "Shitjet Ditore":
                     df_p[kolona_vlera], errors="coerce"
                 ).fillna(0)
 
-                # Grupojmë sipas ditës duke nxjerrë shumën e sasisë dhe vlerës
                 return (
                     df_p.groupby("Dita_Numri")
                     .agg({kolona_kg: "sum", kolona_vlera: "sum"})
@@ -1557,7 +1564,7 @@ elif page == "Shitjet Ditore":
             data_para_vit
         )
 
-        # --- LLOGARITJA E METRIKAVE LIKED-TO-LIKE (Deri në ditën e muajit aktual) ---
+        # --- LLOGARITJA E METRIKAVE LIKE-TO-LIKE (Deri në ditën e muajit aktual) ---
         def llogarit_kumulativ_deri_diten(data_dict, max_day):
             sasia_kumulative = 0.0
             vlera_kumulative = 0.0
@@ -1571,9 +1578,9 @@ elif page == "Shitjet Ditore":
             )
             return sasia_kumulative, cmimi_mesatar_periudhe
 
-        totali_aktual = sum(y_aktual)  # Muaji aktual ka shitjet e veta live deri më sot
+        totali_aktual = sum(y_aktual)
 
-        # Dy muajt e tjerë llogariten vetëm deri te dita e njëjtë (Like-to-Like)
+        # Dy muajt e tjerë llogariten Like-to-Like deri te dita aktuale
         totali_para_muaj_l2l, cm_mes_para_muaj_l2l = llogarit_kumulativ_deri_diten(
             data_para_muaj, dita_korrente
         )
@@ -1581,11 +1588,14 @@ elif page == "Shitjet Ditore":
             data_para_vit, dita_korrente
         )
 
-        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Pa të Diela) ---
+        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Përfshin të Shtunat, Pa të Diela) ---
         def llogarit_mesatare_dite_pune(vit, muaj, max_day, data_dict):
-            # Gjejmë të gjitha ditët e vlefshme që nuk janë të diela
+            # weekday() ka vlerat: 0=Hënë, 1=Martë, ..., 5=Shtunë, 6=Dielë
+            # Duke vendosur kondicionin != 6, përfshijmë ditët 0 deri 5 (Hënë - Shtunë)
             ditet_punes = [
-                d for d in range(1, max_day + 1) if datetime(vit, muaj, d).weekday() < 6
+                d
+                for d in range(1, max_day + 1)
+                if datetime(vit, muaj, d).weekday() != 6
             ]
             nr_dite_pune = len(ditet_punes)
 
@@ -1604,7 +1614,7 @@ elif page == "Shitjet Ditore":
             vit_para_vit, para_vit_muaj, dita_korrente, data_para_vit
         )
 
-        # --- SHFAQJA E METRIKAVE TË REJA NË NDARJE KPI ---
+        # --- SHFAQJA E METRIKAVE ---
         st.markdown("#### 📊 Përmbledhje e Performancës Mujore & Metrikat e Reja")
 
         # Rreshti 1: Volumi total dhe Çmimi Mesatar i plotë i muajit në grafik
@@ -1629,7 +1639,7 @@ elif page == "Shitjet Ditore":
         )
 
         st.write("")
-        # Rreshti 2: Krahasimi Like-to-Like deri në ditën e fundit të muajit aktual
+        # Rreshti 2: Krahasimi Like-to-Like deri në ditën e muajit aktual
         ndryshimi_muaj_l2l = (
             ((totali_aktual - totali_para_muaj_l2l) / totali_para_muaj_l2l * 100)
             if totali_para_muaj_l2l > 0
@@ -1643,7 +1653,7 @@ elif page == "Shitjet Ditore":
 
         cc1, cc2, cc3 = st.columns(3)
         cc1.markdown(
-            f"<div style='text-align:center; background:#f0f2f6; padding:10px; border-radius:5px;'><strong>Krahasimi Like-to-Like (Deri në ditën {dita_korrente}):</strong></div>",
+            f"<div style='text-align:center; background:#f0f2f6; padding:10px; border-radius:5px; font-size:14px; font-weight:bold;'>Krahasimi Like-to-Like (Deri në ditën {dita_korrente}):</div>",
             unsafe_allow_html=True,
         )
         cc2.metric(
@@ -1658,18 +1668,18 @@ elif page == "Shitjet Ditore":
         )
 
         st.write("")
-        # Rreshti 3: Ditët e punës (Sasia mesatare në ditë pa të diela)
+        # Rreshti 3: Ditët e punës (Përfshin të shtunat, pa të diela)
         ccc1, ccc2, ccc3 = st.columns(3)
         ccc1.metric(
-            label=f"Ø Shitje/Ditë Pune {muajt_sq.get(muaj_aktual)}",
+            label=f"Ø Shitje / Ditë Pune {muajt_sq.get(muaj_aktual)}",
             value=f"{mes_dite_pune_aktual:,.0f} kg/ditë",
         )
         ccc2.metric(
-            label=f"Ø Shitje/Ditë Pune {muajt_sq.get(para_muaj)}",
+            label=f"Ø Shitje / Ditë Pune {muajt_sq.get(para_muaj)}",
             value=f"{mes_dite_pune_para_muaj:,.0f} kg/ditë",
         )
         ccc3.metric(
-            label=f"Ø Shitje/Ditë Pune {muajt_sq.get(para_vit_muaj)} '{str(vit_para_vit)[2:]}",
+            label=f"Ø Shitje / Ditë Pune {muajt_sq.get(para_vit_muaj)} '{str(vit_para_vit)[2:]}",
             value=f"{mes_dite_pune_para_vit:,.0f} kg/ditë",
         )
 
@@ -1679,7 +1689,6 @@ elif page == "Shitjet Ditore":
         fig = go.Figure()
         gjeresia_kolones = 0.6
 
-        # 1. VIT PARAFRA (P.sh. MAJ 2025)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1693,7 +1702,6 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 2. MUAJI I KALUAR (P.sh. PRILL 2026)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1707,7 +1715,6 @@ elif page == "Shitjet Ditore":
             )
         )
 
-        # 3. MUAJI AKTUAL (P.sh. MAJ 2026)
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
@@ -1766,7 +1773,6 @@ elif page == "Shitjet Ditore":
                 use_container_width=True,
                 hide_index=True,
             )
-
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
 # ---------------------------------------------------------
