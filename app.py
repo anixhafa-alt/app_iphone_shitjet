@@ -1438,7 +1438,7 @@ elif page == "Mundësitë":
 
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (Formatim Estetik pa Dhjetore)
+# MODULI I PLOTË: SHITJET DITORE (I MODIFIKUAR ME METRIKA TË REJA)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1448,6 +1448,7 @@ elif page == "Shitjet Ditore":
 
     # Data aktuale e referencës
     sot = datetime(2026, 5, 16)
+    dita_korrente = sot.day
 
     st.title(f"Shitjet Ditore")
     st.markdown(
@@ -1458,8 +1459,8 @@ elif page == "Shitjet Ditore":
 
     if df_raw is not None and not df_raw.empty:
 
-        # --- MARRIM DIREKT KOLONËN "kg" TË LLOGARITUR NGA FILLIMI I KODIT ---
         kolona_kg = "kg"
+        kolona_vlera = "Vlera_Historike"
 
         # --- LLOGARITJA AUTOMATIKE E PERIUDHAVE ---
         vit_aktual = sot.year
@@ -1493,8 +1494,8 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- FUNKSIONI I MARRJES SË TË DHËNAVE ---
-        def merr_asortimentin_ditore(df_filtri, vit, muaj):
+        # --- FUNKSIONI I MARRJES SË TË DHËNAVE (Sasia dhe Vlera për Çmimin Mesatar) ---
+        def merr_te_dhenat_mujore(df_filtri, vit, muaj):
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
                 & (df_filtri["Data"].dt.month == muaj)
@@ -1504,63 +1505,175 @@ elif page == "Shitjet Ditore":
                 df_p[kolona_kg] = pd.to_numeric(
                     df_p[kolona_kg], errors="coerce"
                 ).fillna(0)
-                return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
+                df_p[kolona_vlera] = pd.to_numeric(
+                    df_p[kolona_vlera], errors="coerce"
+                ).fillna(0)
+
+                # Grupojmë sipas ditës duke nxjerrë shumën e sasisë dhe vlerës
+                return (
+                    df_p.groupby("Dita_Numri")
+                    .agg({kolona_kg: "sum", kolona_vlera: "sum"})
+                    .to_dict(orient="index")
+                )
             return {}
 
-        data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
-        data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
-        data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
+        data_aktual = merr_te_dhenat_mujore(df_base, vit_aktual, muaj_aktual)
+        data_para_muaj = merr_te_dhenat_mujore(df_base, vit_para_muaj, para_muaj)
+        data_para_vit = merr_te_dhenat_mujore(df_base, vit_para_vit, para_vit_muaj)
 
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
-        # --- PREGATITJA E KASKADËS ---
+        # --- PREGATITJA E KASKADËS DHE LLOGARITJA E ÇMIMEVE MESATARE MUJORE ---
         ditet_numerik = list(range(1, numri_diteve + 1))
         ditet_etiketa = [f"{d:02d}" for d in ditet_numerik]
 
-        def llogarit_kaskaden(data_dict):
+        def llogarit_kaskaden_dhe_cmimin(data_dict):
             vlerat_reale = []
             vlerat_baze = []
             kumulativ = 0.0
+            t_sasia = 0.0
+            t_vlera = 0.0
+
             for d in range(1, numri_diteve + 1):
-                vlera = data_dict.get(d, 0.0)
+                dita_data = data_dict.get(d, {kolona_kg: 0.0, kolona_vlera: 0.0})
+                sasia = dita_data[kolona_kg]
+                vlera = dita_data[kolona_vlera]
+
                 vlerat_baze.append(kumulativ)
-                vlerat_reale.append(vlera)
-                kumulativ += vlera
-            return vlerat_baze, vlerat_reale
+                vlerat_reale.append(sasia)
+                kumulativ += sasia
 
-        base_aktual, y_aktual = llogarit_kaskaden(data_aktual)
-        base_para_muaj, y_para_muaj = llogarit_kaskaden(data_para_muaj)
-        base_para_vit, y_para_vit = llogarit_kaskaden(data_para_vit)
+                t_sasia += sasia
+                t_vlera += vlera
 
-        # --- LLOGARITJA E METRIKAVE TOTALE ---
-        totali_aktual = sum(y_aktual)
-        totali_para_muaj = sum(y_para_muaj)
-        totali_para_vit = sum(y_para_vit)
+            cmimi_mesatar = (t_vlera / t_sasia) if t_sasia > 0 else 0.0
+            return vlerat_baze, vlerat_reale, cmimi_mesatar
 
+        base_aktual, y_aktual, cm_mes_aktual = llogarit_kaskaden_dhe_cmimin(data_aktual)
+        base_para_muaj, y_para_muaj, cm_mes_para_muaj = llogarit_kaskaden_dhe_cmimin(
+            data_para_muaj
+        )
+        base_para_vit, y_para_vit, cm_mes_para_vit = llogarit_kaskaden_dhe_cmimin(
+            data_para_vit
+        )
+
+        # --- LLOGARITJA E METRIKAVE LIKED-TO-LIKE (Deri në ditën e muajit aktual) ---
+        def llogarit_kumulativ_deri_diten(data_dict, max_day):
+            sasia_kumulative = 0.0
+            vlera_kumulative = 0.0
+            for d in range(1, max_day + 1):
+                dita_data = data_dict.get(d, {kolona_kg: 0.0, kolona_vlera: 0.0})
+                sasia_kumulative += dita_data[kolona_kg]
+                vlera_kumulative += dita_data[kolona_vlera]
+
+            cmimi_mesatar_periudhe = (
+                (vlera_kumulative / sasia_kumulative) if sasia_kumulative > 0 else 0.0
+            )
+            return sasia_kumulative, cmimi_mesatar_periudhe
+
+        totali_aktual = sum(y_aktual)  # Muaji aktual ka shitjet e veta live deri më sot
+
+        # Dy muajt e tjerë llogariten vetëm deri te dita e njëjtë (Like-to-Like)
+        totali_para_muaj_l2l, cm_mes_para_muaj_l2l = llogarit_kumulativ_deri_diten(
+            data_para_muaj, dita_korrente
+        )
+        totali_para_vit_l2l, cm_mes_para_vit_l2l = llogarit_kumulativ_deri_diten(
+            data_para_vit, dita_korrente
+        )
+
+        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Pa të Diela) ---
+        def llogarit_mesatare_dite_pune(vit, muaj, max_day, data_dict):
+            # Gjejmë të gjitha ditët e vlefshme që nuk janë të diela
+            ditet_punes = [
+                d for d in range(1, max_day + 1) if datetime(vit, muaj, d).weekday() < 6
+            ]
+            nr_dite_pune = len(ditet_punes)
+
+            sasia_totale_pune = sum(
+                data_dict.get(d, {kolona_kg: 0.0})[kolona_kg] for d in ditet_punes
+            )
+            return (sasia_totale_pune / nr_dite_pune) if nr_dite_pune > 0 else 0.0
+
+        mes_dite_pune_aktual = llogarit_mesatare_dite_pune(
+            vit_aktual, muaj_aktual, dita_korrente, data_aktual
+        )
+        mes_dite_pune_para_muaj = llogarit_mesatare_dite_pune(
+            vit_para_muaj, para_muaj, dita_korrente, data_para_muaj
+        )
+        mes_dite_pune_para_vit = llogarit_mesatare_dite_pune(
+            vit_para_vit, para_vit_muaj, dita_korrente, data_para_vit
+        )
+
+        # --- SHFAQJA E METRIKAVE TË REJA NË NDARJE KPI ---
+        st.markdown("#### 📊 Përmbledhje e Performancës Mujore & Metrikat e Reja")
+
+        # Rreshti 1: Volumi total dhe Çmimi Mesatar i plotë i muajit në grafik
         c1, c2, c3 = st.columns(3)
-        ndryshimi_muaj = (
-            ((totali_aktual - totali_para_muaj) / totali_para_muaj * 100)
-            if totali_para_muaj > 0
-            else 0
+        c1.metric(
+            label=f"Sasia {emri_muaj_aktual}",
+            value=f"{totali_aktual:,.0f} kg",
+            delta=f"Ø Çmimi: {cm_mes_aktual:,.1f} L/kg",
+            delta_color="off",
         )
-        ndryshimi_vit = (
-            ((totali_aktual - totali_para_vit) / totali_para_vit * 100)
-            if totali_para_vit > 0
-            else 0
-        )
-
-        c1.metric(label=f"Shitjet {emri_muaj_aktual}", value=f"{totali_aktual:,.0f} kg")
         c2.metric(
-            label=f"vs {emri_muaj_kaluar}",
-            value=f"{totali_para_muaj:,.0f} kg",
-            delta=f"{ndryshimi_muaj:+.1f}%",
+            label=f"Sasia e Plotë {emri_muaj_kaluar}",
+            value=f"{sum(y_para_muaj):,.0f} kg",
+            delta=f"Ø Çmimi: {cm_mes_para_muaj:,.1f} L/kg",
+            delta_color="off",
         )
         c3.metric(
-            label=f"vs {emri_vit_kaluar}",
-            value=f"{totali_para_vit:,.0f} kg",
-            delta=f"{ndryshimi_vit:+.1f}%",
+            label=f"Sasia e Plotë {emri_vit_kaluar}",
+            value=f"{sum(y_para_vit):,.0f} kg",
+            delta=f"Ø Çmimi: {cm_mes_para_vit:,.1f} L/kg",
+            delta_color="off",
         )
+
         st.write("")
+        # Rreshti 2: Krahasimi Like-to-Like deri në ditën e fundit të muajit aktual
+        ndryshimi_muaj_l2l = (
+            ((totali_aktual - totali_para_muaj_l2l) / totali_para_muaj_l2l * 100)
+            if totali_para_muaj_l2l > 0
+            else 0
+        )
+        ndryshimi_vit_l2l = (
+            ((totali_aktual - totali_para_vit_l2l) / totali_para_vit_l2l * 100)
+            if totali_para_vit_l2l > 0
+            else 0
+        )
+
+        cc1, cc2, cc3 = st.columns(3)
+        cc1.markdown(
+            f"<div style='text-align:center; background:#f0f2f6; padding:10px; border-radius:5px;'><strong>Krahasimi Like-to-Like (Deri në ditën {dita_korrente}):</strong></div>",
+            unsafe_allow_html=True,
+        )
+        cc2.metric(
+            label=f"vs {emri_muaj_kaluar} (Dita 1-{dita_korrente})",
+            value=f"{totali_para_muaj_l2l:,.0f} kg",
+            delta=f"{ndryshimi_muaj_l2l:+.1f}% (Ø: {cm_mes_para_muaj_l2l:,.1f} L)",
+        )
+        cc3.metric(
+            label=f"vs {emri_vit_kaluar} (Dita 1-{dita_korrente})",
+            value=f"{totali_para_vit_l2l:,.0f} kg",
+            delta=f"{ndryshimi_vit_l2l:+.1f}% (Ø: {cm_mes_para_vit_l2l:,.1f} L)",
+        )
+
+        st.write("")
+        # Rreshti 3: Ditët e punës (Sasia mesatare në ditë pa të diela)
+        ccc1, ccc2, ccc3 = st.columns(3)
+        ccc1.metric(
+            label=f"Ø Shitje/Ditë Pune {muajt_sq.get(muaj_aktual)}",
+            value=f"{mes_dite_pune_aktual:,.0f} kg/ditë",
+        )
+        ccc2.metric(
+            label=f"Ø Shitje/Ditë Pune {muajt_sq.get(para_muaj)}",
+            value=f"{mes_dite_pune_para_muaj:,.0f} kg/ditë",
+        )
+        ccc3.metric(
+            label=f"Ø Shitje/Ditë Pune {muajt_sq.get(para_vit_muaj)} '{str(vit_para_vit)[2:]}",
+            value=f"{mes_dite_pune_para_vit:,.0f} kg/ditë",
+        )
+
+        st.divider()
 
         # --- NDËRTIMI I GRAFIKUT FINAL ---
         fig = go.Figure()
@@ -1576,7 +1689,7 @@ elif page == "Shitjet Ditore":
                 width=gjeresia_kolones,
                 marker_color="rgba(141, 211, 199, 0.55)",
                 textposition="none",
-                hovertemplate="%{y:,.0f} kg<extra></extra>",  # Formati hover pa dhjetore
+                hovertemplate="%{y:,.0f} kg<extra></extra>",
             )
         )
 
@@ -1590,7 +1703,7 @@ elif page == "Shitjet Ditore":
                 width=gjeresia_kolones,
                 marker_color="rgba(0, 105, 92, 0.55)",
                 textposition="none",
-                hovertemplate="%{y:,.0f} kg<extra></extra>",  # Formati hover pa dhjetore
+                hovertemplate="%{y:,.0f} kg<extra></extra>",
             )
         )
 
@@ -1603,10 +1716,9 @@ elif page == "Shitjet Ditore":
                 name=emri_muaj_aktual,
                 width=gjeresia_kolones,
                 marker_color="rgba(255, 193, 7, 0.65)",
-                # Formatojmë tekstet sipër shtyllave me ndarës mijësh pa dhjetore
                 text=[f"{v:,.0f}" if v > 0 else "" for v in y_aktual],
                 textposition="outside",
-                hovertemplate="%{y:,.0f} kg<extra></extra>",  # Formati hover pa dhjetore
+                hovertemplate="%{y:,.0f} kg<extra></extra>",
             )
         )
 
@@ -1643,7 +1755,6 @@ elif page == "Shitjet Ditore":
                 }
             )
 
-            # Formatimi estetik i tabelës Streamlit me ndarës mijëshe pa dhjetore
             st.dataframe(
                 tabela_df.style.format(
                     {
@@ -1658,8 +1769,6 @@ elif page == "Shitjet Ditore":
 
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
-
-
 # ---------------------------------------------------------
 # MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
 # ---------------------------------------------------------
