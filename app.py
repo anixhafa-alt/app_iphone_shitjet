@@ -1665,7 +1665,7 @@ elif page == "Shitjet Ditore":
 
         cc1, cc2, cc3 = st.columns(3)
         cc1.markdown(
-            f"<div style='text-align:center; background:#e9ecef; padding:12px; border-radius:6px; font-size:13px; font-weight:bold; color:#495057; margin-top:5px;'>Krahasimi Like-to-Like<br>(Deri në ditën {dita_korrente} pa të Diela)</div>",
+            f"<div style='text-align:center; background:#e9ecef; padding:12px; border-radius:6px; font-size:13px; font-weight:bold; color:#495057; margin-top:5px;'>Krahasim i periudhave të njëjta<br>(Deri më datë {dita_korrente})</div>",
             unsafe_allow_html=True,
         )
         cc2.metric(
