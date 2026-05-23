@@ -1493,39 +1493,23 @@ elif page == "Shitjet Ditore":
         if klientet_selected:
             df_base = df_base[df_base["Klienti"].isin(klientet_selected)]
 
-        # --- KOLONA E VLERAVE PER LLOGARITJEN E CMIMIT ---
-        kolona_vlera = None
-        for cand in ["Vlera_Historike", "VleraRresht", "TotalRresht"]:
-            if cand in df_base.columns:
-                kolona_vlera = cand
-                break
-
-        # --- FUNKSIONI: kthen TE DY dict-et per cdo muaj (kg dhe vlera) ---
-        def merr_asortimentin_ditore_full(df_filtri, vit, muaj):
+        # --- FUNKSIONI I MARRJES SË TË DHËNAVE ---
+        def merr_asortimentin_ditore(df_filtri, vit, muaj):
             df_p = df_filtri[
                 (df_filtri["Data"].dt.year == vit)
                 & (df_filtri["Data"].dt.month == muaj)
             ].copy()
-            if df_p.empty:
-                return {}, {}
-            df_p["Dita_Numri"] = df_p["Data"].dt.day
-            df_p[kolona_kg] = pd.to_numeric(df_p[kolona_kg], errors="coerce").fillna(0)
-            kg_dict = df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
-            if kolona_vlera and kolona_vlera in df_p.columns:
-                df_p[kolona_vlera] = pd.to_numeric(df_p[kolona_vlera], errors="coerce").fillna(0)
-                vl_dict = df_p.groupby("Dita_Numri")[kolona_vlera].sum().to_dict()
-            else:
-                vl_dict = {}
-            return kg_dict, vl_dict
+            if not df_p.empty:
+                df_p["Dita_Numri"] = df_p["Data"].dt.day
+                df_p[kolona_kg] = pd.to_numeric(
+                    df_p[kolona_kg], errors="coerce"
+                ).fillna(0)
+                return df_p.groupby("Dita_Numri")[kolona_kg].sum().to_dict()
+            return {}
 
-        # Kompatibilitet me kodin e meposhtem qe pret nje dict (vetem kg)
-        def merr_asortimentin_ditore(df_filtri, vit, muaj):
-            kg_d, _ = merr_asortimentin_ditore_full(df_filtri, vit, muaj)
-            return kg_d
-
-        data_aktual, vl_aktual = merr_asortimentin_ditore_full(df_base, vit_aktual, muaj_aktual)
-        data_para_muaj, vl_para_muaj = merr_asortimentin_ditore_full(df_base, vit_para_muaj, para_muaj)
-        data_para_vit, vl_para_vit = merr_asortimentin_ditore_full(df_base, vit_para_vit, para_vit_muaj)
+        data_aktual = merr_asortimentin_ditore(df_base, vit_aktual, muaj_aktual)
+        data_para_muaj = merr_asortimentin_ditore(df_base, vit_para_muaj, para_muaj)
+        data_para_vit = merr_asortimentin_ditore(df_base, vit_para_vit, para_vit_muaj)
 
         _, numri_diteve = calendar.monthrange(vit_aktual, muaj_aktual)
 
@@ -1575,120 +1559,6 @@ elif page == "Shitjet Ditore":
             label=f"vs {emri_vit_kaluar}",
             value=f"{totali_para_vit:,.0f} kg",
             delta=f"{ndryshimi_vit:+.1f}%",
-        )
-        st.write("")
-
-        # ============================================================
-        # METRIKA SHTESE: CMIM MESATAR, KG DERI NE DITEN AKTUALE, MES. DITORE
-        # ============================================================
-        import calendar as _cal
-
-        # Dita e fundit me shitje ne muajin aktual
-        dita_e_fundit = max(data_aktual.keys()) if data_aktual else 0
-
-        def _deri_ne(d_dict, dita_max):
-            return sum(v for d, v in d_dict.items() if d <= dita_max)
-
-        def _cmim(kg, vlera):
-            return (vlera / kg) if kg > 0 else 0
-
-        def _ditet_pune(vit, muaj, dita_max):
-            """Numron ditet jo-te-djele (mon-shtu = 6 dite/jave)."""
-            count = 0
-            limit_dita = min(dita_max, _cal.monthrange(vit, muaj)[1])
-            for d in range(1, limit_dita + 1):
-                if datetime(vit, muaj, d).weekday() != 6:
-                    count += 1
-            return count
-
-        # Totalet e plota
-        vl_aktual_total = sum(vl_aktual.values()) if vl_aktual else 0
-        vl_para_muaj_total = sum(vl_para_muaj.values()) if vl_para_muaj else 0
-        vl_para_vit_total = sum(vl_para_vit.values()) if vl_para_vit else 0
-
-        cmim_aktual_plot = _cmim(totali_aktual, vl_aktual_total)
-        cmim_para_muaj_plot = _cmim(totali_para_muaj, vl_para_muaj_total)
-        cmim_para_vit_plot = _cmim(totali_para_vit, vl_para_vit_total)
-
-        if dita_e_fundit > 0:
-            # KG deri ne diten e fundit aktuale
-            kg_a_deri = _deri_ne(data_aktual, dita_e_fundit)
-            kg_pm_deri = _deri_ne(data_para_muaj, dita_e_fundit)
-            kg_pv_deri = _deri_ne(data_para_vit, dita_e_fundit)
-
-            vl_a_deri = _deri_ne(vl_aktual, dita_e_fundit)
-            vl_pm_deri = _deri_ne(vl_para_muaj, dita_e_fundit)
-            vl_pv_deri = _deri_ne(vl_para_vit, dita_e_fundit)
-
-            cmim_a_deri = _cmim(kg_a_deri, vl_a_deri)
-            cmim_pm_deri = _cmim(kg_pm_deri, vl_pm_deri)
-            cmim_pv_deri = _cmim(kg_pv_deri, vl_pv_deri)
-
-            # Dite pune (jo te diela) deri ne diten e fundit
-            wd_a = _ditet_pune(vit_aktual, muaj_aktual, dita_e_fundit)
-            wd_pm = _ditet_pune(vit_para_muaj, para_muaj, dita_e_fundit)
-            wd_pv = _ditet_pune(vit_para_vit, para_vit_muaj, dita_e_fundit)
-
-            mes_dit_a = (kg_a_deri / wd_a) if wd_a > 0 else 0
-            mes_dit_pm = (kg_pm_deri / wd_pm) if wd_pm > 0 else 0
-            mes_dit_pv = (kg_pv_deri / wd_pv) if wd_pv > 0 else 0
-        else:
-            kg_a_deri = kg_pm_deri = kg_pv_deri = 0
-            cmim_a_deri = cmim_pm_deri = cmim_pv_deri = 0
-            mes_dit_a = mes_dit_pm = mes_dit_pv = 0
-            wd_a = wd_pm = wd_pv = 0
-
-        # Tabela permbledhese me te gjitha metrikat
-        tabela_metrikat = pd.DataFrame([
-            {
-                "Muaji": emri_muaj_aktual,
-                "Total KG": totali_aktual,
-                "Cmim Mes (Lek/kg)": cmim_aktual_plot,
-                f"KG deri me {dita_e_fundit:02d}": kg_a_deri,
-                f"Cmim deri me {dita_e_fundit:02d}": cmim_a_deri,
-                "Dite Pune": wd_a,
-                "Mes. Ditore (pa diela)": mes_dit_a,
-            },
-            {
-                "Muaji": emri_muaj_kaluar,
-                "Total KG": totali_para_muaj,
-                "Cmim Mes (Lek/kg)": cmim_para_muaj_plot,
-                f"KG deri me {dita_e_fundit:02d}": kg_pm_deri,
-                f"Cmim deri me {dita_e_fundit:02d}": cmim_pm_deri,
-                "Dite Pune": wd_pm,
-                "Mes. Ditore (pa diela)": mes_dit_pm,
-            },
-            {
-                "Muaji": emri_vit_kaluar,
-                "Total KG": totali_para_vit,
-                "Cmim Mes (Lek/kg)": cmim_para_vit_plot,
-                f"KG deri me {dita_e_fundit:02d}": kg_pv_deri,
-                f"Cmim deri me {dita_e_fundit:02d}": cmim_pv_deri,
-                "Dite Pune": wd_pv,
-                "Mes. Ditore (pa diela)": mes_dit_pv,
-            },
-        ])
-
-        st.markdown(
-            f"<h4 style='color: #1a237e;'>📊 Metrika te detajuara "
-            f"(deri me daten {dita_e_fundit:02d} per muajin aktual)</h4>",
-            unsafe_allow_html=True,
-        )
-        st.dataframe(
-            tabela_metrikat.style.format({
-                "Total KG": "{:,.0f}",
-                "Cmim Mes (Lek/kg)": "{:,.0f}",
-                f"KG deri me {dita_e_fundit:02d}": "{:,.0f}",
-                f"Cmim deri me {dita_e_fundit:02d}": "{:,.0f}",
-                "Dite Pune": "{:,.0f}",
-                "Mes. Ditore (pa diela)": "{:,.0f}",
-            }),
-            use_container_width=True,
-            hide_index=True,
-        )
-        st.caption(
-            "💡 'KG deri me X' krahason periudhen e barabarte ne te 3 muajt. "
-            "'Mes. Ditore' eshte mesatare e kg per dite pune (perjashton te dielat)."
         )
         st.write("")
 
