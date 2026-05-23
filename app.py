@@ -1653,7 +1653,7 @@ elif page == "Shitjet Ditore":
 
         cc1, cc2, cc3 = st.columns(3)
         cc1.markdown(
-            f"<div style='text-align:center; background:#f0f2f6; padding:10px; border-radius:5px; font-size:14px; font-weight:bold;'>Krahasimi Like-to-Like (Deri në ditën {dita_korrente}):</div>",
+            f"<div style='text-align:center; background:#f0f2f6; padding:10px; border-radius:5px; font-size:14px; font-weight:bold;'>Krahasimi i ngjashëm-me-të-ngjashëm (Deri në ditën {dita_korrente} -pa të diela):</div>",
             unsafe_allow_html=True,
         )
         cc2.metric(
