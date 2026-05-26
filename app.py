@@ -578,21 +578,30 @@ elif page == "Historiku":
 
         # --- GRAFIKU I TRENDIT ---
         st.subheader("📈 Trendi Mujor (KG)")
-        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
-        if not chart_data.empty:
-            # 1. Bëjmë pivot ku indeks mbetet "Muaji" si numër (1-12) që të ruhet radha kronologjike
-            chart_pivot = chart_data.pivot(
-                index="Muaji", columns="Viti", values="kg"
-            ).fillna(0)
-
-            # 2. Sigurohemi që indeksi i numrave të jetë i renditur rritës (1, 2, 3...)
-            chart_pivot = chart_pivot.sort_index()
-
-            # 3. Vetëm TANI i ndryshojmë emrat e indeksit nga numra në tekst.
-            # Pandas do të ruajë radhën ekzistuese kronologjike dhe Streamlit do detyrohet ta lexojë ashtu.
-            chart_pivot.index = [muajt_sq.get(m, m) for m in chart_pivot.index]
-
-            st.line_chart(chart_pivot)
+        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index() [cite: 5]
+        if not chart_data.empty: [cite: 5]
+            # 1. Krijojmë një kolonë të re me emrin e muajit në bazë të numrit
+        chart_data["Emri_Muajit"] = chart_data["Muaji"].map(muajt_sq)
+            
+            # 2. E renditim dataframe-in sipas Vitit dhe Numrit të Muajit (1-12)
+        chart_data = chart_data.sort_values(by=["Viti", "Muaji"])
+            
+            # 3. Përdorim Plotly për grafikun pasi ai respekton renditjen tonë
+        import plotly.express as px
+            
+        fig = px.line(
+                chart_data, 
+                x="Emri_Muajit", 
+                y="kg", 
+                color="Viti",
+                labels={"Emri_Muajit": "Muaji", "kg": "Totale KG"},
+                markers=True # Shton pika te çdo muaj për pamje më të qartë
+            )
+            
+            # Kjo i thotë plotly-t të mos e bëjë boshtin X sipas alfabetit
+        fig.update_layout(xaxis={'categoryorder':'trace'})
+            
+        st.plotly_chart(fig, use_container_width=True)
 
         # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
         st.divider()
