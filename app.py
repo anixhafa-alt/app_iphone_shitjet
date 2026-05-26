@@ -578,18 +578,18 @@ elif page == "Historiku":
 
         # --- GRAFIKU I TRENDIT ---
         st.subheader("📈 Trendi Mujor (KG)")
-        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index() [cite: 5]
-        if not chart_data.empty: [cite: 5]
+        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
+        if not chart_data.empty:
             # 1. Krijojmë një kolonë të re me emrin e muajit në bazë të numrit
-        chart_data["Emri_Muajit"] = chart_data["Muaji"].map(muajt_sq)
+            chart_data["Emri_Muajit"] = chart_data["Muaji"].map(muajt_sq)
             
             # 2. E renditim dataframe-in sipas Vitit dhe Numrit të Muajit (1-12)
-        chart_data = chart_data.sort_values(by=["Viti", "Muaji"])
+            chart_data = chart_data.sort_values(by=["Viti", "Muaji"])
             
             # 3. Përdorim Plotly për grafikun pasi ai respekton renditjen tonë
-        import plotly.express as px
+            import plotly.express as px
             
-        fig = px.line(
+            fig = px.line(
                 chart_data, 
                 x="Emri_Muajit", 
                 y="kg", 
@@ -599,9 +599,9 @@ elif page == "Historiku":
             )
             
             # Kjo i thotë plotly-t të mos e bëjë boshtin X sipas alfabetit
-        fig.update_layout(xaxis={'categoryorder':'trace'})
+            fig.update_layout(xaxis={'categoryorder':'trace'})
             
-        st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
 
         # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
         st.divider()
@@ -636,7 +636,7 @@ elif page == "Historiku":
                     "Nr. Klientëve": "{:,.0f}",
                 }
             ),
-            use_container_width="stretch",
+            use_container_width=True,
             height=600,  # Lartësia që lejon të shohësh shumë rreshta
         )
 
