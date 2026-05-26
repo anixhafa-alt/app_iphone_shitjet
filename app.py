@@ -1438,7 +1438,7 @@ elif page == "Mundësitë":
 
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (I SISTEMUAR NGA ANA GRAFIKE)
+# MODULI I PLOTË: SHITJET DITORE (I INTEGRUAR PLOTËSISHT)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1665,7 +1665,7 @@ elif page == "Shitjet Ditore":
 
         cc1, cc2, cc3 = st.columns(3)
         cc1.markdown(
-            f"<div style='text-align:center; background:#e9ecef; padding:12px; border-radius:6px; font-size:13px; font-weight:bold; color:#495057; margin-top:5px;'>Krahasim i periudhave të njëjta<br>(Deri më datë {dita_korrente})</div>",
+            f"<div style='text-align:center; background:#e9ecef; padding:12px; border-radius:6px; font-size:13px; font-weight:bold; color:#495057; margin-top:5px;'>Krahasimi Like-to-Like<br>(Deri në ditën {dita_korrente} pa të Diela)</div>",
             unsafe_allow_html=True,
         )
         cc2.metric(
@@ -1681,7 +1681,7 @@ elif page == "Shitjet Ditore":
 
         st.write("")
 
-        # Rreshti 3: SISTEMIMI I RI GRAFIK (Stil Kard-Tabele e rreshtuar pastër)
+        # Rreshti 3: Tabela e pastër e Mesatareve
         st.markdown(
             "<h5 style='color: #2c3e50; font-size:15px; margin-top:15px; margin-bottom:10px;'>📈 Sasia Mesatare për Ditë Pune (Hënë - Shtunë, pa të Diela)</h5>",
             unsafe_allow_html=True,
@@ -1786,6 +1786,40 @@ elif page == "Shitjet Ditore":
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
+        # --- TABELA E DETAJUAR ORIGJINALE E SHITJEVE DITORE (E KTHYER) ---
+        st.markdown(
+            "<h4 style='color: #2c3e50; font-size:18px; margin-top:20px;'>📋 Tabela Krahasuese e të Dhënave Ditore</h4>",
+            unsafe_allow_html=True,
+        )
+
+        # Përgatitja e dataframe-it të tabelës
+        # Sigurohemi që listat të kenë të njëjtën gjatësi për të mos pasur gabime në DataFrame
+        tabela_df = pd.DataFrame(
+            {
+                "Dita": ditet_etiketa,
+                f"{emri_muaj_aktual} (kg)": y_aktual,
+                f"{emri_muaj_kaluar} (kg)": [
+                    data_para_muaj.get(d, {}).get(kolona_kg, 0.0) for d in ditet_numerik
+                ],
+                f"{emri_vit_kaluar} (kg)": [
+                    data_para_vit.get(d, {}).get(kolona_kg, 0.0) for d in ditet_numerik
+                ],
+            }
+        )
+
+        # Shfaqja e tabelës klasike të Streamlit (Dataframe) me formatim numrash
+        st.dataframe(
+            tabela_df.style.format(
+                {
+                    f"{emri_muaj_aktual} (kg)": "{:,.0f}",
+                    f"{emri_muaj_kaluar} (kg)": "{:,.0f}",
+                    f"{emri_vit_kaluar} (kg)": "{:,.0f}",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     else:
         st.error("Të dhënat nuk u ngarkuan dot.")
