@@ -583,7 +583,32 @@ elif page == "Historiku":
             chart_pivot = chart_data.pivot(
                 index="Muaji", columns="Viti", values="kg"
             ).fillna(0)
+
+            # 1. Kthejmë numrat e muajve në emra (siç e ke pasur)
             chart_pivot.index = [muajt_sq.get(m, m) for m in chart_pivot.index]
+
+            # 2. Rregullimi i renditjes: Përcaktojmë listën e saktë të muajve sipas radhës
+            rendi_muajve = [
+                "Janar",
+                "Shkurt",
+                "Mars",
+                "Prill",
+                "Maj",
+                "Qershor",
+                "Korrik",
+                "Gusht",
+                "Shtator",
+                "Tetor",
+                "Nëntor",
+                "Dhjetor",
+            ]
+
+            # Sigurohemi që të marrim vetëm muajt që ekzistojnë në grafik, por në radhën e duhur
+            muajt_e_pranishëm = [m for m in rendi_muajve if m in chart_pivot.index]
+
+            # Ritransformojmë indeksin në kategorik me radhën e saktë dhe e ri-renditim
+            chart_pivot = chart_pivot.reindex(muajt_e_pranishëm)
+
             st.line_chart(chart_pivot)
 
         # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
