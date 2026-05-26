@@ -576,58 +576,30 @@ elif page == "Historiku":
             df_hist["Viti"].isin(viti_sel) & df_hist["kat"].isin(kat_sel)
         ]
 
-        # --- GRAFIKU I TRENDIT DINAMIK ---
+        # --- GRAFIKU I TRENDIT ---
         st.subheader("📈 Trendi Mujor (KG)")
 
-        # 1. Grupimi i të dhënave: Përfshijmë edhe "Klienti" në grupim që grafiku të jetë dinamik
-        chart_data = (
-            df_final.groupby(["Viti", "Muaji", "Klienti"])["kg"].sum().reset_index()
-        )
+        # Pasi df_final ka kaluar filtret e Agjentit, Klientëve dhe Grupit, bëjmë grupimin
+        chart_data = df_final.groupby(["Viti", "Muaji"])["kg"].sum().reset_index()
 
         if not chart_data.empty:
-            # 2. Shtojmë emrin e muajit në bazë të numrit (p.sh. 1 -> Janar)
-            chart_data["Emri_Muajit"] = chart_data["Muaji"].map(muajt_sq)
+            # Krijojmë pivot tabelën ku rreshtat janë muajt dhe kolonat janë vitet
+            chart_pivot = chart_data.pivot(
+                index="Muaji", columns="Viti", values="kg"
+            ).fillna(0)
 
-            # 3. Rendisim të dhënat kronologjikisht sipas Vitit dhe Numrit të Muajit (1-12)
-            chart_data = chart_data.sort_values(by=["Viti", "Muaji"])
+            # Renditim muajt si numra (1, 2, 3...) që të ruhet radha kronologjike
+            chart_pivot = chart_pivot.sort_index()
 
-            import plotly.express as px
+            # Vendosim emrat e muajve me numër përpara (p.sh. "01. Janar") që Streamlit mos t'i prishë
+            chart_pivot.index = [
+                f"{m:02d}. {muajt_sq.get(m, m)}" for m in chart_pivot.index
+            ]
 
-            # 4. Përcaktojmë se si do të shfaqen të dhënat në grafik:
-            # - Nëse përdoruesi ka zgjedhur disa klientë specifikë, grafiku ndan vijat sipas KLIENTËVE.
-            # - Nëse nuk ka zgjedhur klientë (ose ka zgjedhur "Të gjithë"), vijat ndahen sipas VITIT.
-            if klientet_selected and len(klientet_selected) > 0:
-                ngjyra_sipas = "Klienti"
-                titulli_grafikut = (
-                    "Trendi i Shitjeve sipas Klientëve të Përzgjedhur (KG)"
-                )
-            else:
-                ngjyra_sipas = "Viti"
-                titulli_grafikut = "Trendi i Shitjeve Mujore sipas Viteve (KG)"
-
-            # Krijimi i grafikut interaktiv me Plotly
-            fig = px.line(
-                chart_data,
-                x="Emri_Muajit",
-                y="kg",
-                color=ngjyra_sipas,  # Ndryshon dinamikisht ngjyrën (Viti ose Klienti)
-                title=titulli_grafikut,
-                labels={
-                    "Emri_Muajit": "Muaji",
-                    "kg": "Totale KG",
-                    "Klienti": "Klienti",
-                    "Viti": "Viti",
-                },
-                markers=True,
-            )
-
-            # Ndalojmë Plotly-n që të mos e renditë boshtin X alfabetikisht (ruan Janar, Shkurt, Mars...)
-            fig.update_layout(xaxis={"categoryorder": "trace"})
-
-            # Shfaqja e grafikut në Streamlit
-            st.plotly_chart(fig, use_container_width=True)
+            # Shfaqim grafikun e thjeshtë me vijat sipas viteve
+            st.line_chart(chart_pivot)
         else:
-            st.info("Nuk ka të dhëna të disponueshme për këtë përzgjedhje filtresh.")
+            st.info("Nuk ka të dhëna për këtë përzgjedhje klientësh.")
 
         # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
         st.divider()
