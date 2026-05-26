@@ -582,25 +582,25 @@ elif page == "Historiku":
         if not chart_data.empty:
             # 1. Krijojmë një kolonë të re me emrin e muajit në bazë të numrit
             chart_data["Emri_Muajit"] = chart_data["Muaji"].map(muajt_sq)
-            
+
             # 2. E renditim dataframe-in sipas Vitit dhe Numrit të Muajit (1-12)
             chart_data = chart_data.sort_values(by=["Viti", "Muaji"])
-            
+
             # 3. Përdorim Plotly për grafikun pasi ai respekton renditjen tonë
             import plotly.express as px
-            
+
             fig = px.line(
-                chart_data, 
-                x="Emri_Muajit", 
-                y="kg", 
+                chart_data,
+                x="Emri_Muajit",
+                y="kg",
                 color="Viti",
                 labels={"Emri_Muajit": "Muaji", "kg": "Totale KG"},
-                markers=True # Shton pika te çdo muaj për pamje më të qartë
+                markers=True,  # Shton pika te çdo muaj për pamje më të qartë
             )
-            
+
             # Kjo i thotë plotly-t të mos e bëjë boshtin X sipas alfabetit
-            fig.update_layout(xaxis={'categoryorder':'trace'})
-            
+            fig.update_layout(xaxis={"categoryorder": "trace"})
+
             st.plotly_chart(fig, use_container_width=True)
 
         # --- TABELA E PLOTË E ARTIKUJVE (Kërkesa jote) ---
