@@ -2202,6 +2202,121 @@ if page == "🎯 Plani sipas Strukturës B":
     st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
 
 # endregion
-# -----------------------------------------------------------------
-# MODULI: ROUTE PLAN & ANALIZA E KLIENTËVE TË HUMBUR (I SAKTËSUAR)
-# -----------------------------------------------------------------
+
+# =========================================================
+# MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE)
+# region ==================================================
+import google.generativeai as genai
+
+
+def shfaq_ai_assistant(df):
+    st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave")
+    st.markdown(
+        "Pyet inteligjencën artificiale për çdo problematikë, anomali ose analizë mbi të dhënat e ngarkuara."
+    )
+
+    # 1. Konfigurimi i API Key në mënyrë të sigurt (nga Streamlit Secrets ose Input)
+    # Në Streamlit Cloud, mund ta vendosësh te Secrets si GEMINI_API_KEY
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+    if not api_key:
+        api_key = st.sidebar.text_input(
+            "Vendos Google Gemini API Key:", type="password"
+        )
+        if not api_key:
+            st.info(
+                "🔑 Ju lutem vendosni një API Key në sidebar për të aktivizuar Asistentin AI."
+            )
+            st.stop()
+
+    # Inicializimi i modelit Gemini
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        "gemini-1.5-flash"
+    )  # Model i shpejtë dhe i saktë për data
+
+    # 2. Përgatitja e kontekstit të të dhënave (Data Summary)
+    # Nuk i dërgojmë të gjithë databazën e madhe nëse është me miliona rreshta,
+    # por i dërgojmë një pasqyrë të saktë strukture dhe statistikat kryesore.
+    buffer = io.StringIO()
+    df.info(buf=buffer)
+    struktura_df = buffer.getvalue()
+
+    statistikat = df.describe(include="all").to_string()
+    mungesat = df.isnull().sum().to_string()
+
+    # Krijojmë një mostër (sample) me 5 rreshtat e parë që AI të kuptojë formatin
+    mostra_te_dhenave = df.head(5).to_string()
+
+    konteksti_ai = f"""
+    Ti je asistenti AI i quajtur AXION AI, ekspert në analizën e të dhënave dhe databazave.
+    Përdoruesi ka ngarkuar një databazë në aplikacion me këtë strukturë:
+    
+    === STRUKTURA E KOLONAVE ===
+    {struktura_df}
+    
+    === STATISTIKAT KRYESORE ===
+    {statistikat}
+    
+    === VLERA QË MUNGOJNË (NULL) ===
+    {mungesat}
+    
+    === MOSTRA E TË DHËNAVE (5 RRESHTAT E PARË) ===
+    {mostra_te_dhenave}
+    
+    Përgjigju në gjuhën shqipe. Nëse përdoruesi të pyet për anomali, analizo mungesat, vlerat ekstreme ose gabimet logjike në strukturë bazuar në këtë pasqyrë. Nëse kërkohet analizë specifike, trego hapat se si mund ta zgjidhë ai ose jepni sugjerime logjike.
+    """
+
+    # 3. Ndërtimi i dritares së Chat-it (Chat Interface)
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": "Përshëndetje! Unë kam lexuar strukturën e databazës tënde. Çfarë dëshiron të analizojmë së bashku? (p.sh. 'A ka agjentë që nuk kanë regjistruar data?', 'A ka vlera zero ose negative në kolona?')",
+            }
+        ]
+
+    # Shfaq historikun e mesazheve
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    # Inputi nga përdoruesi
+    if prompt := st.chat_input("Shkruaj pyetjen tënde këtu..."):
+        # Ruajmë mesazhin e përdoruesit
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        # Gjenerimi i përgjigjes nga AI
+        with st.chat_message("assistant"):
+            with st.spinner("Duke menduar dhe analizuar databazën..."):
+                try:
+                    # Bashkojmë kontekstin e të dhënave me pyetjen aktuale të përdoruesit
+                    full_prompt = (
+                        f"{konteksti_ai}\n\nPyetje nga përdoruesi: {prompt}\nPërgjigje:"
+                    )
+                    response = model.generate_content(full_prompt)
+
+                    përgjigje_ai = response.text
+                    st.write(përgjigje_ai)
+
+                    # Ruajmë përgjigjen në historik
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": përgjigje_ai}
+                    )
+                except Exception as e:
+                    st.error(f"⚠️ Ndodhi një gabim gjatë bisedës me AI: {e}")
+
+
+# Integrimi me menunë (blloku IF)
+if page == "AI Assistant":
+    if "df_kryesor" in locals() or "df_kryesor" in globals():
+        shfaq_ai_assistant(df_kryesor)
+    else:
+        st.warning(
+            "⚠️ Ju lutem ngarkoni të dhënat fillimisht te moduli kryesor për të njoftuar AI-n."
+        )
+    st.stop()
+
+# endregion
