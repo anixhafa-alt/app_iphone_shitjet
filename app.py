@@ -2208,18 +2208,17 @@ if page == "🎯 Plani sipas Strukturës B":
 # MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE)
 # region ==================================================
 import google.generativeai as genai
-import io  # Kjo linjë siguron që kodi të mos ngrijë dhe të mos nxjerrë faqe të bardhë
+import io
 
 
 def shfaq_ai_assistant(df):
     st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave")
     st.markdown(
-        "Pyet inteligjencën artificiale për çdo problematikë, anomali ose analizë mbi të dhënat e ngarkuara."
+        "Pyet inteligjencën artificiale për problematika, anomali ose analizë mbi shitjet dhe agjentët."
     )
 
     # 1. Konfigurimi i API Key
     api_key = st.secrets.get("GEMINI_API_KEY", "")
-
     if not api_key:
         api_key = st.sidebar.text_input(
             "Vendos Google Gemini API Key:", type="password"
@@ -2231,39 +2230,47 @@ def shfaq_ai_assistant(df):
             st.stop()
 
     try:
-        # Inicializimi i modelit Gemini
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-1.5-flash")
     except Exception as e:
         st.error(f"Gabim gjatë konfigurimit të Gemini: {e}")
         st.stop()
 
-    # 2. Përgatitja e kontekstit të të dhënave (Data Summary)
+    # 2. Përgatitja e kontekstit (Marrim vetëm një snapshot inteligjent të strukturës SQL)
     buffer = io.StringIO()
     df.info(buf=buffer)
     struktura_df = buffer.getvalue()
 
-    statistikat = df.describe(include="all").to_string()
-    mungesat = df.isnull().sum().to_string()
+    # Marrim mostrat dhe vlerat unike kryesore
+    numri_rreshtave = len(df)
+    forca_shitese_unike = (
+        df["ForcaShitese"].dropna().unique()[:15].tolist()
+        if "ForcaShitese" in df.columns
+        else []
+    )
+    kategorite_unike = (
+        df["kat"].dropna().unique()[:15].tolist() if "kat" in df.columns else []
+    )
     mostra_te_dhenave = df.head(5).to_string()
 
     konteksti_ai = f"""
-    Ti je asistenti AI i quajtur AXION AI, ekspert në analizën e të dhënave dhe databazave.
-    Përdoruesi ka ngarkuar një databazë në aplikacion me këtë strukturë:
+    Ti je asistenti AI i quajtur AXION AI, ekspert në analizën e të dhënave të shitjeve ERP.
+    Databaza vjen automatikisht nga SQL View 'GetRaportiMadhView' dhe ka {numri_rreshtave} rreshta.
     
     === STRUKTURA E KOLONAVE ===
     {struktura_df}
     
-    === STATISTIKAT KRYESORE ===
-    {statistikat}
+    === DISA NGA AGJENTËT (ForcaShitese) ===
+    {forca_shitese_unike}
     
-    === VLERA QË MUNGOJNË (NULL) ===
-    {mungesat}
+    === DISA NGA KATEGORITË (kat) ===
+    {kategorite_unike}
     
-    === MOSTRA E TË DHËNAVE (5 RRESHTAT E PARË) ===
+    === SHEMBULL I 5 RRESHTAVE TË PARË ===
     {mostra_te_dhenave}
     
-    Përgjigju në gjuhën shqipe. Nëse përdoruesi të pyet për anomali, analizo mungesat, vlerat ekstreme ose gabimet logjike në strukturë bazuar në këtë pasqyrë.
+    Përgjigju gjithmonë në gjuhën shqipe në mënyrë profesionale dhe të shkurtër. 
+    Nëse përdoruesi të pyet për rrugët, anomali apo performancë, bazoje logjikën te këto kolona që ke në dispozicion.
     """
 
     # 3. Ndërtimi i dritares së Chat-it
@@ -2271,23 +2278,21 @@ def shfaq_ai_assistant(df):
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Përshëndetje! Unë kam lexuar strukturën e databazës tënde. Çfarë dëshiron të analizojmë së bashku? (p.sh. 'A ka agjentë që nuk kanë regjistruar data?', 'A ka vlera zero ose negative?')",
+                "content": "Përshëndetje! Unë e lexova me sukses databazën tënde nga SQL. Mund të më pyesësh për strukturën, për agjentët (ForcaShitese), kategoritë (kat) ose për të gjetur anomali në shitje!",
             }
         ]
 
-    # Shfaq historikun e mesazheve
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    # Inputi nga përdoruesi
     if prompt := st.chat_input("Shkruaj pyetjen tënde këtu..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Duke menduar dhe analizuar databazën..."):
+            with st.spinner("Duke menduar..."):
                 try:
                     full_prompt = (
                         f"{konteksti_ai}\n\nPyetje nga përdoruesi: {prompt}\nPërgjigje:"
@@ -2299,19 +2304,21 @@ def shfaq_ai_assistant(df):
                         {"role": "assistant", "content": përgjigje_ai}
                     )
                 except Exception as e:
-                    st.error(f"⚠️ Ndodhi një gabim gjatë bisedës me AI: {e}")
+                    st.error(f"⚠️ Ndodhi një gabim: {e}")
 
 
-# Integrimi me menunë (Kontrolli i saktë i emrit si "AI Assistant")
+# Integrimi me menunë (Përdorim df_raw që vjen nga SQL)
 if page == "AI Assistant":
-    # Kontrollojmë nëse df_kryesor ekziston realisht në memorien e aplikacionit tënd
-    # Nëse variabla jote e databazës quhet ndryshe (p.sh. df, ose data), ndryshoje këtu poshtë:
-    if "df_kryesor" in locals() or "df_kryesor" in globals():
-        shfaq_ai_assistant(df_kryesor)
+    # Kontrollojmë nëse df_raw ekziston dhe nuk është bosh
+    if "df_raw" in locals() or "df_raw" in globals():
+        if df_raw is not None:
+            shfaq_ai_assistant(df_raw)
+        else:
+            st.error(
+                "❌ Databaza u tentua të ngarkohej nga SQL, por rezulton bosh ose me gabime."
+            )
     else:
-        st.warning(
-            "⚠️ Ju lutem ngarkoni të dhënat fillimisht te moduli kryesor për të njoftuar AI-n."
-        )
+        st.warning("⚠️ Prisni sa të përfundojë leximi i të dhënave nga SQL Server...")
     st.stop()
 
 # endregion
