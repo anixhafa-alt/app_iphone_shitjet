@@ -2208,6 +2208,7 @@ if page == "🎯 Plani sipas Strukturës B":
 # MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE)
 # region ==================================================
 import google.generativeai as genai
+import io  # Kjo linjë siguron që kodi të mos ngrijë dhe të mos nxjerrë faqe të bardhë
 
 
 def shfaq_ai_assistant(df):
@@ -2216,8 +2217,7 @@ def shfaq_ai_assistant(df):
         "Pyet inteligjencën artificiale për çdo problematikë, anomali ose analizë mbi të dhënat e ngarkuara."
     )
 
-    # 1. Konfigurimi i API Key në mënyrë të sigurt (nga Streamlit Secrets ose Input)
-    # Në Streamlit Cloud, mund ta vendosësh te Secrets si GEMINI_API_KEY
+    # 1. Konfigurimi i API Key
     api_key = st.secrets.get("GEMINI_API_KEY", "")
 
     if not api_key:
@@ -2230,23 +2230,21 @@ def shfaq_ai_assistant(df):
             )
             st.stop()
 
-    # Inicializimi i modelit Gemini
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        "gemini-1.5-flash"
-    )  # Model i shpejtë dhe i saktë për data
+    try:
+        # Inicializimi i modelit Gemini
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+    except Exception as e:
+        st.error(f"Gabim gjatë konfigurimit të Gemini: {e}")
+        st.stop()
 
     # 2. Përgatitja e kontekstit të të dhënave (Data Summary)
-    # Nuk i dërgojmë të gjithë databazën e madhe nëse është me miliona rreshta,
-    # por i dërgojmë një pasqyrë të saktë strukture dhe statistikat kryesore.
     buffer = io.StringIO()
     df.info(buf=buffer)
     struktura_df = buffer.getvalue()
 
     statistikat = df.describe(include="all").to_string()
     mungesat = df.isnull().sum().to_string()
-
-    # Krijojmë një mostër (sample) me 5 rreshtat e parë që AI të kuptojë formatin
     mostra_te_dhenave = df.head(5).to_string()
 
     konteksti_ai = f"""
@@ -2265,15 +2263,15 @@ def shfaq_ai_assistant(df):
     === MOSTRA E TË DHËNAVE (5 RRESHTAT E PARË) ===
     {mostra_te_dhenave}
     
-    Përgjigju në gjuhën shqipe. Nëse përdoruesi të pyet për anomali, analizo mungesat, vlerat ekstreme ose gabimet logjike në strukturë bazuar në këtë pasqyrë. Nëse kërkohet analizë specifike, trego hapat se si mund ta zgjidhë ai ose jepni sugjerime logjike.
+    Përgjigju në gjuhën shqipe. Nëse përdoruesi të pyet për anomali, analizo mungesat, vlerat ekstreme ose gabimet logjike në strukturë bazuar në këtë pasqyrë.
     """
 
-    # 3. Ndërtimi i dritares së Chat-it (Chat Interface)
+    # 3. Ndërtimi i dritares së Chat-it
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Përshëndetje! Unë kam lexuar strukturën e databazës tënde. Çfarë dëshiron të analizojmë së bashku? (p.sh. 'A ka agjentë që nuk kanë regjistruar data?', 'A ka vlera zero ose negative në kolona?')",
+                "content": "Përshëndetje! Unë kam lexuar strukturën e databazës tënde. Çfarë dëshiron të analizojmë së bashku? (p.sh. 'A ka agjentë që nuk kanë regjistruar data?', 'A ka vlera zero ose negative?')",
             }
         ]
 
@@ -2284,25 +2282,19 @@ def shfaq_ai_assistant(df):
 
     # Inputi nga përdoruesi
     if prompt := st.chat_input("Shkruaj pyetjen tënde këtu..."):
-        # Ruajmë mesazhin e përdoruesit
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
-        # Gjenerimi i përgjigjes nga AI
         with st.chat_message("assistant"):
             with st.spinner("Duke menduar dhe analizuar databazën..."):
                 try:
-                    # Bashkojmë kontekstin e të dhënave me pyetjen aktuale të përdoruesit
                     full_prompt = (
                         f"{konteksti_ai}\n\nPyetje nga përdoruesi: {prompt}\nPërgjigje:"
                     )
                     response = model.generate_content(full_prompt)
-
                     përgjigje_ai = response.text
                     st.write(përgjigje_ai)
-
-                    # Ruajmë përgjigjen në historik
                     st.session_state.messages.append(
                         {"role": "assistant", "content": përgjigje_ai}
                     )
@@ -2310,8 +2302,10 @@ def shfaq_ai_assistant(df):
                     st.error(f"⚠️ Ndodhi një gabim gjatë bisedës me AI: {e}")
 
 
-# Integrimi me menunë (blloku IF)
+# Integrimi me menunë (Kontrolli i saktë i emrit si "AI Assistant")
 if page == "AI Assistant":
+    # Kontrollojmë nëse df_kryesor ekziston realisht në memorien e aplikacionit tënd
+    # Nëse variabla jote e databazës quhet ndryshe (p.sh. df, ose data), ndryshoje këtu poshtë:
     if "df_kryesor" in locals() or "df_kryesor" in globals():
         shfaq_ai_assistant(df_kryesor)
     else:
