@@ -2244,7 +2244,7 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (VERSIONI AVANCUAR ME DHËNA REALE)
+# MODULI: AI DATA ASSISTANT (VERSIONI SPECIFIK PËR MAJ 2026)
 # region ==================================================
 import anthropic
 import io
@@ -2255,7 +2255,7 @@ import pandas as pd
 def shfaq_ai_assistant(df):
     st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave (Claude)")
     st.markdown(
-        "Pyet inteligjencën artificiale për çdo gjë. Tani AI ka akses te çmimet mesatare dhe shitjet reale!"
+        "Pyet inteligjencën artificiale për çdo gjë. Tani AI ka akses të plotë edhe te filtrat e Majit 2026!"
     )
 
     # 1. Konfigurimi i API Key
@@ -2276,13 +2276,22 @@ def shfaq_ai_assistant(df):
         st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # 2. PËRGATITJA E TË DHËNAVE REALE PËR CLAUDE (Që mos të japë më kode)
-    # Llogarisim çmimet mesatare dhe vlerat për çdo artikull direkt në Python
-    with st.spinner("Duke përgatitur pasqyrën e shitjeve për AI..."):
+    # 2. PËRGATITJA E KONTEKSTIT SPECIFIK (MAJ 2026 & DEKA)
+    with st.spinner("Duke llogaritur shifrat e Majit 2026 për AI..."):
         try:
-            # Grupimi i të dhënave reale për t'ia dhënë Claude-it si tekst të gatshëm
-            df_analiza = (
-                df.groupby(["Artikulli", "Grup_Filtri"])
+            # Sigurohemi që data është datetime
+            df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+
+            # FILTRI 1: Vetëm muaji Maj 2026
+            df_maj2026 = df[
+                (df["Data"].dt.year == 2026) & (df["Data"].dt.month == 5)
+            ].copy()
+
+            # Llogaritja e çmimit mesatar për produktet DEKA në Maj 2026
+            df_deka_maj = df_maj2026[df_maj2026["Grup_Filtri"] == "DEKA"].copy()
+
+            analiza_deka_maj = (
+                df_deka_maj.groupby(["Artikulli"])
                 .agg(
                     Vlera_Totale=("Vlera_Historike", "sum"),
                     Sasia_Totale=("Sasia", "sum"),
@@ -2290,47 +2299,55 @@ def shfaq_ai_assistant(df):
                 .reset_index()
             )
 
-            # Llogaritja e çmimit mesatar real
-            df_analiza["Cmimi_Mesatar"] = (
-                df_analiza["Vlera_Totale"] / df_analiza["Sasia_Totale"]
+            analiza_deka_maj["Cmimi_Mesatar"] = (
+                analiza_deka_maj["Vlera_Totale"] / analiza_deka_maj["Sasia_Totale"]
             ).round(2)
+            shifrat_deka_maj_tekst = analiza_deka_maj.sort_values(
+                "Vlera_Totale", ascending=False
+            ).to_string(index=False)
 
-            # Marrim 40 produktet më të shitura që Claude të ketë faturat kryesore pa u bllokuar memoria
-            top_produkte = (
-                df_analiza.sort_values("Vlera_Totale", ascending=False)
-                .head(40)
+            # FILTRI 2: Top Produkte të përgjithshme (për pyetje të tjera)
+            df_analiza_gjithsej = (
+                df.groupby(["Artikulli", "Grup_Filtri"])
+                .agg(
+                    Vlera_Totale=("Vlera_Historike", "sum"),
+                    Sasia_Totale=("Sasia", "sum"),
+                )
+                .reset_index()
+            )
+            df_analiza_gjithsej["Cmimi_Mesatar"] = (
+                df_analiza_gjithsej["Vlera_Totale"]
+                / df_analiza_gjithsej["Sasia_Totale"]
+            ).round(2)
+            top_produkte_gjithsej = (
+                df_analiza_gjithsej.sort_values("Vlera_Totale", ascending=False)
+                .head(30)
                 .to_string(index=False)
             )
 
-            # Statistika të përgjithshme biznesi
-            total_biznesi = df["Vlera_Historike"].sum()
-            numri_klienteve = (
-                df["KodiKlient"].nunique() if "KodiKlient" in df.columns else 0
-            )
-            numri_agjenteve = (
-                df["ForcaShitese"].nunique() if "ForcaShitese" in df.columns else 0
-            )
+            total_maj_2026 = df_maj2026["Vlera_Historike"].sum()
 
         except Exception as e:
-            top_produkte = "Nuk u llogaritën dot për shkak të një gabimi në kolona."
-            total_biznesi = 0
+            shifrat_deka_maj_tekst = f"Gabim gjatë llogaritjes: {e}"
+            top_produkte_gjithsej = ""
+            total_maj_2026 = 0
 
-    # Krijojmë instruksionin e sistemit duke i dhënë shifrat e gatshme!
+    # Udhëzimet e reja të sistemit – Tani Claude nuk ka si të nxjerrë pretekste
     system_instruction = f"""
-    Ti je asistenti AI i quajtur AXION AI.
-    Kujdes: Përdoruesi NUK dëshiron kode Python ose udhëzime si të ekzekutojë kode. Ai dëshiron përgjigje direkte me shifra.
+    Ti je asistenti AI i quajtur AXION AI. Mos i thuaj asnjëherë përdoruesit që 'nuk ke akses live në SQL' ose 'më jep kod Python'. Shifrat të janë vendosur ty në tavolinë më poshtë.
     
-    Këtu ke të dhënat e llogaritura direkt nga sistemi ERP i kompanisë:
+    Këto janë të dhënat reale të llogaritura nga sistemi për ty:
     
-    === SHIFRAT E PËRGJITHSHME ===
-    - Xhiro Totale Historike: {total_biznesi:,.0f} Lekë
-    - Numri Total i Klientëve unikë: {numri_klienteve}
-    - Numri i Agjentëve në terren (ForcaShitese): {numri_agjenteve}
+    === SHIFRAT E MUAJIT AKTUAL (MAJ 2026) ===
+    - Xhiro totale e kompanisë vetëm për muajin Maj 2026: {total_maj_2026:,.0f} Lekë
     
-    === PASQYRA E ARTIKUJVE KRYESORË DHE ÇMIMEVE MESATARE (TOP 40) ===
-    {top_produkte}
+    === ÇMIMET MESATARE DHE SHITJET PËR PRODUKTET 'DEKA' VETËM PËR MAJ 2026 ===
+    {shifrat_deka_maj_tekst}
     
-    Nëse përdoruesi të pyet për çmimin mesatar të produkteve DEKA ose të ndonjë artikulli tjetër, shiko tabelën e mësipërme ku çmimet janë të llogaritura te kolona 'Cmimi_Mesatar' dhe jepja direkt vlerën në Lekë! Përgjigju shkurt, saktë dhe vetëm në gjuhën shqipe.
+    === TOP PRODUKTET E PËRGJITHSHME HISTORIKE (SI REFERENCË) ===
+    {top_produkte_gjithsej}
+    
+    Kur përdoruesi të pyet për çmimin mesatar të produkteve DEKA në Maj 2026, shiko tabelën specifike të Majit më sipër, gjej produktin dhe jepi vlerën direkte nga kolona 'Cmimi_Mesatar'. Përgjigju pastër, shkurt dhe në shqip.
     """
 
     # 3. Ndërtimi i dritares së Chat-it
@@ -2338,7 +2355,7 @@ def shfaq_ai_assistant(df):
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Përshëndetje! Tani jam i lidhur direkt me databazën tënde dhe i kam llogaritur çmimet mesatare të artikujve kryesorë. Çfarë dëshiron të dish në lidhje me shifrat?",
+                "content": "Përshëndetje! Kam përpunuar të dhënat specifike për muajin Maj 2026 dhe çmimet mesatare të produkteve DEKA. Çfarë dëshironi të kontrolloni?",
             }
         ]
 
