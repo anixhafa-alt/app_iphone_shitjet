@@ -2207,11 +2207,20 @@ if page == "🎯 Plani sipas Strukturës B":
 # =========================================================
 # MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE - CLAUDE)
 # region ==================================================
-import anthropic
 import io
 
 
 def shfaq_ai_assistant(df):
+    try:
+        import anthropic
+    except ImportError:
+        st.error(
+            "📌 Moduli 'anthropic' nuk është i instaluar. Shtoni 'anthropic' në requirements.txt dhe rilidhni aplikacionin."
+        )
+        st.stop()
+    except Exception as e:
+        st.error(f"⚠️ Gabim gjatë importimit të Anthropic: {e}")
+        st.stop()
     st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave (Claude)")
     st.markdown(
         "Pyet inteligjencën artificiale për problematika, anomali ose analizë mbi shitjet dhe agjentët."
@@ -2304,14 +2313,13 @@ def shfaq_ai_assistant(df):
                                 {"role": m["role"], "content": m["content"]}
                             )
 
-                    # Thirrja e modelit Claude 3.5 Sonnet
+                    # Ndryshoje këtë pjesë brenda st.chat_input:
                     response = client.messages.create(
-                        model="claude-3-5-sonnet-20241022",
-                        max_tokens=1020,
+                        model="claude-3-5-sonnet-latest",  # <--- Kjo zgjidh gabimin 404
+                        max_tokens=1024,
                         system=system_instruction,
                         messages=messages_anthropic,
                     )
-
                     përgjigje_ai = response.content[0].text
                     st.write(përgjigje_ai)
                     st.session_state.messages.append(
