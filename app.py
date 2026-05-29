@@ -148,6 +148,7 @@ page = st.sidebar.radio(
         "🎯 Plani sipas Strukturës B",
         "Mundësitë",
         "Historiku",
+        "🤖 AXION AI – Asistenti Inteligjent i të Dhënave",
         "Analiza nga 2020",  # Dashboard interaktiv (trendet, top kategorite, agjentet)
     ],
 )
