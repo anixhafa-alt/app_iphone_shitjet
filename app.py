@@ -2333,3 +2333,23 @@ if page == "AI Assistant":
     st.stop()
 
 # endregion
+df_maj2026 = df[(df["Data"].dt.year == 2026) & (df["Data"].dt.month == 5)].copy()
+
+result = (
+    df_maj2026.groupby("kat")
+    .agg(
+        Vlera_Totale=("VleraRresht", "sum"),
+        Sasia_Totale=("Sasia", "sum"),
+        KG_Totale=("kg", "sum"),
+        Nr_Transaksione=("VleraRresht", "count"),
+        Nr_Klientet=("KodiKlient", "nunique"),
+    )
+    .sort_values("Vlera_Totale", ascending=False)
+)
+
+result["Pesha_%"] = (result["Vlera_Totale"] / result["Vlera_Totale"].sum() * 100).round(
+    2
+)
+
+print(result.to_string())
+print(f"\n💰 TOTAL: {result['Vlera_Totale'].sum():,.0f} Lekë")
