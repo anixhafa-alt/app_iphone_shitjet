@@ -2174,6 +2174,8 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             </html>
             """
 
+            import io
+
             try:
                 from weasyprint import HTML
 
@@ -2207,20 +2209,12 @@ if page == "🎯 Plani sipas Strukturës B":
 # =========================================================
 # MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE - CLAUDE)
 # region ==================================================
+import anthropic
 import io
+import streamlit as st
 
 
 def shfaq_ai_assistant(df):
-    try:
-        import anthropic
-    except ImportError:
-        st.error(
-            "📌 Moduli 'anthropic' nuk është i instaluar. Shtoni 'anthropic' në requirements.txt dhe rilidhni aplikacionin."
-        )
-        st.stop()
-    except Exception as e:
-        st.error(f"⚠️ Gabim gjatë importimit të Anthropic: {e}")
-        st.stop()
     st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave (Claude)")
     st.markdown(
         "Pyet inteligjencën artificiale për problematika, anomali ose analizë mbi shitjet dhe agjentët."
@@ -2245,7 +2239,7 @@ def shfaq_ai_assistant(df):
         st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # 2. Përgatitja e kontekstit nga SQL DataFrame
+    # 2. Përgatitja e kontekstit nga SQL DataFrame (df_raw)
     buffer = io.StringIO()
     df.info(buf=buffer)
     struktura_df = buffer.getvalue()
@@ -2275,7 +2269,7 @@ def shfaq_ai_assistant(df):
     === DISA NGA KATEGORITË (kat) ===
     {kategorite_unike}
     
-    === SHEMBULL I 5 RRESHTAVE TË PARË ===
+    === SHEMBULL I 5 RRESHTAVE T TË PARË ===
     {mostra_te_dhenave}
     
     Përgjigju gjithmonë në gjuhën shqipe në mënyrë profesionale, analitike dhe të strukturuar mirë.
@@ -2287,7 +2281,7 @@ def shfaq_ai_assistant(df):
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Përshëndetje! Unë jam AXION AI (i fuqizuar nga Claude). E lexova strukturën tuaj nga SQL. Çfarë dëshironi të analizojmë ose ku dyshoni se ka anomali?",
+                "content": "Përshëndetje! Unë jam AXION AI. E lexova strukturën tuaj nga SQL. Çfarë dëshironi të analizojmë ose ku dyshoni se ka anomali?",
             }
         ]
 
@@ -2303,23 +2297,21 @@ def shfaq_ai_assistant(df):
         with st.chat_message("assistant"):
             with st.spinner("Claude duke analizuar të dhënat..."):
                 try:
-                    # Formatimi i mesazheve sipas strukturës së re të API-së së Anthropic
                     messages_anthropic = []
                     for m in st.session_state.messages:
-                        if (
-                            m["role"] != "system"
-                        ):  # Përjashtojmë instruksionet e vjetra nëse ka
+                        if m["role"] != "system":
                             messages_anthropic.append(
                                 {"role": m["role"], "content": m["content"]}
                             )
 
-                    # Ndryshoje këtë pjesë brenda st.chat_input:
+                    # Thirrja e unifikuar me modelin e ri zyrtar
                     response = client.messages.create(
-                        model="claude-3-5-sonnet-latest",  # <--- Kjo zgjidh gabimin 404
+                        model="claude-sonnet-4-6",  # <--- Ky model ekziston dhe zgjidh gabimin 404
                         max_tokens=1024,
                         system=system_instruction,
                         messages=messages_anthropic,
                     )
+
                     përgjigje_ai = response.content[0].text
                     st.write(përgjigje_ai)
                     st.session_state.messages.append(
@@ -2331,14 +2323,11 @@ def shfaq_ai_assistant(df):
 
 # Integrimi me menunë (Përdorim df_raw që vjen nga SQL)
 if page == "AI Assistant":
-    # Kontrollojmë nëse df_raw ekziston dhe nuk është bosh
     if "df_raw" in locals() or "df_raw" in globals():
         if df_raw is not None:
             shfaq_ai_assistant(df_raw)
         else:
-            st.error(
-                "❌ Databaza u tentua të ngarkohej nga SQL, por rezulton bosh ose me gabime."
-            )
+            st.error("❌ Databaza u tentua të ngarkohej nga SQL, burimi rezulton bosh.")
     else:
         st.warning("⚠️ Prisni sa të përfundojë leximi i të dhënave nga SQL Server...")
     st.stop()
