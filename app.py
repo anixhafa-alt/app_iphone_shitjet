@@ -2244,20 +2244,21 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE - CLAUDE)
+# MODULI: AI DATA ASSISTANT (VERSIONI AVANCUAR ME DHËNA REALE)
 # region ==================================================
 import anthropic
 import io
 import streamlit as st
+import pandas as pd
 
 
 def shfaq_ai_assistant(df):
     st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave (Claude)")
     st.markdown(
-        "Pyet inteligjencën artificiale për problematika, anomali ose analizë mbi shitjet dhe agjentët."
+        "Pyet inteligjencën artificiale për çdo gjë. Tani AI ka akses te çmimet mesatare dhe shitjet reale!"
     )
 
-    # 1. Konfigurimi i API Key (Pranon sk-ant-...)
+    # 1. Konfigurimi i API Key
     api_key = st.secrets.get("CLAUDE_API_KEY", "")
     if not api_key:
         api_key = st.sidebar.text_input(
@@ -2270,47 +2271,66 @@ def shfaq_ai_assistant(df):
             st.stop()
 
     try:
-        # Inicializimi i klientit të Anthropic
         client = anthropic.Anthropic(api_key=api_key)
     except Exception as e:
         st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # 2. Përgatitja e kontekstit nga SQL DataFrame (df_raw)
-    buffer = io.StringIO()
-    df.info(buf=buffer)
-    struktura_df = buffer.getvalue()
+    # 2. PËRGATITJA E TË DHËNAVE REALE PËR CLAUDE (Që mos të japë më kode)
+    # Llogarisim çmimet mesatare dhe vlerat për çdo artikull direkt në Python
+    with st.spinner("Duke përgatitur pasqyrën e shitjeve për AI..."):
+        try:
+            # Grupimi i të dhënave reale për t'ia dhënë Claude-it si tekst të gatshëm
+            df_analiza = (
+                df.groupby(["Artikulli", "Grup_Filtri"])
+                .agg(
+                    Vlera_Totale=("Vlera_Historike", "sum"),
+                    Sasia_Totale=("Sasia", "sum"),
+                )
+                .reset_index()
+            )
 
-    numri_rreshtave = len(df)
-    forca_shitese_unike = (
-        df["ForcaShitese"].dropna().unique()[:15].tolist()
-        if "ForcaShitese" in df.columns
-        else []
-    )
-    kategorite_unike = (
-        df["kat"].dropna().unique()[:15].tolist() if "kat" in df.columns else []
-    )
-    mostra_te_dhenave = df.head(5).to_string()
+            # Llogaritja e çmimit mesatar real
+            df_analiza["Cmimi_Mesatar"] = (
+                df_analiza["Vlera_Totale"] / df_analiza["Sasia_Totale"]
+            ).round(2)
 
-    # Krijojmë instruksionin e sistemit për Claude
+            # Marrim 40 produktet më të shitura që Claude të ketë faturat kryesore pa u bllokuar memoria
+            top_produkte = (
+                df_analiza.sort_values("Vlera_Totale", ascending=False)
+                .head(40)
+                .to_string(index=False)
+            )
+
+            # Statistika të përgjithshme biznesi
+            total_biznesi = df["Vlera_Historike"].sum()
+            numri_klienteve = (
+                df["KodiKlient"].nunique() if "KodiKlient" in df.columns else 0
+            )
+            numri_agjenteve = (
+                df["ForcaShitese"].nunique() if "ForcaShitese" in df.columns else 0
+            )
+
+        except Exception as e:
+            top_produkte = "Nuk u llogaritën dot për shkak të një gabimi në kolona."
+            total_biznesi = 0
+
+    # Krijojmë instruksionin e sistemit duke i dhënë shifrat e gatshme!
     system_instruction = f"""
-    Ti je asistenti AI i quajtur AXION AI, ekspert i fuqishëm në analizën e të dhënave të shitjeve ERP.
-    Databaza vjen automatikisht nga SQL View 'GetRaportiMadhView' dhe ka {numri_rreshtave} rreshta.
+    Ti je asistenti AI i quajtur AXION AI.
+    Kujdes: Përdoruesi NUK dëshiron kode Python ose udhëzime si të ekzekutojë kode. Ai dëshiron përgjigje direkte me shifra.
     
-    === STRUKTURA E KOLONAVE ===
-    {struktura_df}
+    Këtu ke të dhënat e llogaritura direkt nga sistemi ERP i kompanisë:
     
-    === DISA NGA AGJENTËT (ForcaShitese) ===
-    {forca_shitese_unike}
+    === SHIFRAT E PËRGJITHSHME ===
+    - Xhiro Totale Historike: {total_biznesi:,.0f} Lekë
+    - Numri Total i Klientëve unikë: {numri_klienteve}
+    - Numri i Agjentëve në terren (ForcaShitese): {numri_agjenteve}
     
-    === DISA NGA KATEGORITË (kat) ===
-    {kategorite_unike}
+    === PASQYRA E ARTIKUJVE KRYESORË DHE ÇMIMEVE MESATARE (TOP 40) ===
+    {top_produkte}
     
-    === SHEMBULL I 5 RRESHTAVE T TË PARË ===
-    {mostra_te_dhenave}
-    
-    Përgjigju gjithmonë në gjuhën shqipe në mënyrë profesionale, analitike dhe të strukturuar mirë.
-    Bazoje logjikën fort te kolonat e mësipërme.
+    Nëse përdoruesi të pyet për çmimin mesatar të produkteve DEKA ose të ndonjë artikulli tjetër, shiko tabelën e mësipërme ku çmimet janë të llogaritura te kolona 'Cmimi_Mesatar' dhe jepja direkt vlerën në Lekë! Përgjigju shkurt, saktë dhe vetëm në gjuhën shqipe.
     """
 
     # 3. Ndërtimi i dritares së Chat-it
@@ -2318,7 +2338,7 @@ def shfaq_ai_assistant(df):
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Përshëndetje! Unë jam AXION AI. E lexova strukturën tuaj nga SQL. Çfarë dëshironi të analizojmë ose ku dyshoni se ka anomali?",
+                "content": "Përshëndetje! Tani jam i lidhur direkt me databazën tënde dhe i kam llogaritur çmimet mesatare të artikujve kryesorë. Çfarë dëshiron të dish në lidhje me shifrat?",
             }
         ]
 
@@ -2332,7 +2352,7 @@ def shfaq_ai_assistant(df):
             st.write(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Claude duke analizuar të dhënat..."):
+            with st.spinner("Duke lexuar shifrat..."):
                 try:
                     messages_anthropic = []
                     for m in st.session_state.messages:
@@ -2341,9 +2361,8 @@ def shfaq_ai_assistant(df):
                                 {"role": m["role"], "content": m["content"]}
                             )
 
-                    # Thirrja e unifikuar me modelin e ri zyrtar
                     response = client.messages.create(
-                        model="claude-sonnet-4-6",  # <--- Ky model ekziston dhe zgjidh gabimin 404
+                        model="claude-sonnet-4-6",
                         max_tokens=1024,
                         system=system_instruction,
                         messages=messages_anthropic,
