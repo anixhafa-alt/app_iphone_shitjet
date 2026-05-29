@@ -13,3 +13,4 @@ numpy
 anthropic
 # openai
 # google-generativeai
+google-generativeai
