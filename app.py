@@ -2205,43 +2205,42 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE)
+# MODULI: AI DATA ASSISTANT (CHATBOT PËR DATABASE - CLAUDE)
 # region ==================================================
-import google.generativeai as genai
+import anthropic
 import io
 
 
 def shfaq_ai_assistant(df):
-    st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave")
+    st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave (Claude)")
     st.markdown(
         "Pyet inteligjencën artificiale për problematika, anomali ose analizë mbi shitjet dhe agjentët."
     )
 
-    # 1. Konfigurimi i API Key
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    # 1. Konfigurimi i API Key (Pranon sk-ant-...)
+    api_key = st.secrets.get("CLAUDE_API_KEY", "")
     if not api_key:
         api_key = st.sidebar.text_input(
-            "Vendos Google Gemini API Key:", type="password"
+            "Vendos Anthropic API Key (sk-ant-...):", type="password"
         )
         if not api_key:
             st.info(
-                "🔑 Ju lutem vendosni një API Key në sidebar për të aktivizuar Asistentin AI."
+                "🔑 Ju lutem vendosni API Key-n tuaj të Anthropic në sidebar për të aktivizuar Asistentin AI."
             )
             st.stop()
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # Inicializimi i klientit të Anthropic
+        client = anthropic.Anthropic(api_key=api_key)
     except Exception as e:
-        st.error(f"Gabim gjatë konfigurimit të Gemini: {e}")
+        st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # 2. Përgatitja e kontekstit (Marrim vetëm një snapshot inteligjent të strukturës SQL)
+    # 2. Përgatitja e kontekstit nga SQL DataFrame
     buffer = io.StringIO()
     df.info(buf=buffer)
     struktura_df = buffer.getvalue()
 
-    # Marrim mostrat dhe vlerat unike kryesore
     numri_rreshtave = len(df)
     forca_shitese_unike = (
         df["ForcaShitese"].dropna().unique()[:15].tolist()
@@ -2253,8 +2252,9 @@ def shfaq_ai_assistant(df):
     )
     mostra_te_dhenave = df.head(5).to_string()
 
-    konteksti_ai = f"""
-    Ti je asistenti AI i quajtur AXION AI, ekspert në analizën e të dhënave të shitjeve ERP.
+    # Krijojmë instruksionin e sistemit për Claude
+    system_instruction = f"""
+    Ti je asistenti AI i quajtur AXION AI, ekspert i fuqishëm në analizën e të dhënave të shitjeve ERP.
     Databaza vjen automatikisht nga SQL View 'GetRaportiMadhView' dhe ka {numri_rreshtave} rreshta.
     
     === STRUKTURA E KOLONAVE ===
@@ -2269,8 +2269,8 @@ def shfaq_ai_assistant(df):
     === SHEMBULL I 5 RRESHTAVE TË PARË ===
     {mostra_te_dhenave}
     
-    Përgjigju gjithmonë në gjuhën shqipe në mënyrë profesionale dhe të shkurtër. 
-    Nëse përdoruesi të pyet për rrugët, anomali apo performancë, bazoje logjikën te këto kolona që ke në dispozicion.
+    Përgjigju gjithmonë në gjuhën shqipe në mënyrë profesionale, analitike dhe të strukturuar mirë.
+    Bazoje logjikën fort te kolonat e mësipërme.
     """
 
     # 3. Ndërtimi i dritares së Chat-it
@@ -2278,7 +2278,7 @@ def shfaq_ai_assistant(df):
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Përshëndetje! Unë e lexova me sukses databazën tënde nga SQL. Mund të më pyesësh për strukturën, për agjentët (ForcaShitese), kategoritë (kat) ose për të gjetur anomali në shitje!",
+                "content": "Përshëndetje! Unë jam AXION AI (i fuqizuar nga Claude). E lexova strukturën tuaj nga SQL. Çfarë dëshironi të analizojmë ose ku dyshoni se ka anomali?",
             }
         ]
 
@@ -2292,19 +2292,33 @@ def shfaq_ai_assistant(df):
             st.write(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Duke menduar..."):
+            with st.spinner("Claude duke analizuar të dhënat..."):
                 try:
-                    full_prompt = (
-                        f"{konteksti_ai}\n\nPyetje nga përdoruesi: {prompt}\nPërgjigje:"
+                    # Formatimi i mesazheve sipas strukturës së re të API-së së Anthropic
+                    messages_anthropic = []
+                    for m in st.session_state.messages:
+                        if (
+                            m["role"] != "system"
+                        ):  # Përjashtojmë instruksionet e vjetra nëse ka
+                            messages_anthropic.append(
+                                {"role": m["role"], "content": m["content"]}
+                            )
+
+                    # Thirrja e modelit Claude 3.5 Sonnet
+                    response = client.messages.create(
+                        model="claude-3-5-sonnet-20241022",
+                        max_tokens=1020,
+                        system=system_instruction,
+                        messages=messages_anthropic,
                     )
-                    response = model.generate_content(full_prompt)
-                    përgjigje_ai = response.text
+
+                    përgjigje_ai = response.content[0].text
                     st.write(përgjigje_ai)
                     st.session_state.messages.append(
                         {"role": "assistant", "content": përgjigje_ai}
                     )
                 except Exception as e:
-                    st.error(f"⚠️ Ndodhi një gabim: {e}")
+                    st.error(f"⚠️ Ndodhi një gabim me Claude API: {e}")
 
 
 # Integrimi me menunë (Përdorim df_raw që vjen nga SQL)
