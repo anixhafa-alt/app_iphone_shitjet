@@ -1001,6 +1001,23 @@ elif page == "Realizimi":
         ) * rritja_faktori
         t_target = gp_target_cat["KG_Target"].sum()
 
+        # --- LLOGARITJA E PLANIT PËR KLIENTË DHE KODE UNITARË ---
+        # SHËNIM: Ndryshoni "Kodi_Artikullit" me emrin e saktë të kolonës tuaj nëse ndryshon
+        kodi_col = (
+            "Kodi_Artikullit"
+            if "Kodi_Artikullit" in df_raw.columns
+            else df_raw.columns[0]
+        )
+
+        kliente_unike_ref = dff_ref["Klienti"].nunique()
+        plan_kliente = max(
+            1, round((kliente_unike_ref / n_months_ref) * rritja_faktori)
+        )
+
+        kode_unike_ref = dff_ref[kodi_col].nunique()
+        plan_kode = max(1, round((kode_unike_ref / n_months_ref) * rritja_faktori))
+
+        # --- FILTRIMI LIVE ---
         mask_live = (df_raw["Data"].dt.year == sot.year) & (
             df_raw["Data"].dt.month == sot.month
         )
@@ -1013,6 +1030,10 @@ elif page == "Realizimi":
             df_live = df_live[df_live["Klienti"].isin(klientet_selected)]
 
         t_real = df_live["kg"].sum()
+
+        # --- REALIZIMI AKTUAL I KLIENTËVE DHE KODEVE ---
+        real_kliente = df_live["Klienti"].nunique()
+        real_kode = df_live[kodi_col].nunique()
 
         # --- LLOGARITJA E ÇMIMIT MESATAR LIVE (KORRIGJUAR) ---
         t_vlera_live = (
@@ -1042,11 +1063,13 @@ elif page == "Realizimi":
 
         # --- 3. METRIKAT KRYESORE ---
         total_perc = (t_real / t_target * 100) if t_target > 0 else 0
-        c1, c2, c5, c3, c4 = st.columns(
-            5
-        )  # Ndryshuar në 5 kolona për të rreshtuar Çmimin Mesatar
+
+        # Krijojmë 7 kolona për të shfaqur të gjitha metrikat në një rresht vizual të pastër
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+
         c1.metric("Target KG", f"{t_target:,.0f}")
         c2.metric("Realizuar KG", f"{t_real:,.0f}")
+
         status_color = "normal" if total_perc >= koha_perq else "inverse"
         c3.metric(
             "Realizimi %",
@@ -1054,14 +1077,25 @@ elif page == "Realizimi":
             delta=f"{total_perc - koha_perq:.1f}% vs Koha",
             delta_color=status_color,
         )
+
+        # Metrika e re: Klientët e realizuar vs Plan
+        perc_kliente = (real_kliente / plan_kliente * 100) if plan_kliente > 0 else 0
         c4.metric(
+            "Klientë Realiz/Plan",
+            f"{real_kliente}/{plan_kliente}",
+            f"{perc_kliente:.1f}%",
+        )
+
+        # Metrika e re: Kodet unitare të shitura vs Plan
+        perc_kode = (real_kode / plan_kode * 100) if plan_kode > 0 else 0
+        c5.metric("Kode Unitare R/P", f"{real_kode}/{plan_kode}", f"{perc_kode:.1f}%")
+
+        c6.metric(
             "Ditë Pune",
             f"{ditet_punes_deri_sot}/{ditet_punes_totale}",
             f"{koha_perq:.1f}% e muajit",
         )
-        c5.metric(
-            "Çmimi Mes./kg", f"{cmimi_mesatar:,.1f} Lekë"
-        )  # Shfaqja e metrikës së re
+        c7.metric("Çmimi Mes./kg", f"{cmimi_mesatar:,.1f} Lekë")
 
         st.divider()
 
@@ -1088,7 +1122,7 @@ elif page == "Realizimi":
 
         df_m_kaluar = df_raw[mask_m].copy()
 
-        # APLIKIMI I FILTRAVE (Kjo rregullon vlerat që nuk ndryshonin)
+        # APLIKIMI I FILTRAVE
         if grup_sel != "Të gjitha":
             df_m_kaluar = df_m_kaluar[df_m_kaluar["Grup_Filtri"] == grup_sel]
         if agj_sel != "Të gjithë":
@@ -1110,7 +1144,7 @@ elif page == "Realizimi":
 
         df_v_kaluar = df_raw[mask_v].copy()
 
-        # APLIKIMI I FILTRAVE (Edhe për vitin e kaluar)
+        # APLIKIMI I FILTRAVE
         if grup_sel != "Të gjitha":
             df_v_kaluar = df_v_kaluar[df_v_kaluar["Grup_Filtri"] == grup_sel]
         if agj_sel != "Të gjithë":
@@ -1163,7 +1197,6 @@ elif page == "Realizimi":
 
         with t2:
             st.subheader("Ecuria sipas Agjentëve")
-            # Agregimi live për agjentët
             gp_agj_target = (
                 dff_ref.groupby("ForcaShitese").agg({"kg": "sum"}).reset_index()
             )
@@ -1204,7 +1237,6 @@ elif page == "Realizimi":
 
         with t3:
             st.subheader("Ecuria sipas Klientëve")
-            # Agregimi live për klientët
             gp_kl_target = (
                 dff_ref.groupby(["Klienti", "ForcaShitese"])
                 .agg({"kg": "sum"})
@@ -1229,7 +1261,6 @@ elif page == "Realizimi":
             ).fillna(0)
             df_kl["%"] = (df_kl["Real_KL"] / df_kl["Target_KL"] * 100).clip(upper=100)
 
-            # Shfaqim vetëm klientët që kanë një target (për të shmangur listat e pafundme)
             df_kl = df_kl[df_kl["Target_KL"] > 0]
 
             st.dataframe(
@@ -1250,13 +1281,10 @@ elif page == "Realizimi":
         # --- 7. EKSPORTI NË HTML (Me Filtra dhe Emër Dinamik) ---
         st.divider()
 
-        # Përgatitja e emrit të fajlit
         agj_emri_fajl = (
             agj_sel.replace(" ", "_") if agj_sel != "Të gjithë" else "Gjithe_Agjentet"
         )
         file_name_custom = f"Raport_{agj_emri_fajl}_{sot.strftime('%d_%m_%Y')}.html"
-
-        # Përgatitja e tekstit të klientëve për HTML
         klientet_text = (
             ", ".join(klientet_selected) if klientet_selected else "Të gjithë"
         )
@@ -1272,10 +1300,10 @@ elif page == "Realizimi":
                 .filter-bar {{ background-color: #ffffff; padding: 15px; border: 1px solid #e0e0e0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 20px; }}
                 .filter-item {{ color: #555; }}
                 .filter-item strong {{ color: #1a237e; }}
-                .stats-container {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 15px; }}
-                .stat-box {{ background: white; padding: 20px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 18%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
-                .stat-box h3 {{ margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #777; }}
-                .stat-box p {{ font-size: 22px; font-weight: bold; margin: 10px 0; color: #1a237e; }}
+                .stats-container {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 10px; flex-wrap: wrap; }}
+                .stat-box {{ background: white; padding: 15px 10px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 12%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+                .stat-box h3 {{ margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; }}
+                .stat-box p {{ font-size: 16px; font-weight: bold; margin: 10px 0; color: #1a237e; }}
                 .trend-section {{ background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px; }}
                 table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
                 th, td {{ padding: 15px; text-align: left; border-bottom: 1px solid #eee; }}
@@ -1303,6 +1331,8 @@ elif page == "Realizimi":
                 <div class="stat-box"><h3>Targeti (Muaj)</h3><p>{t_target:,.0f} kg</p></div>
                 <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div>
                 <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div>
+                <div class="stat-box"><h3>Klientë R/P</h3><p>{real_kliente}/{plan_kliente}</p></div>
+                <div class="stat-box"><h3>Kode R/P</h3><p>{real_kode}/{plan_kode}</p></div>
                 <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div>
                 <div class="stat-box"><h3>Çmimi Mesatar</h3><p>{cmimi_mesatar:,.2f} Lekë</p></div>
             </div>
