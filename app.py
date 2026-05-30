@@ -971,7 +971,6 @@ elif page == "Realizimi":
     import numpy as np
 
     sot = datetime.now()
-    # st.title(f"📈 Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
     st.title(f"Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
@@ -995,27 +994,27 @@ elif page == "Realizimi":
         )
         rritja_faktori = 1 + (rritja / 100)
 
+        # Targeti në KG
         gp_target_cat = dff_ref.groupby(["kat"]).agg({"kg": "sum"}).reset_index()
         gp_target_cat["KG_Target"] = (
             gp_target_cat["kg"] / n_months_ref
         ) * rritja_faktori
         t_target = gp_target_cat["KG_Target"].sum()
 
-        # --- LLOGARITJA E PLANIT PËR KLIENTË DHE KODE UNITARË ---
-        # SHËNIM: Ndryshoni "Kodi_Artikullit" me emrin e saktë të kolonës tuaj nëse ndryshon
-        kodi_col = (
-            "Kodi_Artikullit"
-            if "Kodi_Artikullit" in df_raw.columns
-            else df_raw.columns[0]
-        )
+        # --- KORRIGJIMI: LLOGARITJA E PLANIT REAL TË KLIENTËVE DHE KODEVE ---
+        # Gjejmë numrin e klientëve unikë për çdo muaj të periudhës së referencës dhe marrim mesataren
+        dff_ref["Viti_Muaji"] = dff_ref["Data"].dt.to_period("M")
 
-        kliente_unike_ref = dff_ref["Klienti"].nunique()
-        plan_kliente = max(
-            1, round((kliente_unike_ref / n_months_ref) * rritja_faktori)
+        kliente_per_muaj = dff_ref.groupby("Viti_Muaji")["Klienti"].nunique()
+        mesatarja_kliente_ref = (
+            kliente_per_muaj.mean() if not kliente_per_muaj.empty else 0
         )
+        plan_kliente = max(1, round(mesatarja_kliente_ref * rritja_faktori))
 
-        kode_unike_ref = dff_ref[kodi_col].nunique()
-        plan_kode = max(1, round((kode_unike_ref / n_months_ref) * rritja_faktori))
+        # Gjejmë numrin e kodeve unike (KodiArt) për çdo muaj të periudhës së referencës dhe marrim mesataren
+        kode_per_muaj = dff_ref.groupby("Viti_Muaji")["KodiArt"].nunique()
+        mesatarja_kode_ref = kode_per_muaj.mean() if not kode_per_muaj.empty else 0
+        plan_kode = max(1, round(mesatarja_kode_ref * rritja_faktori))
 
         # --- FILTRIMI LIVE ---
         mask_live = (df_raw["Data"].dt.year == sot.year) & (
@@ -1031,9 +1030,11 @@ elif page == "Realizimi":
 
         t_real = df_live["kg"].sum()
 
-        # --- REALIZIMI AKTUAL I KLIENTËVE DHE KODEVE ---
+        # --- KORRIGJIMI: REALIZIMI AKTUAL DISTINCT (KLIENTË DHE KODE) ---
         real_kliente = df_live["Klienti"].nunique()
-        real_kode = df_live[kodi_col].nunique()
+        real_kode = df_live[
+            "KodiArt"
+        ].nunique()  # Merr vetëm kodet unike të shitura realisht këtë muaj
 
         # --- LLOGARITJA E ÇMIMIT MESATAR LIVE (KORRIGJUAR) ---
         t_vlera_live = (
@@ -1064,7 +1065,6 @@ elif page == "Realizimi":
         # --- 3. METRIKAT KRYESORE ---
         total_perc = (t_real / t_target * 100) if t_target > 0 else 0
 
-        # Krijojmë 7 kolona për të shfaqur të gjitha metrikat në një rresht vizual të pastër
         c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
 
         c1.metric("Target KG", f"{t_target:,.0f}")
@@ -1078,7 +1078,6 @@ elif page == "Realizimi":
             delta_color=status_color,
         )
 
-        # Metrika e re: Klientët e realizuar vs Plan
         perc_kliente = (real_kliente / plan_kliente * 100) if plan_kliente > 0 else 0
         c4.metric(
             "Klientë Realiz/Plan",
@@ -1086,7 +1085,6 @@ elif page == "Realizimi":
             f"{perc_kliente:.1f}%",
         )
 
-        # Metrika e re: Kodet unitare të shitura vs Plan
         perc_kode = (real_kode / plan_kode * 100) if plan_kode > 0 else 0
         c5.metric("Kode Unitare R/P", f"{real_kode}/{plan_kode}", f"{perc_kode:.1f}%")
 
@@ -1112,17 +1110,15 @@ elif page == "Realizimi":
             delta=f"{projeksioni - t_target:,.0f} vs Plani",
         )
 
-        # B. vs Muaji Kaluar (Prill deri në datën korrente)
+        # B. vs Muaji Kaluar
         m_kaluar_date = sot - pd.DateOffset(months=1)
         mask_m = (
             (df_raw["Data"].dt.year == m_kaluar_date.year)
             & (df_raw["Data"].dt.month == m_kaluar_date.month)
             & (df_raw["Data"].dt.day <= sot.day)
         )
-
         df_m_kaluar = df_raw[mask_m].copy()
 
-        # APLIKIMI I FILTRAVE
         if grup_sel != "Të gjitha":
             df_m_kaluar = df_m_kaluar[df_m_kaluar["Grup_Filtri"] == grup_sel]
         if agj_sel != "Të gjithë":
@@ -1134,17 +1130,15 @@ elif page == "Realizimi":
         rritja_m = ((t_real / t_m_kaluar) - 1) * 100 if t_m_kaluar > 0 else 0
         tr2.metric("vs Muaji Kaluar", f"{t_m_kaluar:,.0f} kg", delta=f"{rritja_m:.1f}%")
 
-        # C. vs Viti Kaluar (Maj 2025 deri në datën korrente)
+        # C. vs Viti Kaluar
         v_kaluar_date = sot - pd.DateOffset(years=1)
         mask_v = (
             (df_raw["Data"].dt.year == v_kaluar_date.year)
             & (df_raw["Data"].dt.month == v_kaluar_date.month)
             & (df_raw["Data"].dt.day <= sot.day)
         )
-
         df_v_kaluar = df_raw[mask_v].copy()
 
-        # APLIKIMI I FILTRAVE
         if grup_sel != "Të gjitha":
             df_v_kaluar = df_v_kaluar[df_v_kaluar["Grup_Filtri"] == grup_sel]
         if agj_sel != "Të gjithë":
@@ -1157,8 +1151,6 @@ elif page == "Realizimi":
         tr3.metric("vs Viti Kaluar", f"{t_v_kaluar:,.0f} kg", delta=f"{rritja_v:.1f}%")
 
         st.divider()
-
-        # --- 5. TABET ME BARET E PROGRESIT (Barat e kuqe) ---
         st.divider()
 
         # --- TABET E REALIZIMIT ---
@@ -1260,7 +1252,6 @@ elif page == "Realizimi":
                 how="left",
             ).fillna(0)
             df_kl["%"] = (df_kl["Real_KL"] / df_kl["Target_KL"] * 100).clip(upper=100)
-
             df_kl = df_kl[df_kl["Target_KL"] > 0]
 
             st.dataframe(
@@ -1278,7 +1269,7 @@ elif page == "Realizimi":
                 use_container_width="stretch",
             )
 
-        # --- 7. EKSPORTI NË HTML (Me Filtra dhe Emër Dinamik) ---
+        # --- 7. EKSPORTI NË HTML ---
         st.divider()
 
         agj_emri_fajl = (
