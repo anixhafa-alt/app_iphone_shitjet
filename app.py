@@ -288,42 +288,6 @@ if df_raw is not None and df_link is not None:
         )
 # endregion
 
-# =========================================================
-# KETU VENDOSET KODI I TESTIT QE TE DALË NE KRYE TE FAQES
-# =========================================================
-st.write("## 📊 TESTI I PËRKOHSHËM PËR MAJ 2026")
-if df_raw is not None:
-    try:
-        # Filtrojmë muajin Maj 2026 nga df_raw
-        df_maj2026 = df_raw[
-            (df_raw["Data"].dt.year == 2026) & (df_raw["Data"].dt.month == 5)
-        ].copy()
-
-        # Agregimi i të dhënave
-        result = (
-            df_maj2026.groupby("kat")
-            .agg(
-                Vlera_Totale=("Vlera_Historike", "sum"),
-                Sasia_Totale=("Sasia", "sum"),
-                KG_Totale=("kg", "sum"),
-                Nr_Transaksione=("Vlera_Historike", "count"),
-                Nr_Klientet=("KodiKlient", "nunique"),
-            )
-            .sort_values("Vlera_Totale", ascending=False)
-        )
-
-        result["Pesha_%"] = (
-            result["Vlera_Totale"] / result["Vlera_Totale"].sum() * 100
-        ).round(2)
-
-        # Shfaqim tabelën dhe vlerën totale në krye të aplikacionit
-        st.dataframe(result, use_container_width=True)
-        st.success(f"💰 TOTAL MAJ 2026: {result['Vlera_Totale'].sum():,.0f} Lekë")
-
-    except Exception as e:
-        st.error(f"Gabim teknik gjatë llogaritjes së testit: {e}")
-# =========================================================
-
 
 # =========================================================
 # RIFRESKIMI AUTOMATIK ÇDO 30 MINUTA (PA NGADALËSIM)
