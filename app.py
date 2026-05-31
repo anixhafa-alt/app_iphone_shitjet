@@ -1028,7 +1028,7 @@ elif page == "Realizimi":
             st.session_state.tipi_muaji = "Muaji Korrent (Live)"
             st.rerun()
 
-    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
+    # st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
     st.divider()
     # ... (pjesa e përzgjedhjes së periudhës dhe përcaktimit të variablit 'sot' dhe st.title)
 
