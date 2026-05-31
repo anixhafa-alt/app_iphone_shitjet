@@ -1298,66 +1298,66 @@ elif page == "Realizimi":
                 <p style="margin:10px 0 0 0; opacity: 0.8;">Raport zyrtar i performancës së shitjeve</p> [cite: 59]
             </div> [cite: 59]
 
-            <div class="filter-bar">
-                <div class="filter-item">Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div>
-                <div class="filter-item">📈 Rritja e aplikuar: <strong>{rritja}%</strong></div>
-                <div class="filter-item">📦 Grupi: <strong>{grup_sel}</strong></div>
-                <div class="filter-item">👤 Agjenti: <strong>{agj_sel}</strong></div>
-                <div class="filter-item">🏪 Klientët: <strong>{klientet_text}</strong></div>
-            </div>
+            <div class="filter-bar"> [cite: 59]
+                <div class="filter-item">Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div> [cite: 59]
+                <div class="filter-item">📈 Rritja e aplikuar: <strong>{rritja}%</strong></div> [cite: 59]
+                <div class="filter-item">📦 Grupi: <strong>{grup_sel}</strong></div> [cite: 59]
+                <div class="filter-item">👤 Agjenti: <strong>{agj_sel}</strong></div> [cite: 59]
+                <div class="filter-item">🏪 Klientët: <strong>{klientet_text}</strong></div> [cite: 60]
+            </div> [cite: 60]
 
-            <div class="stats-container">
-                <div class="stat-box"><h3>Targeti (Muaj)</h3><p>{t_target:,.0f} kg</p></div>
-                <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div>
-                <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div>
+            <div class="stats-container"> [cite: 60]
+                <div class="stat-box"><h3>Targeti (Muaj)</h3><p>{t_target:,.0f} kg</p></div> [cite: 60]
+                <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div> [cite: 60]
+                <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div> [cite: 60]
                 <div class="stat-box"><h3>Klientë R/P</h3><p>{real_kliente}/{plan_kliente}</p></div>
                 <div class="stat-box"><h3>Kode R/P</h3><p>{real_kode}/{plan_kode}</p></div>
-                <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div>
-                <div class="stat-box"><h3>Çmimi Mesatar</h3><p>{cmimi_mesatar:,.2f} Lekë</p></div>
-            </div>
+                <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div> [cite: 61]
+                <div class="stat-box"><h3>Çmimi Mesatar</h3><p>{cmimi_mesatar:,.2f} Lekë</p></div> [cite: 61]
+            </div> [cite: 61]
 
-            <div class="trend-section">
-                <h2 style="margin-top:0; color: #1a237e; font-size: 18px;">🔍 Krahasimi i Trendeve (Pa të diela)</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Lloji i Trendit</th>
-                            <th>Vlera e Krahasuar</th>
-                            <th>Devijimi / Rritja</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>Trendi Linear</strong> (Parashikimi i mbylljes)</td>
-                            <td>{projeksioni:,.0f} kg</td>
-                            <td class="{'positive' if projeksioni >= t_target else 'negative'}">
-                                {projeksioni - t_target:,.0f} kg vs Objektivi
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><strong>vs Muaji i Kaluar</strong> (Deri në datën {sot.day})</td>
-                            <td>{t_m_kaluar:,.0f} kg</td>
-                            <td class="{'positive' if rritja_m >= 0 else 'negative'}">
-                                {rritja_m:+.1f}%
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><strong>vs Viti i Kaluar</strong> (Deri në datën {sot.day})</td>
-                            <td>{t_v_kaluar:,.0f} kg</td>
-                            <td class="{'positive' if rritja_v >= 0 else 'negative'}">
-                                {rritja_v:+.1f}%
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <div class="trend-section"> [cite: 61]
+                <h2 style="margin-top:0; color: #1a237e; font-size: 18px;">🔍 Krahasimi i Trendeve (Pa të diela)</h2> [cite: 61, 62]
+                <table> [cite: 62]
+                    <thead> [cite: 62]
+                        <tr> [cite: 62]
+                            <th>Lloji i Trendit</th> [cite: 62]
+                            <th>Vlera e Krahasuar</th> [cite: 63]
+                            <th>Devijimi / Rritja</th> [cite: 63]
+                        </tr> [cite: 63]
+                    </thead> [cite: 64]
+                    <tbody> [cite: 64]
+                        <tr> [cite: 64]
+                            <td><strong>Trendi Linear</strong> (Parashikimi i mbylljes)</td> [cite: 64]
+                            <td>{projeksioni:,.0f} kg</td> [cite: 65]
+                            <td class="{'positive' if projeksioni >= t_target else 'negative'}"> [cite: 65]
+                                {projeksioni - t_target:,.0f} kg vs Objektivi [cite: 66]
+                            </td> [cite: 66]
+                        </tr> [cite: 66]
+                        <tr> [cite: 66]
+                            <td><strong>vs Muaji i Kaluar</strong> (Deri në datën {sot.day})</td> [cite: 66]
+                            <td>{t_m_kaluar:,.0f} kg</td> [cite: 67]
+                            <td class="{'positive' if rritja_m >= 0 else 'negative'}"> [cite: 67]
+                                {rritja_m:+.1f}% [cite: 68]
+                            </td> [cite: 68]
+                        </tr> [cite: 68]
+                        <tr> [cite: 68]
+                            <td><strong>vs Viti i Kaluar</strong> (Deri në datën {sot.day})</td> [cite: 68]
+                            <td>{t_v_kaluar:,.0f} kg</td> [cite: 69]
+                            <td class="{'positive' if rritja_v >= 0 else 'negative'}"> [cite: 69]
+                                {rritja_v:+.1f}% [cite: 70]
+                            </td> [cite: 70]
+                        </tr> [cite: 70]
+                    </tbody> [cite: 70]
+                </table> [cite: 70]
+            </div> [cite: 70]
 
-            <div class="footer">
-                Gjeneruar nga Sistemi i Monitorimit të Shitjeve | Data: {sot.strftime('%d/%m/%Y %H:%M:%S')}
-            </div>
-        </body>
-        </html>
-        """
+            <div class="footer"> [cite: 71]
+                Gjeneruar nga Sistemi i Monitorimit të Shitjeve | Data: {sot.strftime('%d/%m/%Y %H:%M:%S')} [cite: 71, 72]
+            </div> [cite: 72]
+        </body> [cite: 72]
+        </html> [cite: 72]
+        """ [cite: 72]
 
         st.download_button( [cite: 72]
             label=f"💾 Shkarko Raportin: {file_name_custom}", [cite: 72]
