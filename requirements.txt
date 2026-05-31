@@ -15,3 +15,4 @@ anthropic
 # google-generativeai
 google-generativeai
 anthropic
+pandasql
