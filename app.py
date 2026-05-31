@@ -1476,7 +1476,7 @@ elif page == "Mundësitë":
 
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (I BLINDUAR NGA VALUERROR TË DATAVE)
+# MODULI I PLOTË: SHITJET DITORE (ME PËRZGJEDHJE DINAMIKE TË PERIUDHAVE)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1493,8 +1493,8 @@ elif page == "Shitjet Ditore":
     # Shfaqja e datës së sotme ekzakte në raport
     st.markdown(
         f"""
-        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid #1a237e; margin-bottom: 25px;'>
-            <h3 style='color: #1a237e; margin: 0; font-size: 20px;'>Muaji Aktual: {muajt_sq.get(sot.month)} {sot.year}</h3>
+        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid #1a237e; margin-bottom: 15px;'>
+            <h3 style='color: #1a237e; margin: 0; font-size: 20px;'>Raporti i Shitjeve Ditore Krahasuese</h3>
             <p style='margin: 5px 0 0 0; color: #666; font-size: 14px;'>
                 📅 Data e gjenerimit të raportit: <strong>{sot.strftime('%d/%m/%Y')}</strong> | 👤 Agjenti: <strong>{agj_sel}</strong>
             </p>
@@ -1508,29 +1508,101 @@ elif page == "Shitjet Ditore":
         kolona_kg = "kg"
         kolona_vlera = "Vlera_Historike"
 
-        # --- LLOGARITJA AUTOMATIKE E PERIUDHAVE ---
-        vit_aktual = sot.year
-        muaj_aktual = sot.month
-
-        if muaj_aktual == 1:
-            vit_para_muaj = vit_aktual - 1
-            para_muaj = 12
-        else:
-            vit_para_muaj = vit_aktual
-            para_muaj = muaj_aktual - 1
-
-        vit_para_vit = vit_aktual - 1
-        para_vit_muaj = muaj_aktual
-
-        # --- EMRAT DINAMIKË PËR METRIKAT DHE LEGJENDËN ---
-        emri_muaj_aktual = f"{muajt_sq.get(muaj_aktual).upper()} {vit_aktual}"
-        emri_muaj_kaluar = f"{muajt_sq.get(para_muaj).upper()} {vit_para_muaj}"
-        emri_vit_kaluar = f"{muajt_sq.get(para_vit_muaj).upper()} {vit_para_vit}"
-
-        # --- FILTRIMET E PËRGJITHSHËM ---
+        # --- PREGATITJA E DATASETIT BAZE ---
         df_base = df_raw.copy()
         df_base["Data"] = pd.to_datetime(df_base["Data"], errors="coerce")
 
+        # Gjejmë vitet dhe muajt unikë në databazë për t'i dhënë si opsione zgjedhjeje
+        vitet_disponueshme = sorted(
+            list(df_base["Data"].dt.year.dropna().unique()), reverse=True
+        )
+        if sot.year not in vitet_disponueshme:
+            vitet_disponueshme.insert(0, sot.year)
+
+        # --- LLOGARITJA E PERIUDHAVE DEFAULT ---
+        vit_aktual_def = sot.year
+        muaj_aktual_def = sot.month
+
+        if muaj_aktual_def == 1:
+            vit_para_muaj_def = vit_aktual_def - 1
+            para_muaj_def = 12
+        else:
+            vit_para_muaj_def = vit_aktual_def
+            para_muaj_def = muaj_aktual_def - 1
+
+        vit_para_vit_def = vit_aktual_def - 1
+        para_vit_muaj_def = muaj_aktual_def
+
+        # --- SEKSIONI I FILTRAVE TË PERIUDHAVE (SELECTION BOXES) ---
+        st.markdown("##### 📅 Përzgjidhni periudhat për krahasim:")
+        col_p1, col_p2, col_p3 = st.columns(3)
+
+        with col_p1:
+            st.markdown("**Grafiku 1 (Kryesor / Aktual)**")
+            sel_muaj_1 = st.selectbox(
+                "Muaji (G1)",
+                list(muajt_sq.keys()),
+                format_func=lambda x: muajt_sq[x],
+                index=list(muajt_sq.keys()).index(muaj_aktual_def),
+                key="m1",
+            )
+            sel_vit_1 = st.selectbox(
+                "Viti (G1)",
+                vitet_disponueshme,
+                index=(
+                    vitet_disponueshme.index(vit_aktual_def)
+                    if vit_aktual_def in vitet_disponueshme
+                    else 0
+                ),
+                key="v1",
+            )
+
+        with col_p2:
+            st.markdown("**Grafiku 2 (Krahasues i parë)**")
+            sel_muaj_2 = st.selectbox(
+                "Muaji (G2)",
+                list(muajt_sq.keys()),
+                format_func=lambda x: muajt_sq[x],
+                index=list(muajt_sq.keys()).index(para_muaj_def),
+                key="m2",
+            )
+            sel_vit_2 = st.selectbox(
+                "Viti (G2)",
+                vitet_disponueshme,
+                index=(
+                    vitet_disponueshme.index(vit_para_muaj_def)
+                    if vit_para_muaj_def in vitet_disponueshme
+                    else 0
+                ),
+                key="v2",
+            )
+
+        with col_p3:
+            st.markdown("**Grafiku 3 (Krahasues i dytë)**")
+            sel_muaj_3 = st.selectbox(
+                "Muaji (G3)",
+                list(muajt_sq.keys()),
+                format_func=lambda x: muajt_sq[x],
+                index=list(muajt_sq.keys()).index(para_vit_muaj_def),
+                key="m3",
+            )
+            sel_vit_3 = st.selectbox(
+                "Viti (G3)",
+                vitet_disponueshme,
+                index=(
+                    vitet_disponueshme.index(vit_para_vit_def)
+                    if vit_para_vit_def in vitet_disponueshme
+                    else 0
+                ),
+                key="v3",
+            )
+
+        # --- EMRAT DINAMIKË BAZUAR MBI ZGJEDHJET ---
+        emri_muaj_1 = f"{muajt_sq.get(sel_muaj_1).upper()} {sel_vit_1}"
+        emri_muaj_2 = f"{muajt_sq.get(sel_muaj_2).upper()} {sel_vit_2}"
+        emri_muaj_3 = f"{muajt_sq.get(sel_muaj_3).upper()} {sel_vit_3}"
+
+        # --- APLIKIMI I FILTRAVE TË TJERË (KLIENTË, AGJENTË, GRUPE) ---
         if grup_sel != "Të gjitha":
             df_base = df_base[df_base["Grup_Filtri"] == grup_sel]
 
@@ -1562,17 +1634,17 @@ elif page == "Shitjet Ditore":
                 )
             return {}
 
-        data_aktual = merr_te_dhenat_mujore(df_base, vit_aktual, muaj_aktual)
-        data_para_muaj = merr_te_dhenat_mujore(df_base, vit_para_muaj, para_muaj)
-        data_para_vit = merr_te_dhenat_mujore(df_base, vit_para_vit, para_vit_muaj)
+        data_aktual = merr_te_dhenat_mujore(df_base, sel_vit_1, sel_muaj_1)
+        data_para_muaj = merr_te_dhenat_mujore(df_base, sel_vit_2, sel_muaj_2)
+        data_para_vit = merr_te_dhenat_mujore(df_base, sel_vit_3, sel_muaj_3)
 
-        # Gjejmë numrin total të ditëve për secilin muaj
-        _, ditet_totale_aktual = calendar.monthrange(vit_aktual, muaj_aktual)
-        _, ditet_totale_para_muaj = calendar.monthrange(vit_para_muaj, para_muaj)
-        _, ditet_totale_para_vit = calendar.monthrange(vit_para_vit, para_vit_muaj)
+        # Gjejmë numrin total të ditëve për secilin muaj të zgjedhur
+        _, ditet_totale_m1 = calendar.monthrange(sel_vit_1, sel_muaj_1)
+        _, ditet_totale_m2 = calendar.monthrange(sel_vit_2, sel_muaj_2)
+        _, ditet_totale_m3 = calendar.monthrange(sel_vit_3, sel_muaj_3)
 
-        # --- PREGATITJA E KASKADËS ---
-        ditet_numerik = list(range(1, ditet_totale_aktual + 1))
+        # Ditët në boshtin X do të udhëhiqen nga muaji kryesor i zgjedhur (Grafiku 1)
+        ditet_numerik = list(range(1, ditet_totale_m1 + 1))
         ditet_etiketa = [f"{d:02d}" for d in ditet_numerik]
 
         def llogarit_kaskaden_dhe_cmimin(data_dict, nr_dite_muaji):
@@ -1598,20 +1670,19 @@ elif page == "Shitjet Ditore":
             return vlerat_baze, vlerat_reale, cmimi_mesatar
 
         base_aktual, y_aktual, cm_mes_aktual = llogarit_kaskaden_dhe_cmimin(
-            data_aktual, ditet_totale_aktual
+            data_aktual, ditet_totale_m1
         )
         base_para_muaj, y_para_muaj, cm_mes_para_muaj = llogarit_kaskaden_dhe_cmimin(
-            data_para_muaj, ditet_totale_para_muaj
+            data_para_muaj, ditet_totale_m2
         )
         base_para_vit, y_para_vit, cm_mes_para_vit = llogarit_kaskaden_dhe_cmimin(
-            data_para_vit, ditet_totale_para_vit
+            data_para_vit, ditet_totale_m3
         )
 
-        # --- LLOGARITJA E METRIKAVE LIKE-TO-LIKE (E mbrojtur nga mbingarkesa e ditëve) ---
+        # --- LLOGARITJA E METRIKAVE LIKE-TO-LIKE ---
         def llogarit_kumulativ_deri_diten(data_dict, max_day, limit_muaji):
             sasia_kumulative = 0.0
             vlera_kumulative = 0.0
-            # Sigurohemi që dita e kërkuar të mos kalojë ditët maksimale të atij muaji specifik
             kufiri_real = min(max_day, limit_muaji)
 
             for d in range(1, kufiri_real + 1):
@@ -1626,17 +1697,15 @@ elif page == "Shitjet Ditore":
 
         totali_aktual = sum(y_aktual)
         totali_para_muaj_l2l, cm_mes_para_muaj_l2l = llogarit_kumulativ_deri_diten(
-            data_para_muaj, dita_korrente, ditet_totale_para_muaj
+            data_para_muaj, dita_korrente, ditet_totale_m2
         )
         totali_para_vit_l2l, cm_mes_para_vit_l2l = llogarit_kumulativ_deri_diten(
-            data_para_vit, dita_korrente, ditet_totale_para_vit
+            data_para_vit, dita_korrente, ditet_totale_m3
         )
 
-        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Hënë - Shtunë, e mbrojtur me min()) ---
+        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Hënë - Shtunë) ---
         def llogarit_mesatare_dite_pune(vit, muaj, max_day, limit_muaji, data_dict):
-            # Nëse dita_korrente është 31 dhe muaji (si Prilli) ka 30 ditë, llogaritja ndalet automatikisht në ditën e 30
             kufiri_real = min(max_day, limit_muaji)
-
             ditet_punes = [
                 d
                 for d in range(1, kufiri_real + 1)
@@ -1648,76 +1717,62 @@ elif page == "Shitjet Ditore":
             )
             return (sasia_totale_pune / nr_dite_pune) if nr_dite_pune > 0 else 0.0
 
-        # 1. Mesatarja Live (Deri në ditën aktuale / kufirin maksimal të muajit)
-        mes_dite_l2l_aktual = llogarit_mesatare_dite_pune(
-            vit_aktual, muaj_aktual, dita_korrente, ditet_totale_aktual, data_aktual
+        # Llogaritja e mesatareve ditore operative dhe të plota
+        mes_dite_l2l_m1 = llogarit_mesatare_dite_pune(
+            sel_vit_1, sel_muaj_1, dita_korrente, ditet_totale_m1, data_aktual
         )
-        mes_dite_l2l_para_muaj = llogarit_mesatare_dite_pune(
-            vit_para_muaj,
-            para_muaj,
-            dita_korrente,
-            ditet_totale_para_muaj,
-            data_para_muaj,
+        mes_dite_l2l_m2 = llogarit_mesatare_dite_pune(
+            sel_vit_2, sel_muaj_2, dita_korrente, ditet_totale_m2, data_para_muaj
         )
-        mes_dite_l2l_para_vit = llogarit_mesatare_dite_pune(
-            vit_para_vit,
-            para_vit_muaj,
-            dita_korrente,
-            ditet_totale_para_vit,
-            data_para_vit,
+        mes_dite_l2l_m3 = llogarit_mesatare_dite_pune(
+            sel_vit_3, sel_muaj_3, dita_korrente, ditet_totale_m3, data_para_vit
         )
 
-        # 2. Mesatarja e Plotë (Për të gjithë muajin e kaluar/vitin e kaluar)
-        mes_dite_plote_para_muaj = llogarit_mesatare_dite_pune(
-            vit_para_muaj,
-            para_muaj,
-            ditet_totale_para_muaj,
-            ditet_totale_para_muaj,
-            data_para_muaj,
+        mes_dite_plote_m1 = llogarit_mesatare_dite_pune(
+            sel_vit_1, sel_muaj_1, ditet_totale_m1, ditet_totale_m1, data_aktual
         )
-        mes_dite_plote_para_vit = llogarit_mesatare_dite_pune(
-            vit_para_vit,
-            para_vit_muaj,
-            ditet_totale_para_vit,
-            ditet_totale_para_vit,
-            data_para_vit,
+        mes_dite_plote_m2 = llogarit_mesatare_dite_pune(
+            sel_vit_2, sel_muaj_2, ditet_totale_m2, ditet_totale_m2, data_para_muaj
+        )
+        mes_dite_plote_m3 = llogarit_mesatare_dite_pune(
+            sel_vit_3, sel_muaj_3, ditet_totale_m3, ditet_totale_m3, data_para_vit
         )
 
         # --- SHFAQJA E METRIKAVE ---
         st.markdown(
-            "<h4 style='color: #2c3e50; font-size:18px; margin-bottom:15px;'>📊 Përmbledhje e Performancës Mujore</h4>",
+            "<h4 style='color: #2c3e50; font-size:18px; margin-top:15px; margin-bottom:15px;'>📊 Përmbledhje e Performancës Mujore</h4>",
             unsafe_allow_html=True,
         )
 
-        # Rreshti 1: Volumet totale
+        # Rreshti 1: Volumet totale sipas përzgjedhjes
         c1, c2, c3 = st.columns(3)
         c1.metric(
-            label=f"Sasia {emri_muaj_aktual}",
+            label=f"Sasia {emri_muaj_1}",
             value=f"{totali_aktual:,.0f} kg",
             delta=f"Ø Çmimi: {cm_mes_aktual:,.1f} L/kg",
             delta_color="off",
         )
         c2.metric(
-            label=f"Sasia e Plotë {emri_muaj_kaluar}",
+            label=f"Sasia e Plotë {emri_muaj_2}",
             value=f"{sum(y_para_muaj):,.0f} kg",
             delta=f"Ø Çmimi: {cm_mes_para_muaj:,.1f} L/kg",
             delta_color="off",
         )
         c3.metric(
-            label=f"Sasia e Plotë {emri_vit_kaluar}",
+            label=f"Sasia e Plotë {emri_muaj_3}",
             value=f"{sum(y_para_vit):,.0f} kg",
             delta=f"Ø Çmimi: {cm_mes_para_vit:,.1f} L/kg",
             delta_color="off",
         )
 
         st.write("")
-        # Rreshti 2: Krahasimi Like-to-Like
-        ndryshimi_muaj_l2l = (
+        # Rreshti 2: Krahasimi Like-to-Like deri në ditën korrente
+        ndryshimi_m2_l2l = (
             ((totali_aktual - totali_para_muaj_l2l) / totali_para_muaj_l2l * 100)
             if totali_para_muaj_l2l > 0
             else 0
         )
-        ndryshimi_vit_l2l = (
+        ndryshimi_m3_l2l = (
             ((totali_aktual - totali_para_vit_l2l) / totali_para_vit_l2l * 100)
             if totali_para_vit_l2l > 0
             else 0
@@ -1729,48 +1784,57 @@ elif page == "Shitjet Ditore":
             unsafe_allow_html=True,
         )
         cc2.metric(
-            label=f"vs {emri_muaj_kaluar} (Dita 1-{min(dita_korrente, ditet_totale_para_muaj)})",
+            label=f"vs {emri_muaj_2} (Dita 1-{min(dita_korrente, ditet_totale_m2)})",
             value=f"{totali_para_muaj_l2l:,.0f} kg",
-            delta=f"{ndryshimi_muaj_l2l:+.1f}% (Ø: {cm_mes_para_muaj_l2l:,.1f} L)",
+            delta=f"{ndryshimi_m2_l2l:+.1f}% (Ø: {cm_mes_para_muaj_l2l:,.1f} L)",
         )
         cc3.metric(
-            label=f"vs {emri_vit_kaluar} (Dita 1-{min(dita_korrente, ditet_totale_para_vit)})",
+            label=f"vs {emri_muaj_3} (Dita 1-{min(dita_korrente, ditet_totale_m3)})",
             value=f"{totali_para_vit_l2l:,.0f} kg",
-            delta=f"{ndryshimi_vit_l2l:+.1f}% (Ø: {cm_mes_para_vit_l2l:,.1f} L)",
+            delta=f"{ndryshimi_m3_l2l:+.1f}% (Ø: {cm_mes_para_vit_l2l:,.1f} L)",
         )
 
         st.write("")
 
-        # Rreshti 3: Tabela e pastër e Mesatareve
+        # Rreshti 3: Tabela e pastër e Mesatareve të zgjedhura
         st.markdown(
             "<h5 style='color: #2c3e50; font-size:15px; margin-top:15px; margin-bottom:10px;'>📈 Sasia Mesatare për Ditë Pune (Hënë - Shtunë, pa të Diela)</h5>",
             unsafe_allow_html=True,
+        )
+
+        status_m1_plote = (
+            f"{mes_dite_plote_m1:,.0f} kg/ditë"
+            if (
+                sel_vit_1 < sot.year
+                or (sel_vit_1 == sot.year and sel_muaj_1 < sot.month)
+            )
+            else "Muaj në progres"
         )
 
         html_tabela_mesatareve = f"""
         <table style="width:100%; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <thead>
                 <tr style="background-color: #1a237e; color: #ffffff; text-align: left; font-size: 14px;">
-                    <th style="padding: 12px 15px;">Periudha / Muaji</th>
+                    <th style="padding: 12px 15px;">Periudha / Muaji i Përzgjedhur</th>
                     <th style="padding: 12px 15px; text-align: center;">⏱️ Live (Dita 1-{dita_korrente})</th>
                     <th style="padding: 12px 15px; text-align: center;">🏁 Gjithë Muajin e Plotë</th>
                 </tr>
             </thead>
             <tbody style="font-size: 14px; color: #333333;">
                 <tr style="border-bottom: 1px solid #dddddd; background-color: #fcfcfd;">
-                    <td style="padding: 12px 15px; font-weight: bold; color: #1a237e;">{muajt_sq.get(muaj_aktual)} {vit_aktual} (Aktual)</td>
-                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; font-size: 16px; color: #2e7d32;">{mes_dite_l2l_aktual:,.0f} kg/ditë</td>
-                    <td style="padding: 12px 15px; text-align: center; color: #888888; font-style: italic;">Muaj në progres</td>
+                    <td style="padding: 12px 15px; font-weight: bold; color: #1a237e;">{emri_muaj_1}</td>
+                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; font-size: 16px; color: #2e7d32;">{mes_dite_l2l_m1:,.0f} kg/ditë</td>
+                    <td style="padding: 12px 15px; text-align: center; color: #555;">{status_m1_plote}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #dddddd;">
-                    <td style="padding: 12px 15px; font-weight: bold;">{muajt_sq.get(para_muaj)} {vit_para_muaj}</td>
-                    <td style="padding: 12px 15px; text-align: center;">{mes_dite_l2l_para_muaj:,.0f} kg/ditë</td>
-                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; color: #111;">{mes_dite_plote_para_muaj:,.0f} kg/ditë</td>
+                    <td style="padding: 12px 15px; font-weight: bold;">{emri_muaj_2}</td>
+                    <td style="padding: 12px 15px; text-align: center;">{mes_dite_l2l_m2:,.0f} kg/ditë</td>
+                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; color: #111;">{mes_dite_plote_m2:,.0f} kg/ditë</td>
                 </tr>
                 <tr style="border-bottom: none;">
-                    <td style="padding: 12px 15px; font-weight: bold;">{muajt_sq.get(para_vit_muaj)} {vit_para_vit}</td>
-                    <td style="padding: 12px 15px; text-align: center;">{mes_dite_l2l_para_vit:,.0f} kg/ditë</td>
-                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; color: #111;">{mes_dite_plote_para_vit:,.0f} kg/ditë</td>
+                    <td style="padding: 12px 15px; font-weight: bold;">{emri_muaj_3}</td>
+                    <td style="padding: 12px 15px; text-align: center;">{mes_dite_l2l_m3:,.0f} kg/ditë</td>
+                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; color: #111;">{mes_dite_plote_m3:,.0f} kg/ditë</td>
                 </tr>
             </tbody>
         </table>
@@ -1787,9 +1851,9 @@ elif page == "Shitjet Ditore":
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
-                y=y_para_vit[:ditet_totale_aktual],
-                base=base_para_vit[:ditet_totale_aktual],
-                name=emri_vit_kaluar,
+                y=y_para_vit[:ditet_totale_m1],
+                base=base_para_vit[:ditet_totale_m1],
+                name=emri_muaj_3,
                 width=gjeresia_kolones,
                 marker_color="rgba(141, 211, 199, 0.55)",
                 textposition="none",
@@ -1800,9 +1864,9 @@ elif page == "Shitjet Ditore":
         fig.add_trace(
             go.Bar(
                 x=ditet_numerik,
-                y=y_para_muaj[:ditet_totale_aktual],
-                base=base_para_muaj[:ditet_totale_aktual],
-                name=emri_muaj_kaluar,
+                y=y_para_muaj[:ditet_totale_m1],
+                base=base_para_muaj[:ditet_totale_m1],
+                name=emri_muaj_2,
                 width=gjeresia_kolones,
                 marker_color="rgba(0, 105, 92, 0.55)",
                 textposition="none",
@@ -1815,7 +1879,7 @@ elif page == "Shitjet Ditore":
                 x=ditet_numerik,
                 y=y_aktual,
                 base=base_aktual,
-                name=emri_muaj_aktual,
+                name=emri_muaj_1,
                 width=gjeresia_kolones,
                 marker_color="rgba(255, 193, 7, 0.65)",
                 text=[f"{v:,.0f}" if v > 0 else "" for v in y_aktual],
@@ -1825,18 +1889,18 @@ elif page == "Shitjet Ditore":
         )
 
         fig.update_layout(
-            title=f"KASKADA KRAHASUESE E SHITJEVE DITORE ({emri_muaj_aktual})",
+            title=f"KASKADA KRAHASUESE E SHITJEVE DITORE ({emri_muaj_1})",
             barmode="overlay",
             plot_bgcolor="#eef2f3",
             height=650,
             xaxis=dict(
-                title="Ditët e muajit",
+                title=f"Ditët e muajit ({muajt_sq.get(sel_muaj_1)})",
                 tickangle=0,
                 type="linear",
                 tickmode="array",
                 tickvals=ditet_numerik,
                 ticktext=ditet_etiketa,
-                range=[0.4, ditet_totale_aktual + 0.6],
+                range=[0.4, ditet_totale_m1 + 0.6],
             ),
             yaxis=dict(title="Shitjet (kg)", gridcolor="#ffffff"),
             legend=dict(
@@ -1856,11 +1920,11 @@ elif page == "Shitjet Ditore":
         tabela_df = pd.DataFrame(
             {
                 "Dita": ditet_etiketa,
-                f"{emri_muaj_aktual} (kg)": y_aktual,
-                f"{emri_muaj_kaluar} (kg)": [
+                f"{emri_muaj_1} (kg)": y_aktual,
+                f"{emri_muaj_2} (kg)": [
                     data_para_muaj.get(d, {}).get(kolona_kg, 0.0) for d in ditet_numerik
                 ],
-                f"{emri_vit_kaluar} (kg)": [
+                f"{emri_muaj_3} (kg)": [
                     data_para_vit.get(d, {}).get(kolona_kg, 0.0) for d in ditet_numerik
                 ],
             }
@@ -1869,9 +1933,9 @@ elif page == "Shitjet Ditore":
         st.dataframe(
             tabela_df.style.format(
                 {
-                    f"{emri_muaj_aktual} (kg)": "{:,.0f}",
-                    f"{emri_muaj_kaluar} (kg)": "{:,.0f}",
-                    f"{emri_vit_kaluar} (kg)": "{:,.0f}",
+                    f"{emri_muaj_1} (kg)": "{:,.0f}",
+                    f"{emri_muaj_2} (kg)": "{:,.0f}",
+                    f"{emri_muaj_3} (kg)": "{:,.0f}",
                 }
             ),
             use_container_width=True,
