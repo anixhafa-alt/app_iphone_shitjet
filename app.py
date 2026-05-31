@@ -1476,7 +1476,7 @@ elif page == "Mundësitë":
 
 
 # ---------------------------------------------------------
-# MODULI I PLOTË: SHITJET DITORE (I INTEGRUAR PLOTËSISHT)
+# MODULI I PLOTË: SHITJET DITORE (I BLINDUAR NGA VALUERROR TË DATAVE)
 # ---------------------------------------------------------
 elif page == "Shitjet Ditore":
     import calendar
@@ -1484,7 +1484,7 @@ elif page == "Shitjet Ditore":
     import plotly.graph_objects as go
     from datetime import datetime
 
-    # Data aktuale e sistemit (Sot: 23 Maj 2026)
+    # Data aktuale e sistemit
     sot = datetime.now()
     dita_korrente = sot.day
 
@@ -1607,11 +1607,14 @@ elif page == "Shitjet Ditore":
             data_para_vit, ditet_totale_para_vit
         )
 
-        # --- LLOGARITJA E METRIKAVE LIKE-TO-LIKE ---
-        def llogarit_kumulativ_deri_diten(data_dict, max_day):
+        # --- LLOGARITJA E METRIKAVE LIKE-TO-LIKE (E mbrojtur nga mbingarkesa e ditëve) ---
+        def llogarit_kumulativ_deri_diten(data_dict, max_day, limit_muaji):
             sasia_kumulative = 0.0
             vlera_kumulative = 0.0
-            for d in range(1, max_day + 1):
+            # Sigurohemi që dita e kërkuar të mos kalojë ditët maksimale të atij muaji specifik
+            kufiri_real = min(max_day, limit_muaji)
+
+            for d in range(1, kufiri_real + 1):
                 dita_data = data_dict.get(d, {kolona_kg: 0.0, kolona_vlera: 0.0})
                 sasia_kumulative += dita_data.get(kolona_kg, 0.0)
                 vlera_kumulative += dita_data.get(kolona_vlera, 0.0)
@@ -1623,17 +1626,20 @@ elif page == "Shitjet Ditore":
 
         totali_aktual = sum(y_aktual)
         totali_para_muaj_l2l, cm_mes_para_muaj_l2l = llogarit_kumulativ_deri_diten(
-            data_para_muaj, dita_korrente
+            data_para_muaj, dita_korrente, ditet_totale_para_muaj
         )
         totali_para_vit_l2l, cm_mes_para_vit_l2l = llogarit_kumulativ_deri_diten(
-            data_para_vit, dita_korrente
+            data_para_vit, dita_korrente, ditet_totale_para_vit
         )
 
-        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Hënë - Shtunë) ---
-        def llogarit_mesatare_dite_pune(vit, muaj, max_day, data_dict):
+        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Hënë - Shtunë, e mbrojtur me min()) ---
+        def llogarit_mesatare_dite_pune(vit, muaj, max_day, limit_muaji, data_dict):
+            # Nëse dita_korrente është 31 dhe muaji (si Prilli) ka 30 ditë, llogaritja ndalet automatikisht në ditën e 30
+            kufiri_real = min(max_day, limit_muaji)
+
             ditet_punes = [
                 d
-                for d in range(1, max_day + 1)
+                for d in range(1, kufiri_real + 1)
                 if datetime(vit, muaj, d).weekday() != 6
             ]
             nr_dite_pune = len(ditet_punes)
@@ -1642,23 +1648,39 @@ elif page == "Shitjet Ditore":
             )
             return (sasia_totale_pune / nr_dite_pune) if nr_dite_pune > 0 else 0.0
 
-        # 1. Mesatarja Live (Deri në ditën aktuale)
+        # 1. Mesatarja Live (Deri në ditën aktuale / kufirin maksimal të muajit)
         mes_dite_l2l_aktual = llogarit_mesatare_dite_pune(
-            vit_aktual, muaj_aktual, dita_korrente, data_aktual
+            vit_aktual, muaj_aktual, dita_korrente, ditet_totale_aktual, data_aktual
         )
         mes_dite_l2l_para_muaj = llogarit_mesatare_dite_pune(
-            vit_para_muaj, para_muaj, dita_korrente, data_para_muaj
+            vit_para_muaj,
+            para_muaj,
+            dita_korrente,
+            ditet_totale_para_muaj,
+            data_para_muaj,
         )
         mes_dite_l2l_para_vit = llogarit_mesatare_dite_pune(
-            vit_para_vit, para_vit_muaj, dita_korrente, data_para_vit
+            vit_para_vit,
+            para_vit_muaj,
+            dita_korrente,
+            ditet_totale_para_vit,
+            data_para_vit,
         )
 
         # 2. Mesatarja e Plotë (Për të gjithë muajin e kaluar/vitin e kaluar)
         mes_dite_plote_para_muaj = llogarit_mesatare_dite_pune(
-            vit_para_muaj, para_muaj, ditet_totale_para_muaj, data_para_muaj
+            vit_para_muaj,
+            para_muaj,
+            ditet_totale_para_muaj,
+            ditet_totale_para_muaj,
+            data_para_muaj,
         )
         mes_dite_plote_para_vit = llogarit_mesatare_dite_pune(
-            vit_para_vit, para_vit_muaj, ditet_totale_para_vit, data_para_vit
+            vit_para_vit,
+            para_vit_muaj,
+            ditet_totale_para_vit,
+            ditet_totale_para_vit,
+            data_para_vit,
         )
 
         # --- SHFAQJA E METRIKAVE ---
@@ -1707,12 +1729,12 @@ elif page == "Shitjet Ditore":
             unsafe_allow_html=True,
         )
         cc2.metric(
-            label=f"vs {emri_muaj_kaluar} (Dita 1-{dita_korrente})",
+            label=f"vs {emri_muaj_kaluar} (Dita 1-{min(dita_korrente, ditet_totale_para_muaj)})",
             value=f"{totali_para_muaj_l2l:,.0f} kg",
             delta=f"{ndryshimi_muaj_l2l:+.1f}% (Ø: {cm_mes_para_muaj_l2l:,.1f} L)",
         )
         cc3.metric(
-            label=f"vs {emri_vit_kaluar} (Dita 1-{dita_korrente})",
+            label=f"vs {emri_vit_kaluar} (Dita 1-{min(dita_korrente, ditet_totale_para_vit)})",
             value=f"{totali_para_vit_l2l:,.0f} kg",
             delta=f"{ndryshimi_vit_l2l:+.1f}% (Ø: {cm_mes_para_vit_l2l:,.1f} L)",
         )
@@ -1825,14 +1847,12 @@ elif page == "Shitjet Ditore":
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- TABELA E DETAJUAR ORIGJINALE E SHITJEVE DITORE (E KTHYER) ---
+        # --- TABELA E DETAJUAR ORIGJINALE E SHITJEVE DITORE ---
         st.markdown(
             "<h4 style='color: #2c3e50; font-size:18px; margin-top:20px;'>📋 Tabela Krahasuese e të Dhënave Ditore</h4>",
             unsafe_allow_html=True,
         )
 
-        # Përgatitja e dataframe-it të tabelës
-        # Sigurohemi që listat të kenë të njëjtën gjatësi për të mos pasur gabime në DataFrame
         tabela_df = pd.DataFrame(
             {
                 "Dita": ditet_etiketa,
@@ -1846,7 +1866,6 @@ elif page == "Shitjet Ditore":
             }
         )
 
-        # Shfaqja e tabelës klasike të Streamlit (Dataframe) me formatim numrash
         st.dataframe(
             tabela_df.style.format(
                 {
