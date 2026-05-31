@@ -36,9 +36,10 @@ muajt_sq = {
 # 2. SISTEMI I SIGURISE (LOGIN)
 # region ==================================================
 def password_entered():
-    if st.session_state["password"] == "a":
+    # Përdorim .get() në vend të ["password"] për të shmangur KeyError
+    if st.session_state.get("password", "") == "a":
         st.session_state["password_correct"] = True
-        del st.session_state["password"]
+        del st.session_state["password"]  # fshijmë fjalëkalimin për siguri
     else:
         st.session_state["password_correct"] = False
 
