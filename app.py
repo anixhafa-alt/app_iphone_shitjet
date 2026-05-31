@@ -2560,18 +2560,18 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (VERSIONI SPECIFIK PËR MAJ 2026)
+# MODULI: AI DATA ASSISTANT (AUTO SQL EXECUTION)
 # region ==================================================
 import anthropic
-import io
 import streamlit as st
 import pandas as pd
+from pandasql import sqldf
 
 
 def shfaq_ai_assistant(df):
-    st.subheader("🤖 AXION AI – Asistenti Inteligjent i të Dhënave (Claude)")
+    st.subheader("🤖 AXION AI – Asistenti Inteligjent që Ekzekuton SQL")
     st.markdown(
-        "Pyet inteligjencën artificiale për çdo gjë. Tani AI ka akses të plotë edhe te filtrat e Majit 2026!"
+        "Shkruaj pyetjen tënde në shqip. AI do të shkruajë dhe ekzekutojë vetë kodin SQL mbi databazën tënde."
     )
 
     # 1. Konfigurimi i API Key
@@ -2592,133 +2592,112 @@ def shfaq_ai_assistant(df):
         st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # 2. PËRGATITJA E KONTEKSTIT SPECIFIK (MAJ 2026 & DEKA)
-    with st.spinner("Duke llogaritur shifrat e Majit 2026 për AI..."):
-        try:
-            # Sigurohemi që data është datetime
-            df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+    # Përgatisim emrat e kolonave që Claude të dijë si të ndërtojë SQL Query-n
+    # Ne kemi df_raw në memorje, por për lehtësi në SQL do t'i themi Claude-it të përdorë emrin e tabelës: df
+    emrat_kolonave = ", ".join(df.columns.tolist())
 
-            # FILTRI 1: Vetëm muaji Maj 2026
-            df_maj2026 = df[
-                (df["Data"].dt.year == 2026) & (df["Data"].dt.month == 5)
-            ].copy()
+    # Krijojmë një mostër të vogël që AI të kuptojë formatet e datave (p.sh. 2026-05-15)
+    mostra_formatit = (
+        df[["Data", "ForcaShitese", "kat", "Vlera_Historike"]].head(3).to_string()
+    )
 
-            # Llogaritja e çmimit mesatar për produktet DEKA në Maj 2026
-            df_deka_maj = df_maj2026[df_maj2026["Grup_Filtri"] == "DEKA"].copy()
-
-            analiza_deka_maj = (
-                df_deka_maj.groupby(["Artikulli"])
-                .agg(
-                    Vlera_Totale=("Vlera_Historike", "sum"),
-                    Sasia_Totale=("Sasia", "sum"),
-                )
-                .reset_index()
-            )
-
-            analiza_deka_maj["Cmimi_Mesatar"] = (
-                analiza_deka_maj["Vlera_Totale"] / analiza_deka_maj["Sasia_Totale"]
-            ).round(2)
-            shifrat_deka_maj_tekst = analiza_deka_maj.sort_values(
-                "Vlera_Totale", ascending=False
-            ).to_string(index=False)
-
-            # FILTRI 2: Top Produkte të përgjithshme (për pyetje të tjera)
-            df_analiza_gjithsej = (
-                df.groupby(["Artikulli", "Grup_Filtri"])
-                .agg(
-                    Vlera_Totale=("Vlera_Historike", "sum"),
-                    Sasia_Totale=("Sasia", "sum"),
-                )
-                .reset_index()
-            )
-            df_analiza_gjithsej["Cmimi_Mesatar"] = (
-                df_analiza_gjithsej["Vlera_Totale"]
-                / df_analiza_gjithsej["Sasia_Totale"]
-            ).round(2)
-            top_produkte_gjithsej = (
-                df_analiza_gjithsej.sort_values("Vlera_Totale", ascending=False)
-                .head(30)
-                .to_string(index=False)
-            )
-
-            total_maj_2026 = df_maj2026["Vlera_Historike"].sum()
-
-        except Exception as e:
-            shifrat_deka_maj_tekst = f"Gabim gjatë llogaritjes: {e}"
-            top_produkte_gjithsej = ""
-            total_maj_2026 = 0
-
-    # Udhëzimet e reja të sistemit – Tani Claude nuk ka si të nxjerrë pretekste
+    # Instruksione strikte që Claude të kthejë vetëm kod pastër SQL
     system_instruction = f"""
-    Ti je asistenti AI i quajtur AXION AI. Mos i thuaj asnjëherë përdoruesit që 'nuk ke akses live në SQL' ose 'më jep kod Python'. Shifrat të janë vendosur ty në tavolinë më poshtë.
+    Ti je një motor inteligjent që kthen pyetjet në gjuhën shqipe në kode të pastra SQL (SQLite sintaksë).
+    Tabela ku do të bësh kërkimin quhet gjithmonë: df
     
-    Këto janë të dhënat reale të llogaritura nga sistemi për ty:
+    Kolonat që ke në dispozicion janë ekzaktësisht këto:
+    {emrat_kolonave}
     
-    === SHIFRAT E MUAJIT AKTUAL (MAJ 2026) ===
-    - Xhiro totale e kompanisë vetëm për muajin Maj 2026: {total_maj_2026:,.0f} Lekë
+    Kujdes me kolonat specifike të këtij aplikacioni:
+    - Për vlerën në Lekë përdor kolonën: Vlera_Historike
+    - Për agjentët përdor kolonën: ForcaShitese
+    - Për kategoritë përdor kolonën: kat
+    - Për grupet e mëdha (DEKA, OLIM, ETJ) përdor kolonën: Grup_Filtri
+    - Kolona 'Data' është e tipit Datetime. Mund të përdorësh funksione si strftime('%m', Data) = '05' për muajin ose strftime('%Y', Data) = '2026' për vitin.
     
-    === ÇMIMET MESATARE DHE SHITJET PËR PRODUKTET 'DEKA' VETËM PËR MAJ 2026 ===
-    {shifrat_deka_maj_tekst}
+    Shembull i formatit të të dhënave:
+    {mostra_formatit}
     
-    === TOP PRODUKTET E PËRGJITHSHME HISTORIKE (SI REFERENCË) ===
-    {top_produkte_gjithsej}
-    
-    Kur përdoruesi të pyet për çmimin mesatar të produkteve DEKA në Maj 2026, shiko tabelën specifike të Majit më sipër, gjej produktin dhe jepi vlerën direkte nga kolona 'Cmimi_Mesatar'. Përgjigju pastër, shkurt dhe në shqip.
+    RREGULLI SIKUR: Kthe VETËM kodin e pastër SQL të kërkuar, pa asnjë fjalë tjetër, pa hyrje, pa sqarime dhe pa tekst rreth e rrotull. Përgjigja jote duhet të jetë vetëm blloku i kodit SQL që fillon me SELECT.
     """
 
-    # 3. Ndërtimi i dritares së Chat-it
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": "Përshëndetje! Kam përpunuar të dhënat specifike për muajin Maj 2026 dhe çmimet mesatare të produkteve DEKA. Çfarë dëshironi të kontrolloni?",
-            }
-        ]
+    # Ndërtimi i dritares së Chat-it të thjeshtësuar
+    if "ai_chat_history" not in st.session_state:
+        st.session_state.ai_chat_history = []
 
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    # Inputi nga përdoruesi
+    prompt = st.text_input(
+        "Çfarë dëshironi të nxjerrim nga databaza? (Psh: 'Më nxjerr çmimet mesatare të produkteve DEKA për muajin Maj 2026')",
+        key="ai_input",
+    )
 
-    if prompt := st.chat_input("Shkruaj pyetjen tënde këtu..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
+    if st.button("Ekzekuto Analizën AI 🚀") and prompt:
+        with st.spinner(
+            "AXION AI duke shkruar kodin SQL dhe duke kalkuluar të dhënat..."
+        ):
+            try:
+                # Thërrasim Claude për të marrë Query-n e saktë SQL
+                response = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=300,
+                    system=system_instruction,
+                    messages=[{"role": "user", "content": prompt}],
+                )
 
-        with st.chat_message("assistant"):
-            with st.spinner("Duke lexuar shifrat..."):
-                try:
-                    messages_anthropic = []
-                    for m in st.session_state.messages:
-                        if m["role"] != "system":
-                            messages_anthropic.append(
-                                {"role": m["role"], "content": m["content"]}
-                            )
+                query_sql = response.content[0].text.strip()
 
-                    response = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=1024,
-                        system=system_instruction,
-                        messages=messages_anthropic,
-                    )
+                # Pastrojmë kodin nëse Claude gabimisht shton shenjat e markdown-it ```sql
+                if "```sql" in query_sql:
+                    query_sql = query_sql.split("```sql")[1].split("```")[0].strip()
+                elif "```" in query_sql:
+                    # take content between first pair of triple backticks
+                    parts = query_sql.split("```")
+                    if len(parts) >= 3:
+                        query_sql = parts[1].strip()
+                    else:
+                        # fallback: remove all backticks
+                        query_sql = query_sql.replace("```", "").strip()
 
-                    përgjigje_ai = response.content[0].text
-                    st.write(përgjigje_ai)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": përgjigje_ai}
-                    )
-                except Exception as e:
-                    st.error(f"⚠️ Ndodhi një gabim me Claude API: {e}")
+                # Shfaqim kodin e gjeneruar që përdoruesi ta shohë për transparencë
+                with st.expander(
+                    "👁️ Shiko kodin SQL të gjeneruar automatikisht nga AI"
+                ):
+                    st.code(query_sql, language="sql")
+
+                # PUNA MAGJIKE: Ekzekutojmë SQL Query-n direkt mbi DataFrame-in tonë (df)
+                # Funksioni lokal sqldf ka nevojë që variabla të quhet 'df'
+                pune_me_df = df
+                rezultati_tabelar = sqldf(query_sql, {"df": pune_me_df})
+
+                # Shfaqim rezultatin direkt si tabelë interaktive në Streamlit!
+                st.success("✅ Analiza përfundoi me sukses! Ja rezultati:")
+                st.dataframe(rezultati_tabelar, use_container_width=True)
+
+                # Opsion për ta shkarkuar si Excel direkt
+                st.download_button(
+                    label="📥 Shkarko këtë rezultat në Excel",
+                    data=rezultati_tabelar.to_csv(index=False).encode("utf-8"),
+                    file_name="rezultat_ai_analiza.csv",
+                    mime="text/csv",
+                )
+
+            except Exception as e:
+                st.error(f"❌ Gabim gjatë ekzekutimit të kërkesës: {e}")
+                st.info(
+                    "Sugjerim: Provoni ta specifikoni pyetjen pak më thjeshtë (p.sh. duke përmendur fjalët 'ForcaShitese' ose 'kat')."
+                )
 
 
-# Integrimi me menunë (Përdorim df_raw që vjen nga SQL)
+# Integrimi me menunë
 if page == "AI Assistant":
     if "df_raw" in locals() or "df_raw" in globals():
         if df_raw is not None:
             shfaq_ai_assistant(df_raw)
         else:
-            st.error("❌ Databaza u tentua të ngarkohej nga SQL, burimi rezulton bosh.")
+            st.error("❌ Databaza e SQL është bosh.")
     else:
-        st.warning("⚠️ Prisni sa të përfundojë leximi i të dhënave nga SQL Server...")
+        st.warning("⚠️ Prisni sa të ngarkohen të dhënat...")
     st.stop()
 
 # endregion
