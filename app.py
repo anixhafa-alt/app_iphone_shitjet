@@ -2561,7 +2561,7 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (VERSIONI INTEGRAL ME CHAT & EXEC)
+# MODULI: AI DATA ASSISTANT (VERSIONI TEKNIK I PASTRUAR)
 # region ==================================================
 import anthropic
 import streamlit as st
@@ -2582,50 +2582,52 @@ def shfaq_ai_assistant(df):
     try:
         client = anthropic.Anthropic(api_key=api_key)
     except Exception as e:
-        st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
+        st.error(f"Gabim gjate konfigurimit te Anthropic: {e}")
         st.stop()
 
-    # Informojmë AI-n për strukturën ekzakte të të dhënave të tua
+    # Informojme AI-n per strukturen ekzakte te te dhenave tuaja
     emrat_kolonave = ", ".join(df.columns.tolist())
     
     system_instruction = f"""
-    Ti je AXION AI, ekspert në analizën e shitjeve ERP. Përdoruesi dëshiron plane komplekse si ai i Qershorit 2026.
-    Nëse të duhet të bësh llogaritje mbi tabelën (e cila quhet 'df'), ti duhet të shkruash një kod Python që filtron dhe agregon të dhënat saktë, pa bërë Cross-Join të gabuar.
+    Ti je AXION AI, ekspert ne analizen e shitjeve ERP. Perdoruesi deshiren plane komplekse si ai i Qershorit 2026.
+    Ne shembullin e tij te fundit, rezultati doli 30 here me i larte sepse u be nje Cross-Join i gabuar midis muajve dhe artikujve. 
+    Duhet te jesh shume i kujdesshem me matematiken dhe agregimet.
     
-    Kolonat e tabelës 'df' janë: {emrat_kolonave}
+    Nese te duhet te besh llogaritje mbi tabelen (e cila quhet 'df'), ti duhet te shkruash nje kod Python qe filtron dhe agregon te dhenat sakte.
+    
+    Kolonat e tabeles 'df' jane: {emrat_kolonave}
     - Data (format datetime)
-    - ForcaShitese (agjentët)
+    - ForcaShitese (agjentet)
     - Klienti / KodiKlient
-    - kat (Kategoritë e produkteve)
+    - kat (Kategorite e produkteve)
     - Sasia (Sasia e shitur)
-    - kg (Sasia në kilogramë)
-    - Vlera_Historike (Vlera në Lekë)
+    - kg (Sasia ne kilograme)
+    - Vlera_Historike (Vlera ne Leke)
     - Grup_Filtri (DEKA, OLIM, ETJ)
 
-    RREGULLI I PËRGJIGJES:
-    Përgjigju në gjuhën shqipe biking i shpjeguar logjikën përdoruesit. Nëse ke llogaritur një tabelë, shfaqe kodin e llogaritjes brenda bllokut standard:
+    RREGULLI I PERGJIGJES:
+    Pergjigju ne gjuhen shqipe duke i shpjeguar logjiken perdoruesit. Nese ke llogaritur nje tabele, shfaqe kodin e llogaritjes brenda bllokut standard:
 ```python
-    # Kodi duhet të krijojë GJITHMONË një variabël të quajtur 'rezultati_final'
-    # Shembull:
+    # Kodi duhet te krijoje GJITHMONE nje variabel te quajtur 'rezultati_final'
     df_filtered = df[df['Grup_Filtri'] == 'DEKA']
     rezultati_final = df_filtered.groupby('Artikulli').agg(Vlera=('Vlera_Historike', 'sum')).reset_index()
     ```
-    Mos harro: variabla finale e rezultatit duhet të quhet ekzaktësisht 'rezultati_final' që aplikacioni ta shfaqë në ekran.
+    Mos harro: variabla finale e rezultatit duhet te quhet ekzaktesisht 'rezultati_final' qe aplikacioni ta shfaqe ne ekran.
     """
 
-    # Inicializimi i historikut të bisedës
+    # Inicializimi i historikut te bisedes
     if "messages_chat" not in st.session_state:
         st.session_state.messages_chat = [
-            {"role": "assistant", "content": "Përshëndetje! Jam AXION AI. Jam gati të rregullojmë planin e Qershorit 2026 hap pas hapi që të mos kemi rritje artificiale shifrash. Çfarë dëshironi të llogarisim si fillim?"}
+            {"role": "assistant", "content": "Pershendetje! Jam AXION AI. Jam gati te rregullojme planin e Qershorit 2026 hap pas hapi qe te mos kemi rritje artificiale shifrash. Cfare deshironi te llogarisim si fillim?"}
         ]
 
-    # Shfaq bisedën e deritanishme
+    # Shfaq biseden e deritanishme
     for msg in st.session_state.messages_chat:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    # Kutia e Chat-it në fund të faqes
-    if prompt := st.chat_input("Shkruaj kërkesën tuaj këtu..."):
+    # Kutia e Chat-it ne fund te faqes
+    if prompt := st.chat_input("Shkruaj kerkesen tuaj ketu..."):
         st.session_state.messages_chat.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
@@ -2633,7 +2635,7 @@ def shfaq_ai_assistant(df):
         with st.chat_message("assistant"):
             with st.spinner("Duke analizuar dhe llogaritur..."):
                 try:
-                    # Përgatitja e historikut për Claude
+                    # Pergatitja e historikut per Claude
                     api_messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages_chat]
                     
                     response = client.messages.create(
@@ -2643,53 +2645,56 @@ def shfaq_ai_assistant(df):
                         messages=api_messages
                     )
                     
-                    përgjigje_ai = response.content[0].text
-                    st.write(përgjigje_ai)
+                    pergjigje_ai = response.content[0].text
+                    st.write(pergjigje_ai)
                     
-                    # Ruajmë mesazhin e AI në historik
-                    st.session_state.messages_chat.append({"role": "assistant", "content": përgjigje_ai})
+                    # Ruajme mesazhin e AI ne historik
+                    st.session_state.messages_chat.append({"role": "assistant", "content": pergjigje_ai})
                     
-                    # Gjetja e kodit me funksionin .find() për të shmangur SyntaxError nga split
-                    markeri_fillimit = "```python"
-                    markeri_fundit = "
-```"
+                    # Gjetja e kodit pa karaktere speciale
+                    start_marker = "```python"
+                    end_marker = "```"
                     
-                    if markeri_fillimit in përgjigje_ai:
-                        idx_start = përgjigje_ai.find(markeri_fillimit) + len(markeri_fillimit)
-                        pjesa_mbetur = përgjigje_ai[idx_start:]
-                        idx_end = pjesa_mbetur.find(markeri_fundit)
+            if start_marker in pergjigje_ai:
+                        idx_start = pergjigje_ai.find(start_marker) + len(start_marker)
+                        pjesa_mbetur = pergjigje_ai[idx_start:]
+                        idx_end = pjesa_mbetur.find(end_marker)
                         
                         pjesa_kodit = pjesa_mbetur[:idx_end].strip()
                         
-                        # Ekzekutojmë kodin e gjeneruar në mënyrë të sigurt vendas
+                        # Ekzekutojme kodin e gjeneruar ne menyre te sigurt
                         lokalet = {"df": df, "pd": pd}
                         exec(pjesa_kodit, globals(), lokalet)
                         
-                        # Nëse kodi krijoi 'rezultati_final', e shfaqim si tabelë interaktive
+                        # Nese kodi krijoi 'rezultati_final', e shfaqim si tabele
                         if "rezultati_final" in lokalet:
                             st.success("📊 Tabela e llogaritur automatikisht:")
                             st.dataframe(lokalet["rezultati_final"], use_container_width=True)
                             
-                            # Butoni për shkarkim në Excel
+                            # Butoni per shkarkim ne Excel
                             st.download_button(
-                                label="📥 Shkarko këtë tabelë në Excel",
+                                label="📥 Shkarko kete tabele ne Excel",
                                 data=lokalet["rezultati_final"].to_csv(index=False).encode('utf-8'),
                                 file_name="analiza_axion_ai.csv",
                                 mime="text/csv"
                             )
                             
-                except Exception as e:
-                    st.error(f"⚠️ Ndodhi një gabim: {e}")
+            except Exception as e:
+            st.error(f"⚠️ Ndodhi nje gabim: {e}")
 
-# Integrimi me menunë e aplikacionit tënd Streamlit
-if page == "AI Assistant":
-    if 'df_raw' in locals() or 'df_raw' in globals():
-        if df_raw is not None:
-            shfaq_ai_assistant(df_raw)
+# KOD INTEGRIMI I SIGURUAR (Nuk varet nga variabla 'page' nese ajo ka gabim)
+try:
+    if page == "AI Assistant":
+        if 'df_raw' in locals() or 'df_raw' in globals():
+            if df_raw is not None:
+                shfaq_ai_assistant(df_raw)
+            else:
+                st.error("❌ Nuk u gjeten te dhena valide nga SQL Server.")
         else:
-            st.error("❌ Nuk u gjetën të dhëna valid nga SQL Server.")
-    else:
-        st.warning("⚠️ Prisni ngarkimin e të dhënave...")
-    st.stop()
+            st.warning("⚠️ Prisni ngarkimin e te dhenave...")
+        st.stop()
+except NameError:
+    # Nese variabla 'page' nuk ekziston ne kodin tend, kjo parandalon faqen e bardhe
+    pass
 
 # endregion
