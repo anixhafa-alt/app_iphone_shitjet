@@ -971,43 +971,68 @@ elif page == "Realizimi":
     import numpy as np
     from datetime import datetime
 
-    # --- ZGJEDHJA E PERIUDHËS: LIVE APO HISTORIKE ---
-    st.sidebar.subheader("📅 Periudha e Analizës")
-    tipi_muaji = st.sidebar.radio(
-        "Zgjidh periudhën e realizimit:",
-        ["Muaji Korrent (Live)", "Muaj Specifik (Historik)"],
-        index=0,  # Default është muaji korrent live
-    )
-
     tani = datetime.now()
 
-    if tipi_muaji == "Muaji Korrent (Live)":
+    # --- RREGULLIMI I STATE-IT PËR KTHIMIN LIVE ---
+    if "tipi_muaji" not in st.session_state:
+        st.session_state.tipi_muaji = "Muaji Korrent (Live)"
+
+    # --- PANEL PERZGJDHJEJE DIREKT NË FAQE (JO NË SIDEBAR) ---
+    st.subheader("📅 Përzgjedhja e Periudhës së Analizës")
+
+    col_p1, col_p2, col_p3 = st.columns([2, 2, 2])
+
+    with col_p1:
+        tipi_muaji = st.radio(
+            "Mënyra e shfaqjes:",
+            ["Muaji Korrent (Live)", "Muaj Specifik (Historik)"],
+            key=(
+                "tipi_muaji_radio"
+                if st.session_state.tipi_muaji == "Muaj Specifik (Historik)"
+                else None
+            ),
+            index=0 if st.session_state.tipi_muaji == "Muaji Korrent (Live)" else 1,
+        )
+        # Sinkronizojmë vlerën me session_state
+        st.session_state.tipi_muaji = tipi_muaji
+
+    if st.session_state.tipi_muaji == "Muaji Korrent (Live)":
         sot = tani
+        # Titulli për muajin Live
+        st.title(f"Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
     else:
         # Krijojmë listën e muajve për përzgjedhje
-        lista_muajve = list(muajt_sq.keys())  # Supozohet që muajt_sq ka çelësa 1-12
+        lista_muajve = list(muajt_sq.keys())
         muaji_emer_list = [muajt_sq[m] for m in lista_muajve]
 
-        col_m1, col_m2 = st.sidebar.columns(2)
-        me_perzgjedhur = col_m1.selectbox(
-            "Muaji:", muaji_emer_list, index=tani.month - 1
-        )
-        viti_perzgjedhur = col_m2.selectbox(
-            "Viti:", range(tani.year - 2, tani.year + 2), index=2
-        )
+        with col_p2:
+            me_perzgjedhur = st.selectbox(
+                "Zgjidh Muajin:", muaji_emer_list, index=tani.month - 1
+            )
+        with col_p3:
+            viti_perzgjedhur = st.selectbox(
+                "Zgjidh Vitin:", range(tani.year - 2, tani.year + 2), index=2
+            )
 
         # Gjejmë numrin e muajit të zgjedhur
         muaji_numert = [k for k, v in muajt_sq.items() if v == me_perzgjedhur][0]
 
         if viti_perzgjedhur == tani.year and muaji_numert == tani.month:
             sot = tani
+            st.title(f"Realizimi Live - {muajt_sq.get(sot.month)} {sot.year}")
         else:
-            # Vendosim ditën e fundit të muajit të përzgjedhur
+            # Vendosim ditën e fundit të muajit të përzgjedhur për historikun
             sot = datetime(viti_perzgjedhur, muaji_numert, 1) + pd.offsets.MonthEnd(0)
+            # Titulli për muajin Historik pa fjalën "Live"
+            st.title(f"Realizimi - {muajt_sq.get(sot.month)} {sot.year}")
 
-    # --- TITULLI DINAMIK ---
-    st.title(f"Realizimi - {muajt_sq.get(sot.month)} {sot.year}")
+        # BUTONI PËR KTHIMIN LIVE
+        if st.button("🔄 Rikthe te Realizimi Live", use_container_width=True):
+            st.session_state.tipi_muaji = "Muaji Korrent (Live)"
+            st.rerun()
+
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
+    st.divider()
 
     if df_raw is not None:
         # --- 1. TARGETI DHE REALIZIMI KORRENT ---
@@ -1049,7 +1074,7 @@ elif page == "Realizimi":
         mesatarja_kode_ref = kode_per_muaj.mean() if not kode_per_muaj.empty else 0
         plan_kode = max(1, round(mesatarja_kode_ref * rritja_faktori))
 
-        # --- FILTRIMI I MUAJIT TË PËRZGJEDHUR (LIVE APO HISTORIK) ---
+        # --- FILTRIMI I MUAJIT TË PËRZGJEDHUR ---
         mask_live = (df_raw["Data"].dt.year == sot.year) & (
             df_raw["Data"].dt.month == sot.month
         )
@@ -1096,7 +1121,6 @@ elif page == "Realizimi":
         # --- 3. METRIKAT KRYESORE ---
         total_perc = (t_real / t_target * 100) if t_target > 0 else 0
 
-        # Renditja e saktë në 7 kolona paralele
         c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
 
         c1.metric("Target KG", f"{t_target:,.0f}")
@@ -1300,7 +1324,7 @@ elif page == "Realizimi":
                 use_container_width="stretch",
             )
 
-        # --- 7. EKSPORTI NË HTML (KORRIGJUAR KLASAT CSS DINAMIKE) ---
+        # --- 7. EKSPORTI NË HTML ---
         st.divider()
 
         agj_emri_fajl = (
@@ -1311,7 +1335,7 @@ elif page == "Realizimi":
             ", ".join(klientet_selected) if klientet_selected else "Të gjithë"
         )
 
-        # Përcaktojmë klasat e ngjyrave paraprakisht jashtë f-string që të mos kemi gabime sintakse
+        # Variablat jashtë f-string për të evituar gabimin e thonjëzave (SyntaxError)
         cls_proj = "positive" if projeksioni >= t_target else "negative"
         cls_m = "positive" if rritja_m >= 0 else "negative"
         cls_v = "positive" if rritja_v >= 0 else "negative"
