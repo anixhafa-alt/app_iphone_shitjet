@@ -2651,8 +2651,8 @@ def shfaq_ai_assistant(df):
                     
                     # Kontrollojmë nëse AI ka sugjeruar një bllok kodi Python për të ekzekutuar
                     if "```python" in përgjigje_ai:
-                        pjesa_kodit = përgjigje_ai.split("
-```python")[1].split("```")[0].strip()
+                        pjesa_kodit = përgjigje_ai.split("```python")[1].split("
+```")[0].strip()
                         
                         # Ekzekutojmë kodin e gjeneruar në mënyrë të sigurt vendas
                         lokalet = {"df": df, "pd": pd}
