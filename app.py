@@ -2561,30 +2561,22 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (CHAT INTERAKTIV ME AUTO-SQL)
+# MODULI: AI DATA ASSISTANT (VERSIONI I RE DHE I SIGURT)
 # region ==================================================
 import anthropic
 import streamlit as st
 import pandas as pd
-from pandasql import sqldf
-
 
 def shfaq_ai_assistant(df):
-    st.subheader("🤖 AXION AI – Asistenti Inteligjent me Memorie & SQL")
-    st.markdown(
-        "Bisedo me AI për plane, parashikime dhe analiza. AI ekzekuton SQL në prapaskenë dhe mban mend bisedën."
-    )
+    st.subheader("🤖 AXION AI – Asistenti Inteligjent i Planeve dhe Analizave")
+    st.markdown("Bisedo me AI për të ndërtuar plane biznesi. AI i llogarit shifrat vetë dhe mban mend bisedën.")
 
     # 1. Konfigurimi i API Key
     api_key = st.secrets.get("CLAUDE_API_KEY", "")
     if not api_key:
-        api_key = st.sidebar.text_input(
-            "Vendos Anthropic API Key (sk-ant-...):", type="password"
-        )
+        api_key = st.sidebar.text_input("Vendos Anthropic API Key (sk-ant-...):", type="password")
         if not api_key:
-            st.info(
-                "🔑 Ju lutem vendosni API Key-n tuaj të Anthropic në sidebar për të aktivizuar Asistentin AI."
-            )
+            st.info("🔑 Ju lutem vendosni API Key-n tuaj të Anthropic në sidebar për të aktivizuar Asistentin AI.")
             st.stop()
 
     try:
@@ -2593,12 +2585,12 @@ def shfaq_ai_assistant(df):
         st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # Informacion mbi strukturën e tabelës për AI
+    # Informojmë AI-n për strukturën ekzakte të të dhënave të tua
     emrat_kolonave = ", ".join(df.columns.tolist())
-
+    
     system_instruction = f"""
-    Ti je AXION AI, një asistent i fuqishëm që ndihmon menaxherin në analizën e shitjeve dhe krijimin e planeve (Forecasting).
-    Ti mund të ekzekutosh kod SQL mbi tabelën e quajtur 'df' duke përdorur funksionin special [SQL_EXECUTE: të cilin ti e thërret kur të duhen të dhëna].
+    Ti je AXION AI, ekspert në analizën e shitjeve ERP. Përdoruesi dëshiron plane komplekse si ai i Qershorit 2026.
+    Nëse të duhet të bësh llogaritje mbi tabelën (e cila quhet 'df'), ti duhet të shkruash një kod Python që filtron dhe agregon të dhënat saktë, pa bërë Cross-Join të gabuar.
     
     Kolonat e tabelës 'df' janë: {emrat_kolonave}
     - Data (format datetime)
@@ -2609,115 +2601,88 @@ def shfaq_ai_assistant(df):
     - kg (Sasia në kilogramë)
     - Vlera_Historike (Vlera në Lekë)
     - Grup_Filtri (DEKA, OLIM, ETJ)
-    
-    RREGULLI I EKZEKUTIMIT TË SQL:
-    Nëse për t'u përgjigjur të duhet të bësh llogaritje (agregime, plane, mesatare), shkruaj kodin SQL brenda tagut të tillë:
-    [SQL_EXECUTE] SELECT ... FROM df ... [/SQL_EXECUTE]
-    Sistemi do ta ekzekutojë automatikisht dhe ti do të shohësh rezultatin në hapin tjetër.
-    
-    Nëse të dhënat të dalin unormale (p.sh. plani rritet me 30 herë), analizo logjikën e JOIN ose matematikën tënde, pasi mund të kesh bërë Cross-Join të gabuar midis muajve apo artikujve. Duhet të jesh shumë i kujdesshëm me logjikën e parashikimeve!
-    Përgjigju gjithmonë në gjuhën shqipe.
+
+    RREGULLI I PËRGJIGJES:
+    Përgjigju në gjuhën shqipe duke i shpjeguar logjikën përdoruesit. Nëse ke llogaritur një tabelë, shfaqe kodin e llogaritjes brenda bllokut standard:
+```python
+    # Kodi duhet të krijojë GJITHMONË një variabël të quajtur 'rezultati_final'
+    # Shembull:
+    df_filtered = df[df['Grup_Filtri'] == 'DEKA']
+    rezultati_final = df_filtered.groupby('Artikulli').agg(Vlera=('Vlera_Historike', 'sum')).reset_index()
+    ```
+    Mos harro: variabla finale e rezultatit duhet të quhet ekzaktësisht 'rezultati_final' që aplikacioni ta shfaqë në ekran.
     """
 
-    # Ruajtja e historikut të bisedës së vërtetë
+    # Inicializimi i historikut të bisedës
     if "messages_chat" not in st.session_state:
         st.session_state.messages_chat = [
-            {
-                "role": "assistant",
-                "content": "Përshëndetje! Jam gati për të ndërtuar plane komplekse biznesi apo analiza. Më trego çfarë dëshiron të llogarisim apo ku mendon se kodi i kaluar gaboi?",
-            }
+            {"role": "assistant", "content": "Përshëndetje! Jam AXION AI. Jam gati të rregullojmë planin e Qershorit 2026 hap pas hapi që të mos kemi rritje artificiale shifrash. Çfarë dëshironi të llogarisim si fillim?"}
         ]
 
-    # Shfaq historikun në ekran
+    # Shfaq bisedën e deritanishme
     for msg in st.session_state.messages_chat:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
-            if "df_rezultat" in msg:
-                st.dataframe(msg["df_rezultat"])
 
-    # Inputi i bisedës (Chat-it)
-    if prompt := st.chat_input("Shkruaj kërkesën ose korrigjimin tënd këtu..."):
+    # Kutia e Chat-it në fund të faqes
+    if prompt := st.chat_input("Shkruaj kërkesën tuaj këtu..."):
         st.session_state.messages_chat.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Duke menduar dhe kalkuluar..."):
+            with st.spinner("Duke analizuar dhe llogaritur..."):
                 try:
-                    # Përgatitja e mesazheve për API
-                    api_messages = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in st.session_state.messages_chat
-                    ]
-
-                    # Thirrja e parë e Claude për të parë nëse do të shkruajë SQL
+                    # Përgatitja e historikut për Claude
+                    api_messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages_chat]
+                    
                     response = client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=1500,
                         system=system_instruction,
-                        messages=api_messages,
+                        messages=api_messages
                     )
-
-                    ai_response_text = response.content[0].text
-
-                    # Kontrollojmë nëse Claude kërkoi të ekzekutojë SQL
-                    if "[SQL_EXECUTE]" in ai_response_text:
-                        try:
-                            # Izolojmë kodin SQL
-                            query_sql = (
-                                ai_response_text.split("[SQL_EXECUTE]")[1]
-                                .split("[/SQL_EXECUTE]")[0]
-                                .strip()
+                    
+                    përgjigje_ai = response.content[0].text
+                    st.write(përgjigje_ai)
+                    
+                    # Ruajmë mesazhin e AI në historik
+                    st.session_state.messages_chat.append({"role": "assistant", "content": përgjigje_ai})
+                    
+                    # Kontrollojmë nëse AI ka sugjeruar një bllok kodi Python për të ekzekutuar
+                    if "```python" in përgjigje_ai:
+                        pjesa_kodit = përgjigje_ai.split("
+```python")[1].split("```")[0].strip()
+                        
+                        # Ekzekutojmë kodin e gjeneruar në mënyrë të sigurt vendas
+                        lokalet = {"df": df, "pd": pd}
+                        exec(pjesa_kodit, globals(), lokalet)
+                        
+                        # Nëse kodi krijoi 'rezultati_final', e shfaqim si tabelë interaktive
+                        if "rezultati_final" in lokalet:
+                            st.success("📊 Tabela e llogaritur automatikisht:")
+                            st.dataframe(lokalet["rezultati_final"], use_container_width=True)
+                            
+                            # Butoni për shkarkim në Excel
+                            st.download_button(
+                                label="📥 Shkarko këtë tabelë në Excel",
+                                data=lokalet["rezultati_final"].to_csv(index=False).encode('utf-8'),
+                                file_name="analiza_axion_ai.csv",
+                                mime="text/csv"
                             )
-
-                            # Ekzekutojmë SQL në prapaskenë mbi df_raw
-                            pune_me_df = df
-                            rezultati_sql = sqldf(query_sql, {"df": pune_me_df})
-
-                            # I dërgojmë rezultatin mbrapsht Claude-it që ta interpretojë si tekst për përdoruesin
-                            konteksti_ri = f"{ai_response_text}\n\n[SISTEMI]: Rezultati i ekzekutimit të SQL është ky:\n{rezultati_sql.head(30).to_string()}\n\nJu lutem bëni përmbledhjen finale në shqip për përdoruesin."
-
-                            api_messages.append(
-                                {"role": "assistant", "content": ai_response_text}
-                            )
-                            api_messages.append(
-                                {"role": "user", "content": konteksti_ri}
-                            )
-
-                            final_response = client.messages.create(
-                                model="claude-sonnet-4-6",
-                                max_tokens=1000,
-                                system=system_instruction,
-                                messages=api_messages,
-                            )
-
-                            përgjigje_finale = final_response.content[0].text
-                            st.write(përgjigje_finale)
-                            st.dataframe(rezultati_sql)
-
-                            # Ruajmë në historik së bashku me tabelën e gjeneruar
-                            st.session_state.messages_chat.append(
-                                {
-                                    "role": "assistant",
-                                    "content": përgjigje_finale,
-                                    "df_rezultat": rezultati_sql,
-                                }
-                            )
-
-                        except Exception as sql_err:
-                            st.error(
-                                f"Gabim në ekzekutimin e SQL-së së gjeneruar: {sql_err}"
-                            )
-                            st.code(query_sql)
-                    else:
-                        # Nëse nuk kishte SQL, thjesht shfaqim përgjigjen e zakonshme (p.sh. kur bëjmë dialog)
-                        st.write(ai_response_text)
-                        st.session_state.messages_chat.append(
-                            {"role": "assistant", "content": ai_response_text}
-                        )
-
+                            
                 except Exception as e:
-                    st.error(f"⚠️ Ndodhi një gabim gjatë komunikimit: {e}")
+                    st.error(f"⚠️ Ndodhi një gabim: {e}")
 
+# Integrimi me menunë
+if page == "AI Assistant":
+    if 'df_raw' in locals() or 'df_raw' in globals():
+        if df_raw is not None:
+            shfaq_ai_assistant(df_raw)
+        else:
+            st.error("❌ Nuk u gjetën të dhëna nga SQL.")
+    else:
+        st.warning("⚠️ Prisni ngarkimin e të dhënave...")
+    st.stop()
 
 # endregion
