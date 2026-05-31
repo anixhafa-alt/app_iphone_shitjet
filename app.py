@@ -2561,7 +2561,7 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (AUTO SQL EXECUTION)
+# MODULI: AI DATA ASSISTANT (CHAT INTERAKTIV ME AUTO-SQL)
 # region ==================================================
 import anthropic
 import streamlit as st
@@ -2570,9 +2570,9 @@ from pandasql import sqldf
 
 
 def shfaq_ai_assistant(df):
-    st.subheader("🤖 AXION AI – Asistenti Inteligjent që Ekzekuton SQL")
+    st.subheader("🤖 AXION AI – Asistenti Inteligjent me Memorie & SQL")
     st.markdown(
-        "Shkruaj pyetjen tënde në shqip. AI do të shkruajë dhe ekzekutojë vetë kodin SQL mbi databazën tënde."
+        "Bisedo me AI për plane, parashikime dhe analiza. AI ekzekuton SQL në prapaskenë dhe mban mend bisedën."
     )
 
     # 1. Konfigurimi i API Key
@@ -2593,112 +2593,131 @@ def shfaq_ai_assistant(df):
         st.error(f"Gabim gjatë konfigurimit të Anthropic: {e}")
         st.stop()
 
-    # Përgatisim emrat e kolonave që Claude të dijë si të ndërtojë SQL Query-n
-    # Ne kemi df_raw në memorje, por për lehtësi në SQL do t'i themi Claude-it të përdorë emrin e tabelës: df
+    # Informacion mbi strukturën e tabelës për AI
     emrat_kolonave = ", ".join(df.columns.tolist())
 
-    # Krijojmë një mostër të vogël që AI të kuptojë formatet e datave (p.sh. 2026-05-15)
-    mostra_formatit = (
-        df[["Data", "ForcaShitese", "kat", "Vlera_Historike"]].head(3).to_string()
-    )
-
-    # Instruksione strikte që Claude të kthejë vetëm kod pastër SQL
     system_instruction = f"""
-    Ti je një motor inteligjent që kthen pyetjet në gjuhën shqipe në kode të pastra SQL (SQLite sintaksë).
-    Tabela ku do të bësh kërkimin quhet gjithmonë: df
+    Ti je AXION AI, një asistent i fuqishëm që ndihmon menaxherin në analizën e shitjeve dhe krijimin e planeve (Forecasting).
+    Ti mund të ekzekutosh kod SQL mbi tabelën e quajtur 'df' duke përdorur funksionin special [SQL_EXECUTE: të cilin ti e thërret kur të duhen të dhëna].
     
-    Kolonat që ke në dispozicion janë ekzaktësisht këto:
-    {emrat_kolonave}
+    Kolonat e tabelës 'df' janë: {emrat_kolonave}
+    - Data (format datetime)
+    - ForcaShitese (agjentët)
+    - Klienti / KodiKlient
+    - kat (Kategoritë e produkteve)
+    - Sasia (Sasia e shitur)
+    - kg (Sasia në kilogramë)
+    - Vlera_Historike (Vlera në Lekë)
+    - Grup_Filtri (DEKA, OLIM, ETJ)
     
-    Kujdes me kolonat specifike të këtij aplikacioni:
-    - Për vlerën në Lekë përdor kolonën: Vlera_Historike
-    - Për agjentët përdor kolonën: ForcaShitese
-    - Për kategoritë përdor kolonën: kat
-    - Për grupet e mëdha (DEKA, OLIM, ETJ) përdor kolonën: Grup_Filtri
-    - Kolona 'Data' është e tipit Datetime. Mund të përdorësh funksione si strftime('%m', Data) = '05' për muajin ose strftime('%Y', Data) = '2026' për vitin.
+    RREGULLI I EKZEKUTIMIT TË SQL:
+    Nëse për t'u përgjigjur të duhet të bësh llogaritje (agregime, plane, mesatare), shkruaj kodin SQL brenda tagut të tillë:
+    [SQL_EXECUTE] SELECT ... FROM df ... [/SQL_EXECUTE]
+    Sistemi do ta ekzekutojë automatikisht dhe ti do të shohësh rezultatin në hapin tjetër.
     
-    Shembull i formatit të të dhënave:
-    {mostra_formatit}
-    
-    RREGULLI SIKUR: Kthe VETËM kodin e pastër SQL të kërkuar, pa asnjë fjalë tjetër, pa hyrje, pa sqarime dhe pa tekst rreth e rrotull. Përgjigja jote duhet të jetë vetëm blloku i kodit SQL që fillon me SELECT.
+    Nëse të dhënat të dalin unormale (p.sh. plani rritet me 30 herë), analizo logjikën e JOIN ose matematikën tënde, pasi mund të kesh bërë Cross-Join të gabuar midis muajve apo artikujve. Duhet të jesh shumë i kujdesshëm me logjikën e parashikimeve!
+    Përgjigju gjithmonë në gjuhën shqipe.
     """
 
-    # Ndërtimi i dritares së Chat-it të thjeshtësuar
-    if "ai_chat_history" not in st.session_state:
-        st.session_state.ai_chat_history = []
+    # Ruajtja e historikut të bisedës së vërtetë
+    if "messages_chat" not in st.session_state:
+        st.session_state.messages_chat = [
+            {
+                "role": "assistant",
+                "content": "Përshëndetje! Jam gati për të ndërtuar plane komplekse biznesi apo analiza. Më trego çfarë dëshiron të llogarisim apo ku mendon se kodi i kaluar gaboi?",
+            }
+        ]
 
-    # Inputi nga përdoruesi
-    prompt = st.text_input(
-        "Çfarë dëshironi të nxjerrim nga databaza? (Psh: 'Më nxjerr çmimet mesatare të produkteve DEKA për muajin Maj 2026')",
-        key="ai_input",
-    )
+    # Shfaq historikun në ekran
+    for msg in st.session_state.messages_chat:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+            if "df_rezultat" in msg:
+                st.dataframe(msg["df_rezultat"])
 
-    if st.button("Ekzekuto Analizën AI 🚀") and prompt:
-        with st.spinner(
-            "AXION AI duke shkruar kodin SQL dhe duke kalkuluar të dhënat..."
-        ):
-            try:
-                # Thërrasim Claude për të marrë Query-n e saktë SQL
-                response = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=300,
-                    system=system_instruction,
-                    messages=[{"role": "user", "content": prompt}],
-                )
+    # Inputi i bisedës (Chat-it)
+    if prompt := st.chat_input("Shkruaj kërkesën ose korrigjimin tënd këtu..."):
+        st.session_state.messages_chat.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
 
-                query_sql = response.content[0].text.strip()
+        with st.chat_message("assistant"):
+            with st.spinner("Duke menduar dhe kalkuluar..."):
+                try:
+                    # Përgatitja e mesazheve për API
+                    api_messages = [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.messages_chat
+                    ]
 
-                # Pastrojmë kodin nëse Claude gabimisht shton shenjat e markdown-it ```sql
-                if "```sql" in query_sql:
-                    query_sql = query_sql.split("```sql")[1].split("```")[0].strip()
-                elif "```" in query_sql:
-                    # take content between first pair of triple backticks
-                    parts = query_sql.split("```")
-                    if len(parts) >= 3:
-                        query_sql = parts[1].strip()
+                    # Thirrja e parë e Claude për të parë nëse do të shkruajë SQL
+                    response = client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=1500,
+                        system=system_instruction,
+                        messages=api_messages,
+                    )
+
+                    ai_response_text = response.content[0].text
+
+                    # Kontrollojmë nëse Claude kërkoi të ekzekutojë SQL
+                    if "[SQL_EXECUTE]" in ai_response_text:
+                        try:
+                            # Izolojmë kodin SQL
+                            query_sql = (
+                                ai_response_text.split("[SQL_EXECUTE]")[1]
+                                .split("[/SQL_EXECUTE]")[0]
+                                .strip()
+                            )
+
+                            # Ekzekutojmë SQL në prapaskenë mbi df_raw
+                            pune_me_df = df
+                            rezultati_sql = sqldf(query_sql, {"df": pune_me_df})
+
+                            # I dërgojmë rezultatin mbrapsht Claude-it që ta interpretojë si tekst për përdoruesin
+                            konteksti_ri = f"{ai_response_text}\n\n[SISTEMI]: Rezultati i ekzekutimit të SQL është ky:\n{rezultati_sql.head(30).to_string()}\n\nJu lutem bëni përmbledhjen finale në shqip për përdoruesin."
+
+                            api_messages.append(
+                                {"role": "assistant", "content": ai_response_text}
+                            )
+                            api_messages.append(
+                                {"role": "user", "content": konteksti_ri}
+                            )
+
+                            final_response = client.messages.create(
+                                model="claude-sonnet-4-6",
+                                max_tokens=1000,
+                                system=system_instruction,
+                                messages=api_messages,
+                            )
+
+                            përgjigje_finale = final_response.content[0].text
+                            st.write(përgjigje_finale)
+                            st.dataframe(rezultati_sql)
+
+                            # Ruajmë në historik së bashku me tabelën e gjeneruar
+                            st.session_state.messages_chat.append(
+                                {
+                                    "role": "assistant",
+                                    "content": përgjigje_finale,
+                                    "df_rezultat": rezultati_sql,
+                                }
+                            )
+
+                        except Exception as sql_err:
+                            st.error(
+                                f"Gabim në ekzekutimin e SQL-së së gjeneruar: {sql_err}"
+                            )
+                            st.code(query_sql)
                     else:
-                        # fallback: remove all backticks
-                        query_sql = query_sql.replace("```", "").strip()
+                        # Nëse nuk kishte SQL, thjesht shfaqim përgjigjen e zakonshme (p.sh. kur bëjmë dialog)
+                        st.write(ai_response_text)
+                        st.session_state.messages_chat.append(
+                            {"role": "assistant", "content": ai_response_text}
+                        )
 
-                # Shfaqim kodin e gjeneruar që përdoruesi ta shohë për transparencë
-                with st.expander(
-                    "👁️ Shiko kodin SQL të gjeneruar automatikisht nga AI"
-                ):
-                    st.code(query_sql, language="sql")
+                except Exception as e:
+                    st.error(f"⚠️ Ndodhi një gabim gjatë komunikimit: {e}")
 
-                # PUNA MAGJIKE: Ekzekutojmë SQL Query-n direkt mbi DataFrame-in tonë (df)
-                # Funksioni lokal sqldf ka nevojë që variabla të quhet 'df'
-                pune_me_df = df
-                rezultati_tabelar = sqldf(query_sql, {"df": pune_me_df})
-
-                # Shfaqim rezultatin direkt si tabelë interaktive në Streamlit!
-                st.success("✅ Analiza përfundoi me sukses! Ja rezultati:")
-                st.dataframe(rezultati_tabelar, use_container_width=True)
-
-                # Opsion për ta shkarkuar si Excel direkt
-                st.download_button(
-                    label="📥 Shkarko këtë rezultat në Excel",
-                    data=rezultati_tabelar.to_csv(index=False).encode("utf-8"),
-                    file_name="rezultat_ai_analiza.csv",
-                    mime="text/csv",
-                )
-
-            except Exception as e:
-                st.error(f"❌ Gabim gjatë ekzekutimit të kërkesës: {e}")
-                st.info(
-                    "Sugjerim: Provoni ta specifikoni pyetjen pak më thjeshtë (p.sh. duke përmendur fjalët 'ForcaShitese' ose 'kat')."
-                )
-
-
-# Integrimi me menunë
-if page == "AI Assistant":
-    if "df_raw" in locals() or "df_raw" in globals():
-        if df_raw is not None:
-            shfaq_ai_assistant(df_raw)
-        else:
-            st.error("❌ Databaza e SQL është bosh.")
-    else:
-        st.warning("⚠️ Prisni sa të ngarkohen të dhënat...")
-    st.stop()
 
 # endregion
