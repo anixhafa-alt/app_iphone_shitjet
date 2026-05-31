@@ -2718,7 +2718,7 @@ def shfaq_ai_assistant(df):
                                 mime="text/csv",
                             )
                 except Exception as e:
-                    st.error(f"⚠️ Ndodhi nje gabim brenda bisedes: {e}")
+                    st.error(f"⚠️ Ndodhi nje gabim brenda bisedes: {e}").
 
 
 # KOD INTEGRIMI I SIGURUAR (Nuk varet nga variabla 'page' nese ajo ka gabim)
