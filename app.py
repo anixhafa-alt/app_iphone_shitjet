@@ -2567,16 +2567,23 @@ import anthropic
 import streamlit as st
 import pandas as pd
 
+
 def shfaq_ai_assistant(df):
     st.subheader("🤖 AXION AI – Asistenti Inteligjent i Planeve dhe Analizave")
-    st.markdown("Bisedo me AI për të ndërtuar plane biznesi. AI i llogarit shifrat vetë dhe mban mend bisedën.")
+    st.markdown(
+        "Bisedo me AI për të ndërtuar plane biznesi. AI i llogarit shifrat vetë dhe mban mend bisedën."
+    )
 
     # 1. Konfigurimi i API Key
     api_key = st.secrets.get("CLAUDE_API_KEY", "")
     if not api_key:
-        api_key = st.sidebar.text_input("Vendos Anthropic API Key (sk-ant-...):", type="password")
+        api_key = st.sidebar.text_input(
+            "Vendos Anthropic API Key (sk-ant-...):", type="password"
+        )
         if not api_key:
-            st.info("🔑 Ju lutem vendosni API Key-n tuaj të Anthropic në sidebar për të aktivizuar Asistentin AI.")
+            st.info(
+                "🔑 Ju lutem vendosni API Key-n tuaj të Anthropic në sidebar për të aktivizuar Asistentin AI."
+            )
             st.stop()
 
     try:
@@ -2587,7 +2594,7 @@ def shfaq_ai_assistant(df):
 
     # Informojme AI-n per strukturen ekzakte te te dhenave tuaja
     emrat_kolonave = ", ".join(df.columns.tolist())
-    
+
     system_instruction = f"""
     Ti je AXION AI, ekspert ne analizen e shitjeve ERP. Perdoruesi deshiren plane komplekse si ai i Qershorit 2026.
     Ne shembullin e tij te fundit, rezultati doli 30 here me i larte sepse u be nje Cross-Join i gabuar midis muajve dhe artikujve. 
@@ -2618,7 +2625,10 @@ def shfaq_ai_assistant(df):
     # Inicializimi i historikut te bisedes
     if "messages_chat" not in st.session_state:
         st.session_state.messages_chat = [
-            {"role": "assistant", "content": "Pershendetje! Jam AXION AI. Jam gati te rregullojme planin e Qershorit 2026 hap pas hapi qe te mos kemi rritje artificiale shifrash. Cfare deshironi te llogarisim si fillim?"}
+            {
+                "role": "assistant",
+                "content": "Pershendetje! Jam AXION AI. Jam gati te rregullojme planin e Qershorit 2026 hap pas hapi qe te mos kemi rritje artificiale shifrash. Cfare deshironi te llogarisim si fillim?",
+            }
         ]
 
     # Shfaq biseden e deritanishme
@@ -2636,56 +2646,65 @@ def shfaq_ai_assistant(df):
             with st.spinner("Duke analizuar dhe llogaritur..."):
                 try:
                     # Pergatitja e historikut per Claude
-                    api_messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages_chat]
-                    
+                    api_messages = [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.messages_chat
+                    ]
+
                     response = client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=1500,
                         system=system_instruction,
-                        messages=api_messages
+                        messages=api_messages,
                     )
-                    
+
                     pergjigje_ai = response.content[0].text
                     st.write(pergjigje_ai)
-                    
+
                     # Ruajme mesazhin e AI ne historik
-                    st.session_state.messages_chat.append({"role": "assistant", "content": pergjigje_ai})
-                    
+                    st.session_state.messages_chat.append(
+                        {"role": "assistant", "content": pergjigje_ai}
+                    )
+
                     # Gjetja e kodit pa karaktere speciale
                     start_marker = "```python"
                     end_marker = "```"
-                    
-            if start_marker in pergjigje_ai:
+
+                    if start_marker in pergjigje_ai:
                         idx_start = pergjigje_ai.find(start_marker) + len(start_marker)
                         pjesa_mbetur = pergjigje_ai[idx_start:]
                         idx_end = pjesa_mbetur.find(end_marker)
-                        
+
                         pjesa_kodit = pjesa_mbetur[:idx_end].strip()
-                        
-                        # Ekzekutojme kodin e gjeneruar ne menyre te sigurt
+
+                        # Executojme kodin e gjeneruar ne menyre te sigurt
                         lokalet = {"df": df, "pd": pd}
                         exec(pjesa_kodit, globals(), lokalet)
-                        
+
                         # Nese kodi krijoi 'rezultati_final', e shfaqim si tabele
                         if "rezultati_final" in lokalet:
                             st.success("📊 Tabela e llogaritur automatikisht:")
-                            st.dataframe(lokalet["rezultati_final"], use_container_width=True)
-                            
+                            st.dataframe(
+                                lokalet["rezultati_final"], use_container_width=True
+                            )
+
                             # Butoni per shkarkim ne Excel
                             st.download_button(
                                 label="📥 Shkarko kete tabele ne Excel",
-                                data=lokalet["rezultati_final"].to_csv(index=False).encode('utf-8'),
+                                data=lokalet["rezultati_final"]
+                                .to_csv(index=False)
+                                .encode("utf-8"),
                                 file_name="analiza_axion_ai.csv",
-                                mime="text/csv"
+                                mime="text/csv",
                             )
-                            
-            except Exception as e:
-            st.error(f"⚠️ Ndodhi nje gabim: {e}")
+                except Exception as e:
+                    st.error(f"⚠️ Ndodhi nje gabim brenda bisedes: {e}")
+
 
 # KOD INTEGRIMI I SIGURUAR (Nuk varet nga variabla 'page' nese ajo ka gabim)
 try:
     if page == "AI Assistant":
-        if 'df_raw' in locals() or 'df_raw' in globals():
+        if "df_raw" in locals() or "df_raw" in globals():
             if df_raw is not None:
                 shfaq_ai_assistant(df_raw)
             else:
