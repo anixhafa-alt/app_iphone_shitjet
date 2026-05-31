@@ -976,7 +976,7 @@ elif page == "Realizimi":
     tipi_muaji = st.sidebar.radio(
         "Zgjidh periudhën e realizimit:",
         ["Muaji Korrent (Live)", "Muaj Specifik (Historik)"],
-        index=0  # Default është muaji korrent live
+        index=0,  # Default është muaji korrent live
     )
 
     tani = datetime.now()
@@ -985,18 +985,20 @@ elif page == "Realizimi":
         sot = tani
     else:
         # Krijojmë listën e muajve për përzgjedhje
-        lista_muajve = list(muajt_sq.keys()) # Supozohet që muajt_sq ka çelësa 1-12
+        lista_muajve = list(muajt_sq.keys())  # Supozohet që muajt_sq ka çelësa 1-12
         muaji_emer_list = [muajt_sq[m] for m in lista_muajve]
-        
+
         col_m1, col_m2 = st.sidebar.columns(2)
-        me_perzgjedhur = col_m1.selectbox("Muaji:", muaji_emer_list, index=tani.month - 1)
-        viti_perzgjedhur = col_m2.selectbox("Viti:", range(tani.year - 2, tani.year + 2), index=2) # Përshtateni sipas nevojës
+        me_perzgjedhur = col_m1.selectbox(
+            "Muaji:", muaji_emer_list, index=tani.month - 1
+        )
+        viti_perzgjedhur = col_m2.selectbox(
+            "Viti:", range(tani.year - 2, tani.year + 2), index=2
+        )
 
         # Gjejmë numrin e muajit të zgjedhur
         muaji_numert = [k for k, v in muajt_sq.items() if v == me_perzgjedhur][0]
-        
-        # Nëse është muaji i kaluar, marrim ditën e fundit të atij muaji për të simuluar mbylljen e plotë
-        # Nëse përdoruesi zgjedh muajin aktual te historiku, sillet si data e sotme
+
         if viti_perzgjedhur == tani.year and muaji_numert == tani.month:
             sot = tani
         else:
@@ -1004,41 +1006,43 @@ elif page == "Realizimi":
             sot = datetime(viti_perzgjedhur, muaji_numert, 1) + pd.offsets.MonthEnd(0)
 
     # --- TITULLI DINAMIK ---
-    st.title(f"Realizimi - {muajt_sq.get(sot.month)} {sot.year}") [cite: 1]
-    st.markdown(f"### 👤 Agjenti: **{agj_sel}**") [cite: 1]
+    st.title(f"Realizimi - {muajt_sq.get(sot.month)} {sot.year}")
+    st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
 
     if df_raw is not None:
         # --- 1. TARGETI DHE REALIZIMI KORRENT ---
         mask_ref = (df_raw["Data"].dt.date >= start_date) & (
-            df_raw["Data"].dt.date <= end_date [cite: 1]
+            df_raw["Data"].dt.date <= end_date
         )
-        dff_ref = df_raw.loc[mask_ref].copy() [cite: 2]
-        if grup_sel != "Të gjitha": [cite: 2]
-            dff_ref = dff_ref[dff_ref["Grup_Filtri"] == grup_sel] [cite: 2]
-        if agj_sel != "Të gjithë": [cite: 2]
-            dff_ref = dff_ref[dff_ref["ForcaShitese"] == agj_sel] [cite: 2]
-        if klientet_selected: [cite: 2]
-            dff_ref = dff_ref[dff_ref["Klienti"].isin(klientet_selected)] [cite: 2]
+        dff_ref = df_raw.loc[mask_ref].copy()
+        if grup_sel != "Të gjitha":
+            dff_ref = dff_ref[dff_ref["Grup_Filtri"] == grup_sel]
+        if agj_sel != "Të gjithë":
+            dff_ref = dff_ref[dff_ref["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            dff_ref = dff_ref[dff_ref["Klienti"].isin(klientet_selected)]
 
         n_months_ref = max(
             1,
             (end_date.year - start_date.year) * 12
-            + (end_date.month - start_date.month), [cite: 3]
+            + (end_date.month - start_date.month),
         )
-        rritja_faktori = 1 + (rritja / 100) [cite: 3]
+        rritja_faktori = 1 + (rritja / 100)
 
-        # Targeti në KG [cite: 3]
-        gp_target_cat = dff_ref.groupby(["kat"]).agg({"kg": "sum"}).reset_index() [cite: 3]
+        # Targeti në KG
+        gp_target_cat = dff_ref.groupby(["kat"]).agg({"kg": "sum"}).reset_index()
         gp_target_cat["KG_Target"] = (
-            gp_target_cat["kg"] / n_months_ref [cite: 4]
-        ) * rritja_faktori [cite: 4]
-        t_target = gp_target_cat["KG_Target"].sum() [cite: 4]
+            gp_target_cat["kg"] / n_months_ref
+        ) * rritja_faktori
+        t_target = gp_target_cat["KG_Target"].sum()
 
         # --- LLOGARITJA E PLANIT REAL TË KLIENTËVE DHE KODEVE ---
         dff_ref["Viti_Muaji"] = dff_ref["Data"].dt.to_period("M")
-        
+
         kliente_per_muaj = dff_ref.groupby("Viti_Muaji")["Klienti"].nunique()
-        mesatarja_kliente_ref = kliente_per_muaj.mean() if not kliente_per_muaj.empty else 0
+        mesatarja_kliente_ref = (
+            kliente_per_muaj.mean() if not kliente_per_muaj.empty else 0
+        )
         plan_kliente = max(1, round(mesatarja_kliente_ref * rritja_faktori))
 
         kode_per_muaj = dff_ref.groupby("Viti_Muaji")["KodiArt"].nunique()
@@ -1046,227 +1050,271 @@ elif page == "Realizimi":
         plan_kode = max(1, round(mesatarja_kode_ref * rritja_faktori))
 
         # --- FILTRIMI I MUAJIT TË PËRZGJEDHUR (LIVE APO HISTORIK) ---
-        mask_live = (df_raw["Data"].dt.year == sot.year) & ( [cite: 4]
-            df_raw["Data"].dt.month == sot.month [cite: 4]
+        mask_live = (df_raw["Data"].dt.year == sot.year) & (
+            df_raw["Data"].dt.month == sot.month
         )
-        df_live = df_raw[mask_live].copy() [cite: 4]
-        if grup_sel != "Të gjitha": [cite: 4]
-            df_live = df_live[df_live["Grup_Filtri"] == grup_sel] [cite: 4]
-        if agj_sel != "Të gjithë": [cite: 5]
-            df_live = df_live[df_live["ForcaShitese"] == agj_sel] [cite: 5]
-        if klientet_selected: [cite: 5]
-            df_live = df_live[df_live["Klienti"].isin(klientet_selected)] [cite: 5]
+        df_live = df_raw[mask_live].copy()
+        if grup_sel != "Të gjitha":
+            df_live = df_live[df_live["Grup_Filtri"] == grup_sel]
+        if agj_sel != "Të gjithë":
+            df_live = df_live[df_live["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            df_live = df_live[df_live["Klienti"].isin(klientet_selected)]
 
-        t_real = df_live["kg"].sum() [cite: 5]
+        t_real = df_live["kg"].sum()
 
         # --- REALIZIMI AKTUAL DISTINCT (KLIENTË DHE KODE) ---
         real_kliente = df_live["Klienti"].nunique()
-        real_kode = df_live["KodiArt"].nunique() # Numëron vlerat distinct (unike) nga kolona KodiArt
+        real_kode = df_live["KodiArt"].nunique()
 
         # --- LLOGARITJA E ÇMIMIT MESATAR ---
         t_vlera_live = (
-            df_live["Vlera_Historike"].sum() [cite: 5]
-            if "Vlera_Historike" in df_live.columns [cite: 6]
-            else 0 [cite: 6]
+            df_live["Vlera_Historike"].sum()
+            if "Vlera_Historike" in df_live.columns
+            else 0
         )
-        if t_real > 0: [cite: 6]
-            cmimi_mesatar = t_vlera_live / t_real [cite: 6]
-        else: [cite: 6]
-            cmimi_mesatar = 0 [cite: 6]
+        if t_real > 0:
+            cmimi_mesatar = t_vlera_live / t_real
+        else:
+            cmimi_mesatar = 0
 
         # --- 2. DITËT E PUNËS (Pa të diela) ---
-        start_muaji = sot.replace(day=1) [cite: 7]
-        fund_muaji = start_muaji + pd.offsets.MonthEnd(0) [cite: 7]
+        start_muaji = sot.replace(day=1)
+        fund_muaji = start_muaji + pd.offsets.MonthEnd(0)
         ditet_punes_deri_sot = len(
-            [d for d in pd.date_range(start_muaji, sot) if d.weekday() < 6] [cite: 7]
+            [d for d in pd.date_range(start_muaji, sot) if d.weekday() < 6]
         )
         ditet_punes_totale = len(
-            [d for d in pd.date_range(start_muaji, fund_muaji) if d.weekday() < 6] [cite: 7]
+            [d for d in pd.date_range(start_muaji, fund_muaji) if d.weekday() < 6]
         )
         koha_perq = (
-            (ditet_punes_deri_sot / ditet_punes_totale * 100) [cite: 8]
-            if ditet_punes_totale > 0 [cite: 8]
-            else 0 [cite: 8]
+            (ditet_punes_deri_sot / ditet_punes_totale * 100)
+            if ditet_punes_totale > 0
+            else 0
         )
 
         # --- 3. METRIKAT KRYESORE ---
-        total_perc = (t_real / t_target * 100) if t_target > 0 else 0 [cite: 8]
-        
-        # Ndryshuar në 7 kolona që të qëndrojnë të gjitha në një rresht vizual [cite: 9]
-        c1, c2, c3, c4, c5, c6, c7 = st.columns(7) [cite: 9]
-        
-        c1.metric("Target KG", f"{t_target:,.0f}") [cite: 9]
-        c2.metric("Realizuar KG", f"{t_real:,.0f}") [cite: 9]
-        
-        status_color = "normal" if total_perc >= koha_perq else "inverse" [cite: 9]
+        total_perc = (t_real / t_target * 100) if t_target > 0 else 0
+
+        # Renditja e saktë në 7 kolona paralele
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+
+        c1.metric("Target KG", f"{t_target:,.0f}")
+        c2.metric("Realizuar KG", f"{t_real:,.0f}")
+
+        status_color = "normal" if total_perc >= koha_perq else "inverse"
         c3.metric(
             "Realizimi %",
-            f"{total_perc:.1f}%", [cite: 10]
-            delta=f"{total_perc - koha_perq:.1f}% vs Koha", [cite: 10]
-            delta_color=status_color, [cite: 10]
+            f"{total_perc:.1f}%",
+            delta=f"{total_perc - koha_perq:.1f}% vs Koha",
+            delta_color=status_color,
         )
-        
-        # Metrikat e reja
+
         perc_kliente = (real_kliente / plan_kliente * 100) if plan_kliente > 0 else 0
-        c4.metric("Klientë Realiz/Plan", f"{real_kliente}/{plan_kliente}", f"{perc_kliente:.1f}%")
-        
+        c4.metric(
+            "Klientë Realiz/Plan",
+            f"{real_kliente}/{plan_kliente}",
+            f"{perc_kliente:.1f}%",
+        )
+
         perc_kode = (real_kode / plan_kode * 100) if plan_kode > 0 else 0
         c5.metric("Kode Unitare R/P", f"{real_kode}/{plan_kode}", f"{perc_kode:.1f}%")
-        
+
         c6.metric(
             "Ditë Pune",
-            f"{ditet_punes_deri_sot}/{ditet_punes_totale}", [cite: 10]
-            f"{koha_perq:.1f}% e muajit", [cite: 10]
+            f"{ditet_punes_deri_sot}/{ditet_punes_totale}",
+            f"{koha_perq:.1f}% e muajit",
         )
-        c7.metric("Çmimi Mes./kg", f"{cmimi_mesatar:,.1f} Lekë") [cite: 11]
+        c7.metric("Çmimi Mes./kg", f"{cmimi_mesatar:,.1f} Lekë")
 
-        st.divider() [cite: 11]
+        st.divider()
 
         # --- 4. ANALIZA E TRENDËVE ---
-        st.subheader("🔍 Analiza e Trendeve (Krahasim me të njëjtën periudhë)") [cite: 11]
-        tr1, tr2, tr3 = st.columns(3) [cite: 11]
+        st.subheader("🔍 Analiza e Trendeve (Krahasim me të njëjtën periudhë)")
+        tr1, tr2, tr3 = st.columns(3)
 
-        # A. Trendi Linear [cite: 11]
-        ritmi_punes = t_real / ditet_punes_deri_sot if ditet_punes_deri_sot > 0 else 0 [cite: 12]
-        projeksioni = ritmi_punes * ditet_punes_totale [cite: 12]
+        # A. Trendi Linear
+        ritmi_punes = t_real / ditet_punes_deri_sot if ditet_punes_deri_sot > 0 else 0
+        projeksioni = ritmi_punes * ditet_punes_totale
         tr1.metric(
             "Trendi Linear",
-            f"{projeksioni:,.0f} kg", [cite: 12]
-            delta=f"{projeksioni - t_target:,.0f} vs Plani", [cite: 12]
+            f"{projeksioni:,.0f} kg",
+            delta=f"{projeksioni - t_target:,.0f} vs Plani",
         )
 
         # B. vs Muaji Kaluar
-        m_kaluar_date = sot - pd.DateOffset(months=1) [cite: 13]
+        m_kaluar_date = sot - pd.DateOffset(months=1)
         mask_m = (
-            (df_raw["Data"].dt.year == m_kaluar_date.year) [cite: 13]
-            & (df_raw["Data"].dt.month == m_kaluar_date.month) [cite: 13]
-            & (df_raw["Data"].dt.day <= sot.day) [cite: 13]
+            (df_raw["Data"].dt.year == m_kaluar_date.year)
+            & (df_raw["Data"].dt.month == m_kaluar_date.month)
+            & (df_raw["Data"].dt.day <= sot.day)
         )
-        df_m_kaluar = df_raw[mask_m].copy() [cite: 13]
+        df_m_kaluar = df_raw[mask_m].copy()
 
-        if grup_sel != "Të gjitha": [cite: 14]
-            df_m_kaluar = df_m_kaluar[df_m_kaluar["Grup_Filtri"] == grup_sel] [cite: 14]
-        if agj_sel != "Të gjithë": [cite: 14]
-            df_m_kaluar = df_m_kaluar[df_m_kaluar["ForcaShitese"] == agj_sel] [cite: 14]
-        if klientet_selected: [cite: 14]
-            df_m_kaluar = df_m_kaluar[df_m_kaluar["Klienti"].isin(klientet_selected)] [cite: 14]
+        if grup_sel != "Të gjitha":
+            df_m_kaluar = df_m_kaluar[df_m_kaluar["Grup_Filtri"] == grup_sel]
+        if agj_sel != "Të gjithë":
+            df_m_kaluar = df_m_kaluar[df_m_kaluar["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            df_m_kaluar = df_m_kaluar[df_m_kaluar["Klienti"].isin(klientet_selected)]
 
-        t_m_kaluar = df_m_kaluar["kg"].sum() [cite: 14]
-        rritja_m = ((t_real / t_m_kaluar) - 1) * 100 if t_m_kaluar > 0 else 0 [cite: 15]
-        tr2.metric("vs Muaji Kaluar", f"{t_m_kaluar:,.0f} kg", delta=f"{rritja_m:.1f}%") [cite: 15]
+        t_m_kaluar = df_m_kaluar["kg"].sum()
+        rritja_m = ((t_real / t_m_kaluar) - 1) * 100 if t_m_kaluar > 0 else 0
+        tr2.metric("vs Muaji Kaluar", f"{t_m_kaluar:,.0f} kg", delta=f"{rritja_m:.1f}%")
 
         # C. vs Viti Kaluar
-        v_kaluar_date = sot - pd.DateOffset(years=1) [cite: 15]
+        v_kaluar_date = sot - pd.DateOffset(years=1)
         mask_v = (
-            (df_raw["Data"].dt.year == v_kaluar_date.year) [cite: 15]
-            & (df_raw["Data"].dt.month == v_kaluar_date.month) [cite: 15]
-            & (df_raw["Data"].dt.day <= sot.day) [cite: 16]
+            (df_raw["Data"].dt.year == v_kaluar_date.year)
+            & (df_raw["Data"].dt.month == v_kaluar_date.month)
+            & (df_raw["Data"].dt.day <= sot.day)
         )
-        df_v_kaluar = df_raw[mask_v].copy() [cite: 16]
+        df_v_kaluar = df_raw[mask_v].copy()
 
-        if grup_sel != "Të gjitha": [cite: 16]
-            df_v_kaluar = df_v_kaluar[df_v_kaluar["Grup_Filtri"] == grup_sel] [cite: 16]
-        if agj_sel != "Të gjithë": [cite: 16]
-            df_v_kaluar = df_v_kaluar[df_v_kaluar["ForcaShitese"] == agj_sel] [cite: 17]
-        if klientet_selected: [cite: 17]
-            df_v_kaluar = df_v_kaluar[df_v_kaluar["Klienti"].isin(klientet_selected)] [cite: 17]
+        if grup_sel != "Të gjitha":
+            df_v_kaluar = df_v_kaluar[df_v_kaluar["Grup_Filtri"] == grup_sel]
+        if agj_sel != "Të gjithë":
+            df_v_kaluar = df_v_kaluar[df_v_kaluar["ForcaShitese"] == agj_sel]
+        if klientet_selected:
+            df_v_kaluar = df_v_kaluar[df_v_kaluar["Klienti"].isin(klientet_selected)]
 
-        t_v_kaluar = df_v_kaluar["kg"].sum() [cite: 17]
-        rritja_v = ((t_real / t_v_kaluar) - 1) * 100 if t_v_kaluar > 0 else 0 [cite: 17]
-        tr3.metric("vs Viti Kaluar", f"{t_v_kaluar:,.0f} kg", delta=f"{rritja_v:.1f}%") [cite: 17]
+        t_v_kaluar = df_v_kaluar["kg"].sum()
+        rritja_v = ((t_real / t_v_kaluar) - 1) * 100 if t_v_kaluar > 0 else 0
+        tr3.metric("vs Viti Kaluar", f"{t_v_kaluar:,.0f} kg", delta=f"{rritja_v:.1f}%")
 
-        st.divider() [cite: 17]
+        st.divider()
 
         # --- TABET E REALIZIMIT ---
-        df_comp = gp_target_cat.copy() [cite: 18]
+        df_comp = gp_target_cat.copy()
         df_comp = pd.merge(
-            df_comp[["kat", "KG_Target"]], [cite: 18]
-            df_live.groupby("kat", as_index=False).agg(KG_Real=("kg", "sum")), [cite: 18]
-            on="kat", [cite: 18]
-            how="left", [cite: 18]
-        ).fillna(0) [cite: 18]
+            df_comp[["kat", "KG_Target"]],
+            df_live.groupby("kat", as_index=False).agg(KG_Real=("kg", "sum")),
+            on="kat",
+            how="left",
+        ).fillna(0)
 
-        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"]) [cite: 19]
+        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
 
         with t1:
-            st.subheader("Ecuria sipas Kategorive") [cite: 19]
+            st.subheader("Ecuria sipas Kategorive")
             df_comp["Progresi"] = (
-                df_comp["KG_Real"] / df_comp["KG_Target"] * 100 [cite: 19]
-            ).clip(upper=100) [cite: 19]
+                df_comp["KG_Real"] / df_comp["KG_Target"] * 100
+            ).clip(upper=100)
             st.dataframe(
-                df_comp[["kat", "KG_Target", "KG_Real", "Progresi"]], [cite: 20]
+                df_comp[["kat", "KG_Target", "KG_Real", "Progresi"]],
                 column_config={
-                    "kat": "Kategoria", [cite: 20]
-                    "KG_Target": st.column_config.NumberColumn("Target (KG)", format="%d"), [cite: 20, 21]
-                    "KG_Real": st.column_config.NumberColumn("Realizuar (KG)", format="%d"), [cite: 21]
-                    "Progresi": st.column_config.ProgressColumn("Ecuria %", min_value=0, max_value=100, format="%.1f%%"), [cite: 22]
+                    "kat": "Kategoria",
+                    "KG_Target": st.column_config.NumberColumn(
+                        "Target (KG)", format="%d"
+                    ),
+                    "KG_Real": st.column_config.NumberColumn(
+                        "Realizuar (KG)", format="%d"
+                    ),
+                    "Progresi": st.column_config.ProgressColumn(
+                        "Ecuria %", min_value=0, max_value=100, format="%.1f%%"
+                    ),
                 },
-                hide_index=True, [cite: 22]
-                use_container_width="stretch", [cite: 23]
+                hide_index=True,
+                use_container_width="stretch",
             )
 
         with t2:
-            st.subheader("Ecuria sipas Agjentëve") [cite: 23]
-            gp_agj_target = dff_ref.groupby("ForcaShitese").agg({"kg": "sum"}).reset_index() [cite: 23]
-            gp_agj_target["Target_AGJ"] = (gp_agj_target["kg"] / n_months_ref) * rritja_faktori [cite: 24]
+            st.subheader("Ecuria sipas Agjentëve")
+            gp_agj_target = (
+                dff_ref.groupby("ForcaShitese").agg({"kg": "sum"}).reset_index()
+            )
+            gp_agj_target["Target_AGJ"] = (
+                gp_agj_target["kg"] / n_months_ref
+            ) * rritja_faktori
 
-            gp_agj_live = df_live.groupby("ForcaShitese").agg({"kg": "sum"}).reset_index().rename(columns={"kg": "Real_AGJ"}) [cite: 24, 25]
+            gp_agj_live = (
+                df_live.groupby("ForcaShitese")
+                .agg({"kg": "sum"})
+                .reset_index()
+                .rename(columns={"kg": "Real_AGJ"})
+            )
 
             df_agj = pd.merge(
-                gp_agj_target[["ForcaShitese", "Target_AGJ"]], [cite: 25]
-                gp_agj_live, [cite: 25]
-                on="ForcaShitese", [cite: 25]
-                how="left", [cite: 26]
-            ).fillna(0) [cite: 26]
-            df_agj["%"] = (df_agj["Real_AGJ"] / df_agj["Target_AGJ"] * 100).clip(upper=100) [cite: 26]
+                gp_agj_target[["ForcaShitese", "Target_AGJ"]],
+                gp_agj_live,
+                on="ForcaShitese",
+                how="left",
+            ).fillna(0)
+            df_agj["%"] = (df_agj["Real_AGJ"] / df_agj["Target_AGJ"] * 100).clip(
+                upper=100
+            )
 
             st.dataframe(
-                df_agj.sort_values("%", ascending=False), [cite: 27]
+                df_agj.sort_values("%", ascending=False),
                 column_config={
-                    "ForcaShitese": "Agjenti", [cite: 27]
-                    "Target_AGJ": st.column_config.NumberColumn("Target", format="%d"), [cite: 27]
-                    "Real_AGJ": st.column_config.NumberColumn("Realizuar", format="%d"), [cite: 27]
-                    "%": st.column_config.ProgressColumn("Ecuria", min_value=0, max_value=100, format="%.1f%%"), [cite: 28]
+                    "ForcaShitese": "Agjenti",
+                    "Target_AGJ": st.column_config.NumberColumn("Target", format="%d"),
+                    "Real_AGJ": st.column_config.NumberColumn("Realizuar", format="%d"),
+                    "%": st.column_config.ProgressColumn(
+                        "Ecuria", min_value=0, max_value=100, format="%.1f%%"
+                    ),
                 },
-                hide_index=True, [cite: 28]
-                use_container_width="stretch", [cite: 28]
+                hide_index=True,
+                use_container_width="stretch",
             )
 
         with t3:
-            st.subheader("Ecuria sipas Klientëve") [cite: 29]
-            gp_kl_target = dff_ref.groupby(["Klienti", "ForcaShitese"]).agg({"kg": "sum"}).reset_index() [cite: 29, 30]
-            gp_kl_target["Target_KL"] = (gp_kl_target["kg"] / n_months_ref) * rritja_faktori [cite: 30]
+            st.subheader("Ecuria sipas Klientëve")
+            gp_kl_target = (
+                dff_ref.groupby(["Klienti", "ForcaShitese"])
+                .agg({"kg": "sum"})
+                .reset_index()
+            )
+            gp_kl_target["Target_KL"] = (
+                gp_kl_target["kg"] / n_months_ref
+            ) * rritja_faktori
 
-            gp_kl_live = df_live.groupby("Klienti").agg({"kg": "sum"}).reset_index().rename(columns={"kg": "Real_KL"}) [cite: 31]
-
-            df_kl = pd.merge(
-                gp_kl_target[["Klienti", "ForcaShitese", "Target_KL"]], [cite: 31]
-                gp_kl_live, [cite: 32]
-                on="Klienti", [cite: 32]
-                how="left", [cite: 32]
-            ).fillna(0) [cite: 32]
-            df_kl["%"] = (df_kl["Real_KL"] / df_kl["Target_KL"] * 100).clip(upper=100) [cite: 32]
-            df_kl = df_kl[df_kl["Target_KL"] > 0] [cite: 33]
-
-            st.dataframe(
-                df_kl.sort_values("%", ascending=False), [cite: 33]
-                column_config={
-                    "Klienti": "Klienti", [cite: 33]
-                    "ForcaShitese": "Agjenti", [cite: 34]
-                    "Target_KL": st.column_config.NumberColumn("Target", format="%d"), [cite: 34]
-                    "Real_KL": st.column_config.NumberColumn("Realizuar", format="%d"), [cite: 34]
-                    "%": st.column_config.ProgressColumn("Ecuria", min_value=0, max_value=100, format="%.1f%%"), [cite: 34, 35]
-                },
-                hide_index=True, [cite: 35]
-                use_container_width="stretch", [cite: 35]
+            gp_kl_live = (
+                df_live.groupby("Klienti")
+                .agg({"kg": "sum"})
+                .reset_index()
+                .rename(columns={"kg": "Real_KL"})
             )
 
-        # --- 7. EKSPORTI NË HTML ---
-        st.divider() [cite: 36]
+            df_kl = pd.merge(
+                gp_kl_target[["Klienti", "ForcaShitese", "Target_KL"]],
+                gp_kl_live,
+                on="Klienti",
+                how="left",
+            ).fillna(0)
+            df_kl["%"] = (df_kl["Real_KL"] / df_kl["Target_KL"] * 100).clip(upper=100)
+            df_kl = df_kl[df_kl["Target_KL"] > 0]
 
-        agj_emri_fajl = agj_sel.replace(" ", "_") if agj_sel != "Të gjithë" else "Gjithe_Agjentet" [cite: 36]
-        file_name_custom = f"Raport_{agj_emri_fajl}_{sot.strftime('%d_%m_%Y')}.html" [cite: 36]
-        klientet_text = ", ".join(klientet_selected) if klientet_selected else "Të gjithë" [cite: 37]
+            st.dataframe(
+                df_kl.sort_values("%", ascending=False),
+                column_config={
+                    "Klienti": "Klienti",
+                    "ForcaShitese": "Agjenti",
+                    "Target_KL": st.column_config.NumberColumn("Target", format="%d"),
+                    "Real_KL": st.column_config.NumberColumn("Realizuar", format="%d"),
+                    "%": st.column_config.ProgressColumn(
+                        "Ecuria", min_value=0, max_value=100, format="%.1f%%"
+                    ),
+                },
+                hide_index=True,
+                use_container_width="stretch",
+            )
+
+        # --- 7. EKSPORTI NË HTML (KORRIGJUAR KLASAT CSS DINAMIKE) ---
+        st.divider()
+
+        agj_emri_fajl = (
+            agj_sel.replace(" ", "_") if agj_sel != "Të gjithë" else "Gjithe_Agjentet"
+        )
+        file_name_custom = f"Raport_{agj_emri_fajl}_{sot.strftime('%d_%m_%Y')}.html"
+        klientet_text = (
+            ", ".join(klientet_selected) if klientet_selected else "Të gjithë"
+        )
+
+        # Përcaktojmë klasat e ngjyrave paraprakisht jashtë f-string që të mos kemi gabime sintakse
+        cls_proj = "positive" if projeksioni >= t_target else "negative"
+        cls_m = "positive" if rritja_m >= 0 else "negative"
+        cls_v = "positive" if rritja_v >= 0 else "negative"
 
         html_report = f"""
         <!DOCTYPE html>
@@ -1274,98 +1322,98 @@ elif page == "Realizimi":
         <head>
             <meta charset="UTF-8">
             <style>
-                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 30px; background-color: #f8f9fa; color: #333; }} [cite: 38]
-                .header {{ background-color: #1a237e; color: white; padding: 25px; border-radius: 12px 12px 0 0; text-align: center; }} [cite: 38, 39, 40]
-                .filter-bar {{ background-color: #ffffff; padding: 15px; border: 1px solid #e0e0e0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 20px; }} [cite: 40, 41, 42]
-                .filter-item {{ color: #555; }} [cite: 42, 43]
-                .filter-item strong {{ color: #1a237e; }} [cite: 43, 44]
-                .stats-container {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 10px; flex-wrap: wrap; }} [cite: 44, 45]
-                .stat-box {{ background: white; padding: 15px 10px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 12%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }} [cite: 45, 46, 47]
-                .stat-box h3 {{ margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; }} [cite: 47, 48]
-                .stat-box p {{ font-size: 16px; font-weight: bold; margin: 10px 0; color: #1a237e; }} [cite: 48, 49]
-                .trend-section {{ background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px; }} [cite: 49, 50, 51]
-                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }} [cite: 51, 52]
-                th, td {{ padding: 15px; text-align: left; border-bottom: 1px solid #eee; }} [cite: 52, 53]
-                th {{ background-color: #fcfcfc; font-weight: 600; color: #555; }} [cite: 53, 54]
-                .positive {{ color: #2e7d32; font-weight: bold; }} [cite: 54, 55]
-                .negative {{ color: #c62828; font-weight: bold; }} [cite: 55, 56]
-                .footer {{ text-align: center; margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }} [cite: 56, 57, 58]
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 30px; background-color: #f8f9fa; color: #333; }}
+                .header {{ background-color: #1a237e; color: white; padding: 25px; border-radius: 12px 12px 0 0; text-align: center; }}
+                .filter-bar {{ background-color: #ffffff; padding: 15px; border: 1px solid #e0e0e0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 20px; }}
+                .filter-item {{ color: #555; }}
+                .filter-item strong {{ color: #1a237e; }}
+                .stats-container {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 10px; flex-wrap: wrap; }}
+                .stat-box {{ background: white; padding: 15px 10px; border-radius: 10px; border-bottom: 4px solid #1a237e; width: 12%; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+                .stat-box h3 {{ margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #777; }}
+                .stat-box p {{ font-size: 16px; font-weight: bold; margin: 10px 0; color: #1a237e; }}
+                .trend-section {{ background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ padding: 15px; text-align: left; border-bottom: 1px solid #eee; }}
+                th {{ background-color: #fcfcfc; font-weight: 600; color: #555; }}
+                .positive {{ color: #2e7d32; font-weight: bold; }}
+                .negative {{ color: #c62828; font-weight: bold; }}
+                .footer {{ text-align: center; margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }}
             </style>
         </head>
         <body>
-            <div class="header"> [cite: 59]
-                <h1 style="margin:0;">Analiza e Realizimit: {muajt_sq.get(sot.month)} {sot.year}</h1> [cite: 59]
-                <p style="margin:10px 0 0 0; opacity: 0.8;">Raport zyrtar i performancës së shitjeve</p> [cite: 59]
-            </div> [cite: 59]
+            <div class="header">
+                <h1 style="margin:0;">Analiza e Realizimit: {muajt_sq.get(sot.month)} {sot.year}</h1>
+                <p style="margin:10px 0 0 0; opacity: 0.8;">Raport zyrtar i performancës së shitjeve</p>
+            </div>
 
-            <div class="filter-bar"> [cite: 59]
-                <div class="filter-item">Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div> [cite: 59]
-                <div class="filter-item">📈 Rritja e aplikuar: <strong>{rritja}%</strong></div> [cite: 59]
-                <div class="filter-item">📦 Grupi: <strong>{grup_sel}</strong></div> [cite: 59]
-                <div class="filter-item">👤 Agjenti: <strong>{agj_sel}</strong></div> [cite: 59]
-                <div class="filter-item">🏪 Klientët: <strong>{klientet_text}</strong></div> [cite: 60]
-            </div> [cite: 60]
+            <div class="filter-bar">
+                <div class="filter-item">Referenca: <strong>{start_date.strftime('%d/%m/%y')} - {end_date.strftime('%d/%m/%y')}</strong></div>
+                <div class="filter-item">📈 Rritja e aplikuar: <strong>{rritja}%</strong></div>
+                <div class="filter-item">📦 Grupi: <strong>{grup_sel}</strong></div>
+                <div class="filter-item">👤 Agjenti: <strong>{agj_sel}</strong></div>
+                <div class="filter-item">🏪 Klientët: <strong>{klientet_text}</strong></div>
+            </div>
 
-            <div class="stats-container"> [cite: 60]
-                <div class="stat-box"><h3>Targeti (Muaj)</h3><p>{t_target:,.0f} kg</p></div> [cite: 60]
-                <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div> [cite: 60]
-                <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div> [cite: 60]
+            <div class="stats-container">
+                <div class="stat-box"><h3>Targeti (Muaj)</h3><p>{t_target:,.0f} kg</p></div>
+                <div class="stat-box"><h3>Realizimi Live</h3><p>{t_real:,.0f} kg</p></div>
+                <div class="stat-box"><h3>Ecuria %</h3><p>{total_perc:.1f}%</p></div>
                 <div class="stat-box"><h3>Klientë R/P</h3><p>{real_kliente}/{plan_kliente}</p></div>
                 <div class="stat-box"><h3>Kode R/P</h3><p>{real_kode}/{plan_kode}</p></div>
-                <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div> [cite: 61]
-                <div class="stat-box"><h3>Çmimi Mesatar</h3><p>{cmimi_mesatar:,.2f} Lekë</p></div> [cite: 61]
-            </div> [cite: 61]
+                <div class="stat-box"><h3>Statusi i Kohës</h3><p>{ditet_punes_deri_sot}/{ditet_punes_totale} Ditë</p></div>
+                <div class="stat-box"><h3>Çmimi Mesatar</h3><p>{cmimi_mesatar:,.2f} Lekë</p></div>
+            </div>
 
-            <div class="trend-section"> [cite: 61]
-                <h2 style="margin-top:0; color: #1a237e; font-size: 18px;">🔍 Krahasimi i Trendeve (Pa të diela)</h2> [cite: 61, 62]
-                <table> [cite: 62]
-                    <thead> [cite: 62]
-                        <tr> [cite: 62]
-                            <th>Lloji i Trendit</th> [cite: 62]
-                            <th>Vlera e Krahasuar</th> [cite: 63]
-                            <th>Devijimi / Rritja</th> [cite: 63]
-                        </tr> [cite: 63]
-                    </thead> [cite: 64]
-                    <tbody> [cite: 64]
-                        <tr> [cite: 64]
-                            <td><strong>Trendi Linear</strong> (Parashikimi i mbylljes)</td> [cite: 64]
-                            <td>{projeksioni:,.0f} kg</td> [cite: 65]
-                            <td class="{'positive' if projeksioni >= t_target else 'negative'}"> [cite: 65]
-                                {projeksioni - t_target:,.0f} kg vs Objektivi [cite: 66]
-                            </td> [cite: 66]
-                        </tr> [cite: 66]
-                        <tr> [cite: 66]
-                            <td><strong>vs Muaji i Kaluar</strong> (Deri në datën {sot.day})</td> [cite: 66]
-                            <td>{t_m_kaluar:,.0f} kg</td> [cite: 67]
-                            <td class="{'positive' if rritja_m >= 0 else 'negative'}"> [cite: 67]
-                                {rritja_m:+.1f}% [cite: 68]
-                            </td> [cite: 68]
-                        </tr> [cite: 68]
-                        <tr> [cite: 68]
-                            <td><strong>vs Viti i Kaluar</strong> (Deri në datën {sot.day})</td> [cite: 68]
-                            <td>{t_v_kaluar:,.0f} kg</td> [cite: 69]
-                            <td class="{'positive' if rritja_v >= 0 else 'negative'}"> [cite: 69]
-                                {rritja_v:+.1f}% [cite: 70]
-                            </td> [cite: 70]
-                        </tr> [cite: 70]
-                    </tbody> [cite: 70]
-                </table> [cite: 70]
-            </div> [cite: 70]
+            <div class="trend-section">
+                <h2 style="margin-top:0; color: #1a237e; font-size: 18px;">🔍 Krahasimi i Trendeve (Pa të diela)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Lloji i Trendit</th>
+                            <th>Vlera e Krahasuar</th>
+                            <th>Devijimi / Rritja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Trendi Linear</strong> (Parashikimi i mbylljes)</td>
+                            <td>{projeksioni:,.0f} kg</td>
+                            <td class="{cls_proj}">
+                                {projeksioni - t_target:,.0f} kg vs Objektivi
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>vs Muaji i Kaluar</strong> (Deri në datën {sot.day})</td>
+                            <td>{t_m_kaluar:,.0f} kg</td>
+                            <td class="{cls_m}">
+                                {rritja_m:+.1f}%
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>vs Viti i Kaluar</strong> (Deri në datën {sot.day})</td>
+                            <td>{t_v_kaluar:,.0f} kg</td>
+                            <td class="{cls_v}">
+                                {rritja_v:+.1f}%
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-            <div class="footer"> [cite: 71]
-                Gjeneruar nga Sistemi i Monitorimit të Shitjeve | Data: {sot.strftime('%d/%m/%Y %H:%M:%S')} [cite: 71, 72]
-            </div> [cite: 72]
-        </body> [cite: 72]
-        </html> [cite: 72]
-        """ [cite: 72]
+            <div class="footer">
+                Gjeneruar nga Sistemi i Monitorimit të Shitjeve | Data: {sot.strftime('%d/%m/%Y %H:%M:%S')}
+            </div>
+        </body>
+        </html>
+        """
 
-        st.download_button( [cite: 72]
-            label=f"💾 Shkarko Raportin: {file_name_custom}", [cite: 72]
-            data=html_report, [cite: 73]
-            file_name=file_name_custom, [cite: 73]
-            mime="text/html", [cite: 73]
-            use_container_width=True, [cite: 73]
-        ) [cite: 73]
+        st.download_button(
+            label=f"💾 Shkarko Raportin: {file_name_custom}",
+            data=html_report,
+            file_name=file_name_custom,
+            mime="text/html",
+            use_container_width=True,
+        )
 
 # ---------------------------------------------------------
 # MODULI: MUNDESITE
