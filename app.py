@@ -1236,13 +1236,28 @@ elif page == "Realizimi":
             st.divider()
 
         # --- TABET E REALIZIMIT ---
+        # Përgatisim të dhënat e agreguara për kategoritë (përfshirë vlerën për çmimin mesatar)
         df_comp = gp_target_cat.copy()
+        gp_kat_live = df_live.groupby("kat", as_index=False).agg(
+            KG_Real=("kg", "sum"),
+            Vlera_Real=(
+                ("Vlera_Historike", "sum")
+                if "Vlera_Historike" in df_live.columns
+                else ("kg", lambda x: 0)
+            ),
+        )
+
         df_comp = pd.merge(
             df_comp[["kat", "KG_Target"]],
-            df_live.groupby("kat", as_index=False).agg(KG_Real=("kg", "sum")),
+            gp_kat_live,
             on="kat",
             how="left",
         ).fillna(0)
+
+        # Llogarisim çmimin mesatar për kategoritë
+        df_comp["Cmimi_Mesatar"] = np.where(
+            df_comp["KG_Real"] > 0, df_comp["Vlera_Real"] / df_comp["KG_Real"], 0
+        )
 
         t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
 
@@ -1252,7 +1267,13 @@ elif page == "Realizimi":
                 df_comp["Progresi"] = (
                     df_comp["KG_Real"] / df_comp["KG_Target"] * 100
                 ).clip(upper=100)
-                kolonat_shfaq = ["kat", "KG_Target", "KG_Real", "Progresi"]
+                kolonat_shfaq = [
+                    "kat",
+                    "KG_Target",
+                    "KG_Real",
+                    "Progresi",
+                    "Cmimi_Mesatar",
+                ]
                 konfigurimi_kolonave = {
                     "kat": "Kategoria",
                     "KG_Target": st.column_config.NumberColumn(
@@ -1264,13 +1285,19 @@ elif page == "Realizimi":
                     "Progresi": st.column_config.ProgressColumn(
                         "Ecuria %", min_value=0, max_value=100, format="%.1f%%"
                     ),
+                    "Cmimi_Mesatar": st.column_config.NumberColumn(
+                        "Çmimi Mes. (Lekë/kg)", format="%.1f"
+                    ),
                 }
             else:
-                kolonat_shfaq = ["kat", "KG_Real"]
+                kolonat_shfaq = ["kat", "KG_Real", "Cmimi_Mesatar"]
                 konfigurimi_kolonave = {
                     "kat": "Kategoria",
                     "KG_Real": st.column_config.NumberColumn(
                         "Realizuar (KG)", format="%d"
+                    ),
+                    "Cmimi_Mesatar": st.column_config.NumberColumn(
+                        "Çmimi Mes. (Lekë/kg)", format="%.1f"
                     ),
                 }
 
@@ -1285,9 +1312,22 @@ elif page == "Realizimi":
             st.subheader("Ecuria sipas Agjentëve")
             gp_agj_live = (
                 df_live.groupby("ForcaShitese")
-                .agg({"kg": "sum"})
+                .agg(
+                    Real_AGJ=("kg", "sum"),
+                    Vlera_AGJ=(
+                        ("Vlera_Historike", "sum")
+                        if "Vlera_Historike" in df_live.columns
+                        else ("kg", lambda x: 0)
+                    ),
+                )
                 .reset_index()
-                .rename(columns={"kg": "Real_AGJ"})
+            )
+
+            # Llogarisim çmimin mesatar për agjentët
+            gp_agj_live["Cmimi_Mesatar"] = np.where(
+                gp_agj_live["Real_AGJ"] > 0,
+                gp_agj_live["Vlera_AGJ"] / gp_agj_live["Real_AGJ"],
+                0,
             )
 
             if eshte_muaji_korrent:
@@ -1320,17 +1360,25 @@ elif page == "Realizimi":
                         "%": st.column_config.ProgressColumn(
                             "Ecuria", min_value=0, max_value=100, format="%.1f%%"
                         ),
+                        "Cmimi_Mesatar": st.column_config.NumberColumn(
+                            "Çmimi Mes. (Lekë/kg)", format="%.1f"
+                        ),
                     },
                     hide_index=True,
                     use_container_width="stretch",
                 )
             else:
                 st.dataframe(
-                    gp_agj_live.sort_values("Real_AGJ", ascending=False),
+                    gp_agj_live.sort_values("Real_AGJ", ascending=False)[
+                        ["ForcaShitese", "Real_AGJ", "Cmimi_Mesatar"]
+                    ],
                     column_config={
                         "ForcaShitese": "Agjenti",
                         "Real_AGJ": st.column_config.NumberColumn(
                             "Realizuar Total (KG)", format="%d"
+                        ),
+                        "Cmimi_Mesatar": st.column_config.NumberColumn(
+                            "Çmimi Mes. (Lekë/kg)", format="%.1f"
                         ),
                     },
                     hide_index=True,
@@ -1341,9 +1389,22 @@ elif page == "Realizimi":
             st.subheader("Ecuria sipas Klientëve")
             gp_kl_live = (
                 df_live.groupby("Klienti")
-                .agg({"kg": "sum"})
+                .agg(
+                    Real_KL=("kg", "sum"),
+                    Vlera_KL=(
+                        ("Vlera_Historike", "sum")
+                        if "Vlera_Historike" in df_live.columns
+                        else ("kg", lambda x: 0)
+                    ),
+                )
                 .reset_index()
-                .rename(columns={"kg": "Real_KL"})
+            )
+
+            # Llogarisim çmimin mesatar për klientët
+            gp_kl_live["Cmimi_Mesatar"] = np.where(
+                gp_kl_live["Real_KL"] > 0,
+                gp_kl_live["Vlera_KL"] / gp_kl_live["Real_KL"],
+                0,
             )
 
             if eshte_muaji_korrent:
@@ -1380,17 +1441,33 @@ elif page == "Realizimi":
                         "%": st.column_config.ProgressColumn(
                             "Ecuria", min_value=0, max_value=100, format="%.1f%%"
                         ),
+                        "Cmimi_Mesatar": st.column_config.NumberColumn(
+                            "Çmimi Mes. (Lekë/kg)", format="%.1f"
+                        ),
                     },
                     hide_index=True,
                     use_container_width="stretch",
                 )
             else:
-                # Shtohet edhe agjenti përkatës te historiku për qartësi vizuale
                 gp_kl_agj = (
                     df_live.groupby(["Klienti", "ForcaShitese"])
-                    .agg(Real_KL=("kg", "sum"))
+                    .agg(
+                        Real_KL=("kg", "sum"),
+                        Vlera_KL=(
+                            ("Vlera_Historike", "sum")
+                            if "Vlera_Historike" in df_live.columns
+                            else ("kg", lambda x: 0)
+                        ),
+                    )
                     .reset_index()
                 )
+
+                gp_kl_agj["Cmimi_Mesatar"] = np.where(
+                    gp_kl_agj["Real_KL"] > 0,
+                    gp_kl_agj["Vlera_KL"] / gp_kl_agj["Real_KL"],
+                    0,
+                )
+
                 st.dataframe(
                     gp_kl_agj.sort_values("Real_KL", ascending=False),
                     column_config={
@@ -1398,6 +1475,9 @@ elif page == "Realizimi":
                         "ForcaShitese": "Agjenti",
                         "Real_KL": st.column_config.NumberColumn(
                             "Realizuar (KG)", format="%d"
+                        ),
+                        "Cmimi_Mesatar": st.column_config.NumberColumn(
+                            "Çmimi Mes. (Lekë/kg)", format="%.1f"
                         ),
                     },
                     hide_index=True,
