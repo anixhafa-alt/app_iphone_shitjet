@@ -1030,6 +1030,32 @@ elif page == "Realizimi":
 
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
     st.divider()
+    # ... (pjesa e përzgjedhjes së periudhës dhe përcaktimit të variablit 'sot' dhe st.title)
+
+    # --- PËRGATITJA E TEKSTIT PËR KLIENTËT E ZGJEDHUR ---
+    if klientet_selected:
+        # Nëse janë zgjedhur më shumë se 5 klientë, shfaqim numrin e tyre që të mos bllokohet ekrani me tekst
+        if len(klientet_selected) > 5:
+            klientet_shfaq = f"{len(klientet_selected)} Klientë të përzgjedhur"
+        else:
+            klientet_shfaq = ", ".join(klientet_selected)
+    else:
+        klientet_shfaq = "Të gjithë"
+
+    # --- SHFAQJA E FILTRAVE AKTIVË POSHTË TITULLIT ---
+    col_info1, col_info2, col_info3 = st.columns(3)
+    
+    with col_info1:
+        st.markdown(f"👤 Agjenti: **{agj_sel}**")
+    with col_info2:
+        st.markdown(f"📦 Grupi/Kategoria: **{grup_sel}**")
+    with col_info3:
+        st.markdown(f"🏪 Klienti: **{klientet_shfaq}**")
+
+    st.divider()
+    
+    if df_raw is not None:
+        # ... (vazhdon pjesa tjetër e kodit me llogaritjet dhe tabet)
 
     if df_raw is not None:
         # --- 1. TARGETI DHE REALIZIMI KORRENT ---
