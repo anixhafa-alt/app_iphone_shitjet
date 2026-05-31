@@ -1044,7 +1044,7 @@ elif page == "Realizimi":
 
     # --- SHFAQJA E FILTRAVE AKTIVË POSHTË TITULLIT ---
     col_info1, col_info2, col_info3 = st.columns(3)
-    
+
     with col_info1:
         st.markdown(f"👤 Agjenti: **{agj_sel}**")
     with col_info2:
@@ -1053,9 +1053,6 @@ elif page == "Realizimi":
         st.markdown(f"🏪 Klienti: **{klientet_shfaq}**")
 
     st.divider()
-    
-    if df_raw is not None:
-        # ... (vazhdon pjesa tjetër e kodit me llogaritjet dhe tabet)
 
     if df_raw is not None:
         # --- 1. TARGETI DHE REALIZIMI KORRENT ---
