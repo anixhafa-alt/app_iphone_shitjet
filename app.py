@@ -2651,39 +2651,59 @@ def shfaq_ai_assistant(df):
                         for m in st.session_state.messages_chat
                     ]
 
+                    # Ndryshojme pak instruksionin lokal qe Claude te na jape edhe tekst edhe kod
+                    instruksioni_ri = (
+                        system_instruction
+                        + "\nKujdes: Shpjegoni rezultatin ne gjuhen shqipe normalisht. Por kodin Python futeni VETEM brenda tagit [KODI] dhe [/KODI]."
+                    )
+
                     response = client.messages.create(
                         model="claude-sonnet-4-6",
                         max_tokens=1500,
-                        system=system_instruction,
+                        system=instruksioni_ri,
                         messages=api_messages,
                     )
 
                     pergjigje_ai = response.content[0].text
-                    st.write(pergjigje_ai)
 
-                    # Ruajme mesazhin e AI ne historik
+                    # 1. Pastrojme tekstin nga tagu i kodit qe t'i shfaqet perdoruesit vetem shpjegimi njerëzor
+                    tekst_per_shfaqje = pergjigje_ai
+                    if "[KODI]" in tekst_per_shfaqje:
+                        tekst_per_shfaqje = (
+                            tekst_per_shfaqje.split("[KODI]")[0]
+                            + "\n*(Tabela u llogarit me sukses me poshte)*"
+                        )
+
+                    st.write(tekst_per_shfaqje)
+
+                    # Ruajme mesazhin ne historik
                     st.session_state.messages_chat.append(
                         {"role": "assistant", "content": pergjigje_ai}
                     )
 
-                    # Gjetja e kodit pa karaktere speciale
-                    start_marker = "```python"
-                    end_marker = "```"
+                    # 2. Izolojme dhe ekzekutojme kodin Python ne prapaskene
+                    if "[KODI]" in pergjigje_ai:
+                        pjesa_kodit = (
+                            pergjigje_ai.split("[KODI]")[1].split("[/KODI]")[0].strip()
+                        )
 
-                    if start_marker in pergjigje_ai:
-                        idx_start = pergjigje_ai.find(start_marker) + len(start_marker)
-                        pjesa_mbetur = pergjigje_ai[idx_start:]
-                        idx_end = pjesa_mbetur.find(end_marker)
+                        # Pastrim nese ka mbetur ndonje shenje markdown-i ```python
+                        if "```python" in pjesa_kodit:
+                            pjesa_kodit = (
+                                pjesa_kodit.split("```python")[1]
+                                .split("```")[0]
+                                .strip()
+                            )
+                        elif "```" in pjesa_kodit:
+                            pjesa_kodit = pjesa_kodit.split("```")[1].strip()
 
-                        pjesa_kodit = pjesa_mbetur[:idx_end].strip()
-
-                        # Executojme kodin e gjeneruar ne menyre te sigurt
+                        # Executojme kodin e gjeneruar
                         lokalet = {"df": df, "pd": pd}
                         exec(pjesa_kodit, globals(), lokalet)
 
-                        # Nese kodi krijoi 'rezultati_final', e shfaqim si tabele
+                        # Nese kodi krijoi 'rezultati_final', e shfaqim si tabele interaktive
                         if "rezultati_final" in lokalet:
-                            st.success("📊 Tabela e llogaritur automatikisht:")
+                            st.success("📊 Tabela e llogaritur nga AI:")
                             st.dataframe(
                                 lokalet["rezultati_final"], use_container_width=True
                             )
