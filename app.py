@@ -2561,7 +2561,7 @@ if page == "🎯 Plani sipas Strukturës B":
 # endregion
 
 # =========================================================
-# MODULI: AI DATA ASSISTANT (VERSIONI I RE DHE I SIGURT)
+# MODULI: AI DATA ASSISTANT (VERSIONI INTEGRAL ME CHAT & EXEC)
 # region ==================================================
 import anthropic
 import streamlit as st
@@ -2603,7 +2603,7 @@ def shfaq_ai_assistant(df):
     - Grup_Filtri (DEKA, OLIM, ETJ)
 
     RREGULLI I PËRGJIGJES:
-    Përgjigju në gjuhën shqipe duke i shpjeguar logjikën përdoruesit. Nëse ke llogaritur një tabelë, shfaqe kodin e llogaritjes brenda bllokut standard:
+    Përgjigju në gjuhën shqipe biking i shpjeguar logjikën përdoruesit. Nëse ke llogaritur një tabelë, shfaqe kodin e llogaritjes brenda bllokut standard:
 ```python
     # Kodi duhet të krijojë GJITHMONË një variabël të quajtur 'rezultati_final'
     # Shembull:
@@ -2649,10 +2649,17 @@ def shfaq_ai_assistant(df):
                     # Ruajmë mesazhin e AI në historik
                     st.session_state.messages_chat.append({"role": "assistant", "content": përgjigje_ai})
                     
-                    # Kontrollojmë nëse AI ka sugjeruar një bllok kodi Python për të ekzekutuar
-                    if "```python" in përgjigje_ai:
-                        pjesa_kodit = përgjigje_ai.split("```python")[1].split("
-```")[0].strip()
+                    # Gjetja e kodit me funksionin .find() për të shmangur SyntaxError nga split
+                    markeri_fillimit = "```python"
+                    markeri_fundit = "
+```"
+                    
+                    if markeri_fillimit in përgjigje_ai:
+                        idx_start = përgjigje_ai.find(markeri_fillimit) + len(markeri_fillimit)
+                        pjesa_mbetur = përgjigje_ai[idx_start:]
+                        idx_end = pjesa_mbetur.find(markeri_fundit)
+                        
+                        pjesa_kodit = pjesa_mbetur[:idx_end].strip()
                         
                         # Ekzekutojmë kodin e gjeneruar në mënyrë të sigurt vendas
                         lokalet = {"df": df, "pd": pd}
@@ -2674,13 +2681,13 @@ def shfaq_ai_assistant(df):
                 except Exception as e:
                     st.error(f"⚠️ Ndodhi një gabim: {e}")
 
-# Integrimi me menunë
+# Integrimi me menunë e aplikacionit tënd Streamlit
 if page == "AI Assistant":
     if 'df_raw' in locals() or 'df_raw' in globals():
         if df_raw is not None:
             shfaq_ai_assistant(df_raw)
         else:
-            st.error("❌ Nuk u gjetën të dhëna nga SQL.")
+            st.error("❌ Nuk u gjetën të dhëna valid nga SQL Server.")
     else:
         st.warning("⚠️ Prisni ngarkimin e të dhënave...")
     st.stop()
