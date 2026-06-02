@@ -693,7 +693,10 @@ elif page == "Planifikimi" and df_raw is not None:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
 
     n_months = max(
-        1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+        1,
+        (end_date.year - start_date.year) * 12
+        + (end_date.month - start_date.month)
+        + 1,
     )
 
     # Ruajmë vlerat në session_state që t'i përdorim te Realizimi
