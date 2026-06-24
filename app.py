@@ -164,7 +164,7 @@ def load_all_data():
     try:
         conn = st.connection("sql", type="sql")
         df_sql = conn.query(
-            "SELECT Data, ForcaShitese, KodiKlient, Klienti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
+            "SELECT Data, ForcaShitese, KodiKlient, Klienti, Qyteti, KodiArt, Artikulli, Sasia, VleraRresht FROM dbo.GetRaportiMadhView"
         )
         df_sql.columns = df_sql.columns.str.strip()
         df_sql["Data"] = pd.to_datetime(df_sql["Data"], errors="coerce")
