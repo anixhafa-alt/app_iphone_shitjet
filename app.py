@@ -651,44 +651,48 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI
+# MODULI: PLANIFIKIMI (I PËRDITËSUAR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
-
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
 
+    # --- ℹ️ BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT ---
+    # Vendoset në fillim të faqes që përdoruesi të kuptojë logjikën
+    with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
+        st.markdown("""
+        Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
+        
+        1. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
+           $$\\text{Plani KG} = \\left( \\frac{\\text{KG Historike}}{\\text{Numri i Muajve}} \\right) \\times \\left(1 + \\frac{\\text{Përqindja e Rritjes}}{100}\\right)$$
+        
+        2. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike, duke përjashtuar muajin korrent.
+        
+        3. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit, përdoret *Çmimi Mesatar i Periudhës* së përzgjedhur:
+           $$\\text{Vlera e Planifikuar} = \\text{Plani KG} \\times \\text{Çmimi (i Fundit ose Mesatar)}$$
+        """)
+
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
-
     # Marrim vetëm të dhënat që nuk i përkasin muajit dhe vitit aktual
-
     mask_past = (df_raw["Data"].dt.year < sot.year) | (
         (df_raw["Data"].dt.year == sot.year) & (df_raw["Data"].dt.month < sot.month)
     )
-
     df_past = df_raw[mask_past].copy()
-
     df_past["Cmimi_Rresht"] = df_past["Vlera_Historike"] / df_past["kg"].replace(0, 1)
-
     last_prices = df_past.sort_values("Data").drop_duplicates("KodiArt", keep="last")[
         ["KodiArt", "Cmimi_Rresht"]
     ]
-
     last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
     # --- FILTRIMI ---
-
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
-
     dff = df_raw.loc[mask].copy()
 
     if grup_sel != "Të gjitha":
         dff = dff[dff["Grup_Filtri"] == grup_sel]
-
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
-
     if klientet_selected:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
 
@@ -700,74 +704,50 @@ elif page == "Planifikimi" and df_raw is not None:
     )
 
     # Ruajmë vlerat në session_state që t'i përdorim te Realizimi
-
     st.session_state["start_d_plani"] = start_date
-
     st.session_state["end_d_plani"] = end_date
-
     st.session_state["rritja_plani"] = rritja
-
     st.session_state["grup_plani"] = grup_sel
 
     # --- AGREGIMI ---
-
     gp = (
         dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
     )
-    # INTEGRIMI DHE SAKTËSIMI I PLANIT:
-    if df_klientet_regjistri is not None:
-        # Pasi në tabelën historike mund të keni emrin e klientit ndryshe, bashkimin e bëjmë me Kodin e Klientit
-        # Nëse df_raw-i yt nuk ka kolonë 'KodiKlient', duhet të sigurohesh që kodi i klientit të jetë i pranishëm në dff.
-        # Supozojmë që bëhet bashkimi për të marrë të dhënat aktuale:
 
-        # Filtrojmë vetëm klientët aktivë [V] për të saktësuar rrugët e planit
+    if df_klientet_regjistri is not None:
         df_aktive = df_klientet_regjistri[df_klientet_regjistri["StatusiAktiv"] == True]
 
-        # Mund të zëvendësosh ForcaShitese me ForcaShiteseAktuale për të ri-alokuar volumet automatikisht.
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
-
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
-
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
     )
 
-    # --- TITULLI DHE METRICS (Titulli tashmë është muaji korrent) ---
-    # st.title(f"🎯 Plani: {muajt_sq.get(sot.month)} {sot.year}")
+    # --- TITULLI DHE METRICS ---
     st.title(f"Plani: {muajt_sq.get(sot.month)} {sot.year}")
-
     st.markdown(f"### 👤 Agjenti: **{agj_sel}**")
-
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
     t_kg_ref = gp["kg"].sum()
-
     t_v_ref = gp["Vlera_Historike"].sum()
-
     cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0
 
     t_kg_plan = gp["Plani_KG"].sum()
-
     t_v_plan = gp["Vlera_Planifikuar"].sum()
-
     cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
     c1, c2, c3, c4 = st.columns(4)
-
     c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
-
     c2.metric("Çmimi Mes. Periudhës", f"{cm_mes_ref:,.1f} L/kg")
-
     c3.metric(
         "Çmimi Fundit Mes.",
         f"{cm_mes_plan:,.1f} L/kg",
         delta=f"{cm_mes_plan - cm_mes_ref:,.1f} L",
     )
-
     c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     config_kolonave = {
@@ -787,11 +767,8 @@ elif page == "Planifikimi" and df_raw is not None:
     st.divider()
 
     # --- TABET ---
-
     if klientet_selected:
-
         st.subheader("📍 Detajet Artikujve")
-
         st.dataframe(
             gp[
                 [
@@ -808,13 +785,9 @@ elif page == "Planifikimi" and df_raw is not None:
             hide_index=True,
             column_config=config_kolonave,
         )
-
     else:
-
         t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
-
         with t1:
-
             df_k = (
                 gp.groupby("kat")
                 .agg(
@@ -827,15 +800,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 .reset_index()
             )
-
             df_k["Cmimi_Mes_Periudhes"] = df_k["Vlera_Historike"] / df_k["kg"].replace(
                 0, 1
             )
-
             df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k[
                 "Plani_KG"
             ].replace(0, 1)
-
             st.dataframe(
                 df_k[
                     [
@@ -852,7 +822,6 @@ elif page == "Planifikimi" and df_raw is not None:
             )
 
         with t2:
-
             df_a = (
                 gp.groupby("ForcaShitese")
                 .agg(
@@ -865,15 +834,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 .reset_index()
             )
-
             df_a["Cmimi_Mes_Periudhes"] = df_a["Vlera_Historike"] / df_a["kg"].replace(
                 0, 1
             )
-
             df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a[
                 "Plani_KG"
             ].replace(0, 1)
-
             st.dataframe(
                 df_a[
                     [
@@ -890,7 +856,6 @@ elif page == "Planifikimi" and df_raw is not None:
             )
 
         with t3:
-
             df_kl = (
                 gp.groupby(["Klienti", "ForcaShitese"])
                 .agg(
@@ -903,15 +868,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 .reset_index()
             )
-
             df_kl["Cmimi_Mes_Periudhes"] = df_kl["Vlera_Historike"] / df_kl[
                 "kg"
             ].replace(0, 1)
-
             df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl[
                 "Plani_KG"
             ].replace(0, 1)
-
             st.dataframe(
                 df_kl[
                     [
@@ -928,45 +890,60 @@ elif page == "Planifikimi" and df_raw is not None:
                 column_config=config_kolonave,
             )
 
-    # --- EKSPORTI ---
+    # --- 📥 EKSPORTET (HTML DHE EXCEL) ---
+    st.sidebar.markdown("### 📥 Eksporto të dhënat")
 
+    # Funksioni ekzistues për HTML report
     def generate_html_report(dataframe):
-
         html = "<html><head><style>body{font-family:sans-serif;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;} .num{text-align:right;}</style></head><body>"
-
         html += f"<h1>Raporti i Planit ({grup_sel})</h1>"
-
         for agjent in sorted(dataframe["ForcaShitese"].unique()):
-
             html += f"<h3>Agjenti: {agjent}</h3>"
-
             agj_df = (
                 dataframe[dataframe["ForcaShitese"] == agjent]
                 .groupby("kat")
                 .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
                 .reset_index()
             )
-
             html += "<table><thead><tr><th>Kategoria</th><th class='num'>Plani (KG)</th><th class='num'>Vlera</th></tr></thead><tbody>"
-
             for _, row in agj_df.iterrows():
-
                 html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
-
             html += "</tbody></table><br>"
-
         html += "</body></html>"
-
         return html
 
     if st.sidebar.button("Gjenero Raportin HTML"):
-
         b64 = base64.b64encode(generate_html_report(gp).encode()).decode()
-
         st.sidebar.markdown(
-            f'<a href="data:text/html;base64,{b64}" download="Plani.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px;">Shkarko Raportin</a>',
+            f'<a href="data:text/html;base64,{b64}" download="Plani.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
             unsafe_allow_html=True,
         )
+
+    # --- SHTIMI I EKSPORTIT NË EXCEL ---
+    import io  # Sigurohuni që kjo të jetë e importuar në krye të skedarit tuaj kryesor
+
+    # Përgatisim një "buffer" në memorie për të ruajtur Excel-in pa prekur diskun
+    buffer = io.BytesIO()
+
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        # Mund të eksportojmë tabelën kryesore të detajuar
+        gp.to_excel(writer, sheet_name="Plani Detajuar", index=False)
+
+        # Ose dhe përmbledhjet sipas tabeve që kemi në faqe
+        if "df_k" in locals():
+            df_k.to_excel(writer, sheet_name="Sipas Kategorive", index=False)
+        if "df_a" in locals():
+            df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
+        if "df_kl" in locals():
+            df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
+
+    # Krijojmë butonin nativ të Streamlit për shkarkim skedarësh (Download Button)
+    st.sidebar.download_button(
+        label="📊 Shkarko Planin në Excel",
+        data=buffer.getvalue(),
+        file_name=f"Plani_{grup_sel.replace(' ', '_')}_{sot.strftime('%m_%Y')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI
