@@ -653,24 +653,26 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI
+# MODULI: PLANIFIKIMI (INFO E PËRDITËSUAR MBI AGJENTIN AKTUAL)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
 
-    # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT ---
+    # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT (I UPDATE-UAR) ---
     with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
         st.markdown("""
         Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
         
-        1. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet med përqindjen e përzgjedhur:
+        1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
+        
+        2. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
            $$\\text{Plani KG} = \\left( \\frac{\\text{KG Historike}}{\\text{Numri i Muajve}} \\right) \\times \\left(1 + \\frac{\\text{Përqindja e Rritjes}}{100}\\right)$$
         
-        2. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike, duke përjashtuar muajin korrent.
+        3. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
         
-        3. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit, përdoret *Çmimi Mesatar i Periudhës* së përzgjedhur:
+        4. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar të Periudhës* së përzgjedhur:
            $$\\text{Vlera e Planifikuar} = \\text{Plani KG} \\times \\text{Çmimi (i Fundit ose Mesatar)}$$
         """)
 
