@@ -653,12 +653,26 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (KODI I PASTRUAR)
+# MODULI: PLANIFIKIMI
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
+
+    # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT ---
+    with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
+        st.markdown("""
+        Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
+        
+        1. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet med përqindjen e përzgjedhur:
+           $$\\text{Plani KG} = \\left( \\frac{\\text{KG Historike}}{\\text{Numri i Muajve}} \\right) \\times \\left(1 + \\frac{\\text{Përqindja e Rritjes}}{100}\\right)$$
+        
+        2. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike, duke përjashtuar muajin korrent.
+        
+        3. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit, përdoret *Çmimi Mesatar i Periudhës* së përzgjedhur:
+           $$\\text{Vlera e Planifikuar} = \\text{Plani KG} \\times \\text{Çmimi (i Fundit ose Mesatar)}$$
+        """)
 
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
     mask_past = (df_raw["Data"].dt.year < sot.year) | (
@@ -671,23 +685,27 @@ elif page == "Planifikimi" and df_raw is not None:
     ]
     last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
+    # --- FILTRIMI I PERIUDHËS HISTORIKE ---
+    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
+    dff = df_raw.loc[mask].copy()
+
+    if grup_sel != "Të gjitha":
+        dff = dff[dff["Grup_Filtri"] == grup_sel]
+
     # --- INTEGRIMI ME 'KlientetListView' PËR AGJENTIN AKTUAL ---
     if df_klientet_regjistri is not None:
-        # 1. Gjejmë si quhet kolona e Klientit (p.sh. 'Emri', 'emri', 'Emri_Klientit')
         kolona_emri = None
         for k in ["Emri", "emri", "Klienti", "EmriKlientit"]:
             if k in df_klientet_regjistri.columns:
                 kolona_emri = k
                 break
 
-        # 2. Gjejmë si quhet kolona e Agjentit/Zonës (p.sh. 'Zona', 'zona', 'ForcaShitese')
         kolona_zona = None
         for k in ["Zona", "zona", "Agjenti", "ForcaShiteseAktuale"]:
             if k in df_klientet_regjistri.columns:
                 kolona_zona = k
                 break
 
-        # Nëse i gjetëm kolonat, bëjmë bashkimin e të dhënave
         if kolona_emri and kolona_zona:
             dff = dff.merge(
                 df_klientet_regjistri[[kolona_emri, kolona_zona]],
@@ -695,11 +713,9 @@ elif page == "Planifikimi" and df_raw is not None:
                 right_on=kolona_emri,
                 how="inner",
             )
-
-            # Zëvendësojmë agjentin historik me agjentin e ri aktual
+            # Zëvendësojmë forcat shitëse historike me Agjentin e Ri Aktual (kolona Zona)
             dff["ForcaShitese"] = dff[kolona_zona]
         else:
-            # Nëse sërish dështon, shfaqim një mesazh ndihmues në ndërfaqe pa bllokuar aplikacionin
             st.error(
                 f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView. Kolonat ekzistuese janë: {list(df_klientet_regjistri.columns)}"
             )
@@ -903,6 +919,53 @@ elif page == "Planifikimi" and df_raw is not None:
                 hide_index=True,
                 column_config=config_kolonave,
             )
+
+    # --- EKSPORTET (HTML DHE EXCEL) ---
+    st.sidebar.markdown("### 📥 Eksporto të dhënat")
+
+    def generate_html_report(dataframe):
+        html = "<html><head><style>body{font-family:sans-serif;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;} .num{text-align:right;}</style></head><body>"
+        html += f"<h1>Raporti i Planit ({grup_sel})</h1>"
+        for agjent in sorted(dataframe["ForcaShitese"].unique()):
+            html += f"<h3>Agjenti: {agjent}</h3>"
+            agj_df = (
+                dataframe[dataframe["ForcaShitese"] == agjent]
+                .groupby("kat")
+                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
+                .reset_index()
+            )
+            html += "<table><thead><tr><th>Kategoria</th><th class='num'>Plani (KG)</th><th class='num'>Vlera</th></tr></thead><tbody>"
+            for _, row in agj_df.iterrows():
+                html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
+            html += "</tbody></table><br>"
+        html += "</body></html>"
+        return html
+
+    if st.sidebar.button("Gjenero Raportin HTML"):
+        b64 = base64.b64encode(generate_html_report(gp).encode()).decode()
+        st.sidebar.markdown(
+            f'<a href="data:text/html;base64,{b64}" download="Plani.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
+            unsafe_allow_html=True,
+        )
+
+    import io
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        gp.to_excel(writer, sheet_name="Plani Detajuar", index=False)
+        if "df_k" in locals():
+            df_k.to_excel(writer, sheet_name="Sipas Kategorive", index=False)
+        if "df_a" in locals():
+            df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
+        if "df_kl" in locals():
+            df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
+
+    st.sidebar.download_button(
+        label="📊 Shkarko Planin në Excel",
+        data=buffer.getvalue(),
+        file_name=f"Plani_{grup_sel.replace(' ', '_')}_{sot.strftime('%m_%Y')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI
