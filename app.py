@@ -653,27 +653,59 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (INFO E PËRDITËSUAR MBI AGJENTIN AKTUAL)
+# MODULI: PLANIFIKIMI (ME ZGJEDHJE DINAMIKE TË MUAJIT/VITIT)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
 
-    # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT (I UPDATE-UAR) ---
+    # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
+    st.sidebar.markdown("### 📅 Periudha e Planit")
+
+    # Lista e muajve për selectbox
+    lista_muajve = [
+        "Janar",
+        "Shkurt",
+        "Mars",
+        "Prill",
+        "Maj",
+        "Qershor",
+        "Korrik",
+        "Gusht",
+        "Shtator",
+        "Tetor",
+        "Nëntor",
+        "Dhjetor",
+    ]
+
+    # Gjejmë muajin aktual si indeks (0-11) që të jetë i përzgjedhur si parazgjedhje (default)
+    muaji_default_index = sot.month - 1
+    muaji_i_zgjedhur = st.sidebar.selectbox(
+        "Zgjidh Muajin:", lista_muajve, index=muaji_default_index
+    )
+
+    # Krijojmë një listë vitesh (p.sh. nga viti i kaluar deri 3 vite më pas)
+    lista_viteve = list(range(sot.year - 1, sot.year + 4))
+    viti_default_index = lista_viteve.index(sot.year) if sot.year in lista_viteve else 0
+    viti_i_zgjedhur = st.sidebar.selectbox(
+        "Zgjidh Vitin:", lista_viteve, index=viti_default_index
+    )
+
+    # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT ---
     with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
-        st.markdown("""
+        st.markdown(f"""
         Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
         
         1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
         
         2. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
-           $$\\text{Plani KG} = \\left( \\frac{\\text{KG Historike}}{\\text{Numri i Muajve}} \\right) \\times \\left(1 + \\frac{\\text{Përqindja e Rritjes}}{100}\\right)$$
+           $$\\text{{Plani KG}} = \\left( \\frac{{\\text{{KG Historike}}}}{{\\text{{Numri i Muajve}}}} \\right) \\times \\left(1 + \\frac{{\\text{{Përqindja e Rritjes}}}}{{100}}\\right)$$
         
         3. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
         
-        4. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar të Periudhës* së përzgjedhur:
-           $$\\text{Vlera e Planifikuar} = \\text{Plani KG} \\times \\text{Çmimi (i Fundit ose Mesatar)}$$
+        4. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar i Periudhës* së përzgjedhur:
+           $$\\text{{Vlera e Planifikuar}} = \\text{{Plani KG}} \\times \\text{{Çmimi (i Fundit ose Mesatar)}}$$
         """)
 
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
@@ -715,14 +747,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 right_on=kolona_emri,
                 how="inner",
             )
-            # Zëvendësojmë forcat shitëse historike me Agjentin e Ri Aktual (kolona Zona)
             dff["ForcaShitese"] = dff[kolona_zona]
         else:
             st.error(
                 f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView. Kolonat ekzistuese janë: {list(df_klientet_regjistri.columns)}"
             )
 
-    # Filtrimi i agjentit sipas përzgjedhjes në ndërfaqe (tani mbi agjentët aktualë)
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
 
@@ -736,13 +766,12 @@ elif page == "Planifikimi" and df_raw is not None:
         + 1,
     )
 
-    # Ruajmë vlerat në session_state për modulin Realizimi
     st.session_state["start_d_plani"] = start_date
     st.session_state["end_d_plani"] = end_date
     st.session_state["rritja_plani"] = rritja
     st.session_state["grup_plani"] = grup_sel
 
-    # --- AGREGIMI (Sipas Agjentit Aktual dhe Klientit) ---
+    # --- AGREGIMI ---
     gp = (
         dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
@@ -752,14 +781,13 @@ elif page == "Planifikimi" and df_raw is not None:
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
-    # Llogaritja e sasisë dhe vlerës së planit
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
     )
 
-    # --- TITULLI DHE METRICS ---
-    st.title(f"Plani: {muajt_sq.get(sot.month)} {sot.year}")
+    # --- TITULLI I RI DINAMIK ---
+    st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
@@ -922,12 +950,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 column_config=config_kolonave,
             )
 
-    # --- EKSPORTET (HTML DHE EXCEL) ---
+    # --- EKSPORTET ---
     st.sidebar.markdown("### 📥 Eksporto të dhënat")
 
     def generate_html_report(dataframe):
         html = "<html><head><style>body{font-family:sans-serif;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;} .num{text-align:right;}</style></head><body>"
-        html += f"<h1>Raporti i Planit ({grup_sel})</h1>"
+        html += f"<h1>Raporti i Planit - {muaji_i_zgjedhur} {viti_i_zgjedhur} ({grup_sel})</h1>"
         for agjent in sorted(dataframe["ForcaShitese"].unique()):
             html += f"<h3>Agjenti: {agjent}</h3>"
             agj_df = (
@@ -946,7 +974,7 @@ elif page == "Planifikimi" and df_raw is not None:
     if st.sidebar.button("Gjenero Raportin HTML"):
         b64 = base64.b64encode(generate_html_report(gp).encode()).decode()
         st.sidebar.markdown(
-            f'<a href="data:text/html;base64,{b64}" download="Plani.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
+            f'<a href="data:text/html;base64,{b64}" download="Plani_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
             unsafe_allow_html=True,
         )
 
@@ -965,7 +993,7 @@ elif page == "Planifikimi" and df_raw is not None:
     st.sidebar.download_button(
         label="📊 Shkarko Planin në Excel",
         data=buffer.getvalue(),
-        file_name=f"Plani_{grup_sel.replace(' ', '_')}_{sot.strftime('%m_%Y')}.xlsx",
+        file_name=f"Plani_{grup_sel.replace(' ', '_')}_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
