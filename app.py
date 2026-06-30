@@ -671,26 +671,38 @@ elif page == "Planifikimi" and df_raw is not None:
     ]
     last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
-    # --- FILTRIMI I PERIUDHËS HISTORIKE ---
-    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
-    dff = df_raw.loc[mask].copy()
-
-    if grup_sel != "Të gjitha":
-        dff = dff[dff["Grup_Filtri"] == grup_sel]
-
     # --- INTEGRIMI ME 'KlientetListView' PËR AGJENTIN AKTUAL ---
-    # df_klientet_regjistri përfaqëson tabelën tuaj SQL 'KlientetListView'
     if df_klientet_regjistri is not None:
-        # Bashkojmë shitjet historike me regjistrin aktual të klientëve bazuar tek Emri
-        dff = dff.merge(
-            df_klientet_regjistri[["Emri", "Zona"]],
-            left_on="Klienti",
-            right_on="Emri",
-            how="inner",
-        )
+        # 1. Gjejmë si quhet kolona e Klientit (p.sh. 'Emri', 'emri', 'Emri_Klientit')
+        kolona_emri = None
+        for k in ["Emri", "emri", "Klienti", "EmriKlientit"]:
+            if k in df_klientet_regjistri.columns:
+                kolona_emri = k
+                break
 
-        # Zëvendësojmë agjentin e vjetër të shitjes me Agjentin Aktual (nga kolona 'Zona')
-        dff["ForcaShitese"] = dff["Zona"]
+        # 2. Gjejmë si quhet kolona e Agjentit/Zonës (p.sh. 'Zona', 'zona', 'ForcaShitese')
+        kolona_zona = None
+        for k in ["Zona", "zona", "Agjenti", "ForcaShiteseAktuale"]:
+            if k in df_klientet_regjistri.columns:
+                kolona_zona = k
+                break
+
+        # Nëse i gjetëm kolonat, bëjmë bashkimin e të dhënave
+        if kolona_emri and kolona_zona:
+            dff = dff.merge(
+                df_klientet_regjistri[[kolona_emri, kolona_zona]],
+                left_on="Klienti",
+                right_on=kolona_emri,
+                how="inner",
+            )
+
+            # Zëvendësojmë agjentin historik me agjentin e ri aktual
+            dff["ForcaShitese"] = dff[kolona_zona]
+        else:
+            # Nëse sërish dështon, shfaqim një mesazh ndihmues në ndërfaqe pa bllokuar aplikacionin
+            st.error(
+                f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView. Kolonat ekzistuese janë: {list(df_klientet_regjistri.columns)}"
+            )
 
     # Filtrimi i agjentit sipas përzgjedhjes në ndërfaqe (tani mbi agjentët aktualë)
     if agj_sel != "Të gjithë":
