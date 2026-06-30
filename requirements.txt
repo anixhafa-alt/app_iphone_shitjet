@@ -11,3 +11,4 @@ numpy
 google-generativeai
 anthropic>=0.40.0
 httpx>=0.27.0
+weasyprint
