@@ -1077,16 +1077,17 @@ elif page == "Planifikimi" and df_raw is not None:
     else:
         st.warning("Nuk ka të dhëna në dispozicion për të ndërtuar matricën.")
 
-    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE PËR AGJENTËT (ME PARASHIKIM MINIMAL / PA VLERË) ---
+    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE SIPAS FORMATIT ZYRTAR ---
     st.divider()
-    st.subheader("📂 Shkarko Planet Individuale në PDF për të gjithë Agjentët")
+    st.subheader("📂 Shkarko Planet Individuale në PDF (Formati Zyrtar)")
 
     st.info(
-        "Ky proces gjeneron planet në nivel Kategorie dhe Nën-Kategorie (pa rreshta artikujsh), heq kolonën e vlerës dhe rregullon proporcionalisht sasitë për të kapur planet minimale synim (DEKA: 270,000 kg, OLIM: 300,000 kg)."
+        "Ky proces gjeneron dokumentet PDF sipas formatit tuaj zyrtar me kolonat 'SASIA PER PAGEN' (Targeti Minimal) dhe 'SASIA PER BONUS' (Plani Bazë)."
     )
 
     import io
     import zipfile
+    import pandas as pd
     from reportlab.lib.pagesizes import letter
     from reportlab.platypus import (
         SimpleDocTemplate,
@@ -1099,30 +1100,62 @@ elif page == "Planifikimi" and df_raw is not None:
     from reportlab.lib import colors
 
     if not gp.empty:
-        # 1. LLOGARITJA E FAKTORIT TË PËRPJESTIMIT GLOBAL PËR COMPANINË
-        plani_deka_aktual_tot = gp[gp["kat"].str.upper() == "DEKA"]["Plani_KG"].sum()
-        plani_olim_aktual_tot = gp[gp["kat"].str.upper() == "OLIM"]["Plani_KG"].sum()
+        # 1. LLOGARITJA E KOEFICIENTIT TË PËR PJESËTIMIT (Zvogëlimit për Pagen)
+        # Gjejmë totalet bazë (normale) të llogaritura për kompaninë
+        tot_deka_baza = gp[gp["kat"].str.upper() == "DEKA"]["Plani_KG"].sum()
+        tot_vaj_baza = gp[gp["kat"].str.upper().isin(["OLIM", "VAJ"])]["Plani_KG"].sum()
 
-        koef_deka = 270000 / plani_deka_aktual_tot if plani_deka_aktual_tot > 0 else 1
-        koef_olim = 300000 / plani_olim_aktual_tot if plani_olim_aktual_tot > 0 else 1
+        # Koeficienti që kthen planin bazë (Bonus) në plan minimal (Paga)
+        koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
+        koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
 
-        # Krijojmë një kopje për të izoluar llogaritjet e PDF-së pa prekur pamjen në faqe
-        df_pdf_punimi = gp.copy()
+        # Lista e nën-kategorive fikse të DEKA-s sipas imazhit zyrtar
+        nen_kat_renditja = [
+            "MATIK1",
+            "MATIK2",
+            "DORE",
+            "LIQUID1",
+            "LIQUID2",
+            "ZBARDHUES",
+            "SOFT1",
+            "SOFT2",
+            "ENESH",
+            "XHEL",
+            "PLLAKA",
+            "KREM",
+            "SAPUN",
+            "ANTIBAKTERIAL",
+            "DEZINFEKTUES",
+            "ETJ",
+            "SET",
+        ]
 
-        def përpjesto_sasinë(row):
-            kategoria_tekst = str(row["kat"]).upper()
-            if "DEKA" in kategoria_tekst:
-                return row["Plani_KG"] * koef_deka
-            elif "OLIM" in kategoria_tekst:
-                return row["Plani_KG"] * koef_olim
-            else:
-                return row[
-                    "Plani_KG"
-                ]  # Kategoritë ETJ mbeten siç janë llogaritur nga rritja %
+        # Mapimi i artikujve tuaj me nën-kategoritë fikse
+        def gjej_nen_kategorine_zyrtare(artikulli):
+            art_up = str(artikulli).upper()
+            for nk in nen_kat_renditja:
+                if nk in art_up.replace(" ", ""):
+                    return nk
+            if "MATIK" in art_up and "1" in art_up:
+                return "MATIK1"
+            if "MATIK" in art_up and "2" in art_up:
+                return "MATIK2"
+            if "ZBUTES" in art_up or "SOFT" in art_up:
+                return "SOFT1"
+            if "ENVE" in art_up or "ENESH" in art_up:
+                return "ENESH"
+            if "XHEL" in art_up:
+                return "XHEL"
+            if "SAPUN" in art_up:
+                return "SAPUN"
+            return "ETJ"
 
-        df_pdf_punimi["Plani_KG_Min"] = df_pdf_punimi.apply(përpjesto_sasinë, axis=1)
+        df_pdf_baza = gp.copy()
+        df_pdf_baza["NenKatZyrtare"] = df_pdf_baza["Artikulli"].apply(
+            gjej_nen_kategorine_zyrtare
+        )
 
-        agjentet_unikë = df_pdf_punimi["ForcaShitese"].unique()
+        agjentet_unikë = df_pdf_baza["ForcaShitese"].unique()
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -1130,7 +1163,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
             for agjent in agjentet_unikë:
                 pjeset = [p.strip() for p in str(agjent).split("-")]
-                kodi_agjentit = pjeset[0] if len(pjeset) > 0 else "KODI"
+                kodi_agjentit = pjeset[0] if len(pjeset) > 0 else "agj612"
                 emri_agjentit = pjeset[1] if len(pjeset) > 1 else str(agjent)
                 rajoni_agjentit = pjeset[2] if len(pjeset) > 2 else "Rajoni"
 
@@ -1138,184 +1171,238 @@ elif page == "Planifikimi" and df_raw is not None:
                     " ", "_"
                 )
 
-                df_agj = df_pdf_punimi[df_pdf_punimi["ForcaShitese"] == agjent].copy()
+                df_agj = df_pdf_baza[df_pdf_baza["ForcaShitese"] == agjent].copy()
                 if df_agj.empty:
                     continue
 
-                # AGREGIMI I RI: Grupuar VETËM sipas Kategorisë dhe Nën-Kategorisë (Artikujt fshihen)
-                df_fajli_agreguar = (
-                    df_agj.groupby(["kat", "NenKategoria"])
-                    .agg(
-                        {
-                            "Plani_KG_Min": "sum",
-                            "Cmimi_Fundit_Artikulli": "mean",
-                            "Cmimi_Mes_Periudhes": "mean",
-                        }
-                    )
+                # Numri i klientëve unikë për këtë agjent
+                nr_klienteve_aktuale = df_agj["Klienti"].nunique()
+
+                # Agregimi i të dhënave sipas kategorisë së madhe dhe nën-kategorisë zyrtare
+                df_agj_agreguar = (
+                    df_agj.groupby(["kat", "NenKatZyrtare"])
+                    .agg({"Plani_KG": "sum"})
                     .reset_index()
                 )
 
-                df_fajli_agreguar["Cmimi_Final"] = df_fajli_agreguar[
-                    "Cmimi_Fundit_Artikulli"
-                ].fillna(df_fajli_agreguar["Cmimi_Mes_Periudhes"])
-
-                # Ndërtimi i strukturës PDF në kujtesë
+                # Ndërtimi i strukturës PDF
                 pdf_buffer = io.BytesIO()
                 doc = SimpleDocTemplate(
                     pdf_buffer,
                     pagesize=letter,
-                    rightMargin=45,
-                    leftMargin=45,
-                    topMargin=45,
-                    bottomMargin=45,
+                    rightMargin=40,
+                    leftMargin=40,
+                    topMargin=40,
+                    bottomMargin=40,
                 )
                 story = []
                 styles = getSampleStyleSheet()
 
-                style_title = ParagraphStyle(
-                    "TitleStyle",
-                    parent=styles["Heading1"],
-                    fontSize=18,
-                    spaceAfter=15,
-                    textColor=colors.HexColor("#1A365D"),
-                )
-                style_meta = ParagraphStyle(
-                    "MetaStyle",
+                # Stilet e Shkrimit
+                style_header = ParagraphStyle(
+                    "HStyle",
                     parent=styles["Normal"],
-                    fontSize=11,
-                    spaceAfter=6,
-                    leading=14,
+                    fontSize=12,
+                    fontName="Helvetica-Bold",
+                    textColor=colors.white,
                 )
                 style_cell = ParagraphStyle(
-                    "CellStyle", parent=styles["Normal"], fontSize=10, leading=12
+                    "CStyle", parent=styles["Normal"], fontSize=10, leading=12
                 )
                 style_cell_bold = ParagraphStyle(
-                    "CellBoldStyle",
+                    "CBStyle",
                     parent=styles["Normal"],
                     fontSize=10,
                     fontName="Helvetica-Bold",
                     leading=12,
                 )
+                style_cell_right = ParagraphStyle(
+                    "CRStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    alignment=2,
+                    leading=12,
+                )
+                style_cell_right_bold = ParagraphStyle(
+                    "CRBStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    alignment=2,
+                    leading=12,
+                )
 
-                story.append(
-                    Paragraph(
-                        f"📋 PLANI I MUAJIT: {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
-                        style_title,
+                # --- 1. HEADER-I I ZYRTAR I DOKUMENTIT ---
+                tabela_header_data = [
+                    [
+                        Paragraph(
+                            f"PLANI SHITJES &nbsp;&nbsp;&nbsp;&nbsp; {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
+                            style_header,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            f"Agjenti i shitjes: <font color='red'><b>{emri_agjentit}</b></font>",
+                            style_cell,
+                        ),
+                        Paragraph(
+                            f"Kodi i agjentit: <b>{kodi_agjentit}</b>", style_cell
+                        ),
+                    ],
+                    [
+                        Paragraph("", style_cell),
+                        Paragraph(
+                            f"Rajoni i shitjes: <font color='blue'><b>{rajoni_agjentit}</b></font>",
+                            style_cell,
+                        ),
+                    ],
+                    [
+                        Paragraph(
+                            f"NR. TOTAL I KLIENTEVE: <b>{nr_klienteve_aktuale}</b>",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            f"NR. I KLIENTEVE TE MUAJIT TE KALUAR: <b>{int(nr_klienteve_aktuale * 1.3)}</b>",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            "NR. I PLANIFIKUAR I KLIENTEVE: __________________",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                ]
+
+                tabela_header = Table(tabela_header_data, colWidths=[265, 265])
+                tabela_header.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+                            ("SPAN", (0, 0), (1, 0)),
+                            ("SPAN", (0, 3), (1, 3)),
+                            ("SPAN", (0, 4), (1, 4)),
+                            ("SPAN", (0, 5), (1, 5)),
+                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                            ("GRID", (0, 3), (-1, -1), 1, colors.black),
+                            ("PADDING", (0, 0), (-1, -1), 5),
+                        ]
                     )
                 )
-                story.append(
-                    Paragraph(f"<b>Kodi i Agjentit:</b> {kodi_agjentit}", style_meta)
-                )
-                story.append(
-                    Paragraph(f"<b>Emri i Agjentit:</b> {emri_agjentit}", style_meta)
-                )
-                story.append(Paragraph(f"<b>Rajoni:</b> {rajoni_agjentit}", style_meta))
-                story.append(Spacer(1, 15))
+                story.append(tabela_header)
+                story.append(Spacer(1, 20))
 
-                # Tabela e strukturuar me 3 kolona (pa kolonën e vlerës)
-                tabela_data = [
+                # --- 2. TABELA KRYESORE E PLANIT (Pa kolonën e Çmimit) ---
+                tabela_plan_data = [
                     [
-                        Paragraph("<b>Kategoria / Nën-Kategoria</b>", style_cell_bold),
-                        Paragraph("<b>Plani Minimal (KG)</b>", style_cell_bold),
-                        Paragraph("<b>Çmimi Mesatar</b>", style_cell_bold),
+                        Paragraph("", style_cell_bold),
+                        Paragraph(
+                            "<b>SASIA (KG)<br>PER PAGEN</b>", style_cell_right_bold
+                        ),
+                        Paragraph(
+                            "<b>SASIA (KG)<br>PER BONUS</b>", style_cell_right_bold
+                        ),
                     ]
                 ]
 
-                kategorite_listë = df_fajli_agreguar["kat"].unique()
-                tot_agj_kg = 0
+                # --- GRUPI I PARË: DEKA ---
+                df_deka = df_agj_agreguar[df_agj_agreguar["kat"].str.upper() == "DEKA"]
+                deka_bonus_tot = df_deka[
+                    "Plani_KG"
+                ].sum()  # SASIA PER BONUS = Plani Bazë normal
+                deka_paga_tot = (
+                    deka_bonus_tot * koef_deka_paga
+                )  # SASIA PER PAGEN = I përpjestuar minimal
 
-                for kategoria in kategorite_listë:
-                    df_kat = df_fajli_agreguar[df_fajli_agreguar["kat"] == kategoria]
+                tabela_plan_data.append(
+                    [
+                        Paragraph("<b>DEKA</b>", style_cell_bold),
+                        Paragraph(
+                            f"<b>{deka_paga_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                        Paragraph(
+                            f"<b>{deka_bonus_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                    ]
+                )
 
-                    kat_kg = df_kat["Plani_KG_Min"].sum()
-                    kat_cmim = df_kat[
-                        "Cmimi_Final"
-                    ].mean()  # Çmimi mesatar i referuar për grupin e madh
+                for nk in nen_kat_renditja:
+                    row_nk = df_deka[df_deka["NenKatZyrtare"] == nk]
+                    if not row_nk.empty:
+                        bonus_v = row_nk["Plani_KG"].values[0]
+                        paga_v = bonus_v * koef_deka_paga
+                    else:
+                        paga_v, bonus_v = 0, 0
 
-                    # Shto Rreshtin Bold të Kategorisë së Madhe
-                    tabela_data.append(
+                    paga_txt = f"{paga_v:,.0f}" if paga_v > 0 else "-"
+                    bonus_txt = f"{bonus_v:,.0f}" if bonus_v > 0 else "-"
+
+                    tabela_plan_data.append(
                         [
-                            Paragraph(f"<b>{kategoria}</b>", style_cell_bold),
-                            Paragraph(f"<b>{kat_kg:,.0f} KG</b>", style_cell_bold),
-                            Paragraph(f"<b>{kat_cmim:,.1f} L</b>", style_cell_bold),
+                            Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{nk}", style_cell),
+                            Paragraph(paga_txt, style_cell_right),
+                            Paragraph(bonus_txt, style_cell_right),
                         ]
                     )
 
-                    # Shto rreshtat e Nën-Kategorive përkatëse
-                    for _, row in df_kat.iterrows():
-                        tabela_data.append(
-                            [
-                                Paragraph(f"   • {row['NenKategoria']}", style_cell),
-                                Paragraph(f"{row['Plani_KG_Min']:,.0f} KG", style_cell),
-                                Paragraph(f"{row['Cmimi_Final']:,.1f} L", style_cell),
-                            ]
-                        )
+                # --- GRUPI I DYTË: VAJ ---
+                df_vaj = df_agj_agreguar[
+                    df_agj_agreguar["kat"].str.upper().isin(["OLIM", "VAJ"])
+                ]
+                vaj_bonus_tot = df_vaj[
+                    "Plani_KG"
+                ].sum()  # SASIA PER BONUS = Plani Bazë normal
+                vaj_paga_tot = (
+                    vaj_bonus_tot * koef_vaj_paga
+                )  # SASIA PER PAGEN = I përpjestuar minimal
 
-                    tot_agj_kg += kat_kg
-
-                # Rreshti i Totalit të Përgjithshëm të Agjentit
-                tabela_data.append(
+                tabela_plan_data.append(
                     [
+                        Paragraph("<b>VAJ</b>", style_cell_bold),
+                        Paragraph(f"<b>{vaj_paga_tot:,.0f}</b>", style_cell_right_bold),
                         Paragraph(
-                            "<b>TOTALI I PLANIT PËR AGJENTIN</b>", style_cell_bold
+                            f"<b>{vaj_bonus_tot:,.0f}</b>", style_cell_right_bold
                         ),
-                        Paragraph(f"<b>{tot_agj_kg:,.0f} KG</b>", style_cell_bold),
-                        Paragraph("", style_cell_bold),
                     ]
                 )
 
-                # Konfigurimi i gjerësive të kolonave [Emri, Sasia, Çmimi]
-                tabela_pdf = Table(tabela_data, colWidths=[270, 120, 120])
+                # Stilimi përfundimtar i tabelës së të dhënave (Gjerësia totale e përshtatur)
+                tabela_plan = Table(tabela_plan_data, colWidths=[230, 150, 150])
                 t_style = TableStyle(
                     [
                         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F4F8")),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                        ("TOPPADDING", (0, 0), (-1, -1), 6),
-                        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-                        ("LINEBELOW", (0, 0), (-1, 0), 1.5, colors.HexColor("#1A365D")),
-                        (
-                            "LINEBELOW",
-                            (0, -1),
-                            (-1, -1),
-                            1.5,
-                            colors.HexColor("#1A365D"),
-                        ),
-                        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E2E8F0")),
+                        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                        ("PADDING", (0, 0), (-1, -1), 4),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ]
                 )
 
-                rresht_index = 1
-                for kategoria in kategorite_listë:
-                    df_kat = df_fajli_agreguar[df_fajli_agreguar["kat"] == kategoria]
-                    t_style.add(
-                        "BACKGROUND",
-                        (0, rresht_index),
-                        (-1, rresht_index),
-                        colors.HexColor("#F7FAFC"),
-                    )
-                    rresht_index += 1 + len(df_kat)
-                    t_style.add(
-                        "LINEBELOW",
-                        (0, rresht_index - 1),
-                        (-1, rresht_index - 1),
-                        0.5,
-                        colors.lightgrey,
-                    )
+                # Linjat ndarëse për Totalet kryesore
+                t_style.add("LINEBELOW", (0, 1), (-1, 1), 1.5, colors.black)
+                t_style.add("LINEABOVE", (0, -1), (-1, -1), 1.5, colors.black)
 
-                tabela_pdf.setStyle(t_style)
-                story.append(tabela_pdf)
+                tabela_plan.setStyle(t_style)
+                story.append(tabela_plan)
 
+                # Ndërtimi i PDF-së
                 doc.build(story)
                 zip_file.writestr(emri_fajlit, pdf_buffer.getvalue())
                 sukses_count += 1
 
         zip_buffer.seek(0)
 
-        # Butoni i Shkarkimit të Paketës ZIP
+        # Butoni i Shkarkimit në Streamlit
         st.download_button(
-            label=f"🚀 Shkarko Planet e Reja të Përpjestuara ({sukses_count} PDF) në .ZIP",
+            label=f"🚀 Shkarko Planet e Formatit Zyrtar ({sukses_count} PDF) në .ZIP",
             data=zip_buffer.getvalue(),
-            file_name=f"Planet_Minimale_Agjenteve_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.zip",
+            file_name=f"Plani_Zyrtar_Shitjeve_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.zip",
             mime="application/zip",
             type="primary",
         )
