@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (VERSIONI ZYRTAR I PLOTË - I KORRIGJUAR ME EMRA KOLONASH TË SAKTA SQL)
+# MODULI: PLANIFIKIMI (VERSIONI ZYRTAR - ZGJIDHJA E KEYERROR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -759,7 +759,24 @@ elif page == "Planifikimi" and df_raw is not None:
     if grup_sel != "Të gjitha":
         dff = dff[dff["Grup_Filtri"] == grup_sel]
 
-    # Integrimi me regjistrin e agjentëve duke përdorur kolonën tuaja zyrtare SQL
+    # --- 🔍 KONTROLLI AUTOMATIK I EMRAVE TË KOLONAVE TË SQL ---
+    # Gjejmë saktë si quhet kolona e Kodit të Agjentit në dataframe-in tuaj
+    kolona_kodi_agj_sql = next(
+        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
+    )
+    if not kolona_kodi_agj_sql:
+        kolona_kodi_agj_sql = next(
+            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
+            "KodiForcashitese",
+        )
+
+    # Gjejmë saktë si quhet kolona e Rajonit (Zona) në dataframe-in tuaj
+    kolona_rajoni_sql = next(
+        (c for c in dff.columns if "ZONA" in c.upper() or "RAJON" in c.upper()),
+        "KodZona",
+    )
+
+    # Integrimi me regjistrin shtesë të klientëve nëse ekziston
     if df_klientet_regjistri is not None:
         kolona_emri = next(
             (
@@ -772,7 +789,7 @@ elif page == "Planifikimi" and df_raw is not None:
         kolona_zona = next(
             (
                 k
-                for k in ["KodZona", "Zona", "zona"]
+                for k in ["KodZona", "Zona", "zona", "Kodzona"]
                 if k in df_klientet_regjistri.columns
             ),
             None,
@@ -785,10 +802,12 @@ elif page == "Planifikimi" and df_raw is not None:
             dff = dff.merge(
                 df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
             )
-            if "KodZona" in dff.columns:
-                dff["KodZona"] = dff["KodZona_y"].fillna(dff["KodZona_x"])
+            if kolona_rajoni_sql in dff.columns:
+                dff[kolona_rajoni_sql] = dff[f"{kolona_zona}_y"].fillna(
+                    dff[f"{kolona_rajoni_sql}_x"]
+                )
             else:
-                dff["KodZona"] = dff[kolona_zona]
+                dff[kolona_rajoni_sql] = dff[kolona_zona]
 
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
@@ -803,18 +822,24 @@ elif page == "Planifikimi" and df_raw is not None:
         + 1,
     )
 
-    # --- AGREGIMI BAZË I PLANIT ME KOLONAT E REJA SQL ---
+    # --- STANDARDIZIMI DHE AGREGIMI BAZË ---
+    # Nëse kolonat nuk ekzistojnë fare në tabelë, i krijojmë që të mos plasë asnjëherë Error
+    if kolona_kodi_agj_sql not in dff.columns:
+        dff[kolona_kodi_agj_sql] = "agj000"
+    if kolona_rajoni_sql not in dff.columns:
+        dff[kolona_rajoni_sql] = "Rajoni"
+
     dff["ForcaShitese"] = dff["ForcaShitese"].fillna("Pa Agjent")
-    dff["KodiForcaShitese"] = dff["KodiForcaShitese"].fillna("agj000")
-    dff["KodZona"] = dff["KodZona"].fillna("Pa Rajon")
+    dff[kolona_kodi_agj_sql] = dff[kolona_kodi_agj_sql].fillna("agj000")
+    dff[kolona_rajoni_sql] = dff[kolona_rajoni_sql].fillna("Pa Rajon")
     dff["kat"] = dff["kat"].fillna("ETJ")
 
     gp = (
         dff.groupby(
             [
                 "ForcaShitese",
-                "KodiForcaShitese",
-                "KodZona",
+                kolona_kodi_agj_sql,
+                kolona_rajoni_sql,
                 "Klienti",
                 "kat",
                 "KodiArt",
@@ -828,7 +853,6 @@ elif page == "Planifikimi" and df_raw is not None:
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
-    # Plani_KG shërben si SASIA PER BONUS (Plani bazë normal)
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
@@ -941,7 +965,6 @@ elif page == "Planifikimi" and df_raw is not None:
     from reportlab.lib import colors
 
     if not gp.empty:
-        # KORRIGJIM: Përdorim .str.contains për siguri të plotë nga hapësirat
         tot_deka_baza = gp[gp["kat"].str.upper().str.contains("DEKA", na=False)][
             "Plani_KG"
         ].sum()
@@ -952,7 +975,6 @@ elif page == "Planifikimi" and df_raw is not None:
         koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
         koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
 
-        # Lista fikse e nën-kategorive të kërkuara nga formati juaj zyrtar
         nen_kat_renditja = [
             "MATIK1",
             "MATIK2",
@@ -993,7 +1015,6 @@ elif page == "Planifikimi" and df_raw is not None:
             gjej_nen_kategorine_zyrtare
         )
 
-        # Çdo agjent unik do të ketë PDF e vet
         agjentet_unikë = df_pdf_baza["ForcaShitese"].unique()
         zip_buffer = io.BytesIO()
 
@@ -1005,10 +1026,9 @@ elif page == "Planifikimi" and df_raw is not None:
                 if df_agj.empty:
                     continue
 
-                # Tërheqim saktë të dhënat nga kolonat zyrtare SQL që plotësove!
                 emri_agjentit = str(agjent)
-                kodi_agjentit = str(df_agj["KodiForcaShitese"].iloc[0])
-                rajoni_agjentit = str(df_agj["KodZona"].iloc[0])
+                kodi_agjentit = str(df_agj[kolona_kodi_agj_sql].iloc[0])
+                rajoni_agjentit = str(df_agj[kolona_rajoni_sql].iloc[0])
 
                 emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
                     " ", "_"
