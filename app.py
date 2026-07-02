@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME ZGJEDHJE DINAMIKE TË MUAJIT/VITIT)
+# MODULI: PLANIFIKIMI (KODI I PLOTË DHE I KORRIGJUAR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -663,7 +663,6 @@ elif page == "Planifikimi" and df_raw is not None:
     # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
     st.sidebar.markdown("### 📅 Periudha e Planit")
 
-    # Lista e muajve për selectbox
     lista_muajve = [
         "Janar",
         "Shkurt",
@@ -679,13 +678,11 @@ elif page == "Planifikimi" and df_raw is not None:
         "Dhjetor",
     ]
 
-    # Gjejmë muajin aktual si indeks (0-11) që të jetë i përzgjedhur si parazgjedhje (default)
     muaji_default_index = sot.month - 1
     muaji_i_zgjedhur = st.sidebar.selectbox(
         "Zgjidh Muajin:", lista_muajve, index=muaji_default_index
     )
 
-    # Krijojmë një listë vitesh (p.sh. nga viti i kaluar deri 3 vite më pas)
     lista_viteve = list(range(sot.year - 1, sot.year + 4))
     viti_default_index = lista_viteve.index(sot.year) if sot.year in lista_viteve else 0
     viti_i_zgjedhur = st.sidebar.selectbox(
@@ -697,7 +694,7 @@ elif page == "Planifikimi" and df_raw is not None:
         st.markdown(f"""
         Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
         
-        1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
+        1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Gjatë këtij procesi, pastrohen dublikimet e mundshme të klientëve për të parandaluar fryrjen artificiale të volumeve. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
         
         2. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
            $$\\text{{Plani KG}} = \\left( \\frac{{\\text{{KG Historike}}}}{{\\text{{Numri i Muajve}}}} \\right) \\times \\left(1 + \\frac{{\\text{{Përqindja e Rritjes}}}}{{100}}\\right)$$
@@ -741,18 +738,22 @@ elif page == "Planifikimi" and df_raw is not None:
                 break
 
         if kolona_emri and kolona_zona:
+            # RREGULLIM KRITIK: Heqim çdo dublikim rreshtash nga regjistri përpara bashkimit që të mos shumëfishohet sasia
+            df_klientet_paster = df_klientet_regjistri[
+                [kolona_emri, kolona_zona]
+            ].drop_duplicates(subset=[kolona_emri])
+
             dff = dff.merge(
-                df_klientet_regjistri[[kolona_emri, kolona_zona]],
-                left_on="Klienti",
-                right_on=kolona_emri,
-                how="inner",
+                df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
             )
-            dff["ForcaShitese"] = dff[kolona_zona]
+            # Nëse klienti ekziston në regjistër, alokojmë agjentin aktual (kolona Zona), përndryshe mbajmë atë historik
+            dff["ForcaShitese"] = dff[kolona_zona].fillna(dff["ForcaShitese"])
         else:
             st.error(
                 f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView. Kolonat ekzistuese janë: {list(df_klientet_regjistri.columns)}"
             )
 
+    # Filtrimi i agjentit (tani i kryer mbi agjentët aktualë të terrenit)
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
 
@@ -781,12 +782,13 @@ elif page == "Planifikimi" and df_raw is not None:
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
+    # Llogaritja e saktë e planit pa fryrje të sasisë
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
     )
 
-    # --- TITULLI I RI DINAMIK ---
+    # --- TITULLI DINAMIK DHE METRICS ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
@@ -950,7 +952,7 @@ elif page == "Planifikimi" and df_raw is not None:
                 column_config=config_kolonave,
             )
 
-    # --- EKSPORTET ---
+    # --- 📥 EKSPORTET (HTML DHE EXCEL) ---
     st.sidebar.markdown("### 📥 Eksporto të dhënat")
 
     def generate_html_report(dataframe):
