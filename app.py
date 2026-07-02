@@ -880,7 +880,7 @@ elif page == "Planifikimi" and df_raw is not None:
     df_matrica_transpozuar = df_matrica_transpozuar.reindex(renditje_finale_rreshtave)
     st.dataframe(df_matrica_transpozuar, width="stretch")
 
-    # --- 📂 GENERATORI I PDF-VE TË TRANSPOZUARA ---
+    # --- 📂 GENERATORI I PDF-VE TË TRANSPOZUARA (ZGJIDHJA E KEYERROR) ---
     st.divider()
     st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
 
@@ -924,10 +924,9 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 nr_klienteve_aktuale = df_agj["Klienti"].nunique()
 
+                # Agregimi pa bërë set_index në mënyrë të rrezikshme
                 df_agj_agreguar = (
-                    df_agj.groupby(["NenKatZyrtare"])
-                    .agg({"Plani_KG": "sum"})
-                    .set_index("NenKatZyrtare")
+                    df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
                 )
 
                 # Ndërtimi i PDF-së
@@ -1055,10 +1054,10 @@ elif page == "Planifikimi" and df_raw is not None:
                     ]
                 ]
 
-                # Sasi Totale DEKA për agjentin aktual
-                deka_bonus_tot = df_agj_agreguar.loc[
-                    df_agj_agreguar.index != "VAJ", "Plani_KG"
-                ].sum()
+                # Sasi Totale DEKA duke mbledhur të gjitha përveç Vajit nga fjalori
+                deka_bonus_tot = sum(
+                    v for k, v in df_agj_agreguar.items() if k != "VAJ"
+                )
                 deka_paga_tot = deka_bonus_tot * koef_deka_paga
 
                 tabela_plan_data.append(
@@ -1073,13 +1072,9 @@ elif page == "Planifikimi" and df_raw is not None:
                     ]
                 )
 
-                # Vendosja e rreshtave të transpozuar
+                # Vendosja e rreshtave të transpozuar nga fjalori (Mbron nga KeyError)
                 for nk in nen_kat_renditja:
-                    bonus_v = (
-                        df_agj_agreguar.loc[nk, "Plani_KG"]
-                        if nk in df_agj_agreguar.index
-                        else 0
-                    )
+                    bonus_v = df_agj_agreguar.get(nk, 0)
                     paga_v = bonus_v * koef_deka_paga if bonus_v > 0 else 0
 
                     tabela_plan_data.append(
@@ -1097,11 +1092,7 @@ elif page == "Planifikimi" and df_raw is not None:
                     )
 
                 # Sasi Totale VAJ për agjentin aktual
-                vaj_bonus_tot = (
-                    df_agj_agreguar.loc["VAJ", "Plani_KG"]
-                    if "VAJ" in df_agj_agreguar.index
-                    else 0
-                )
+                vaj_bonus_tot = df_agj_agreguar.get("VAJ", 0)
                 vaj_paga_tot = vaj_bonus_tot * koef_vaj_paga
 
                 tabela_plan_data.append(
