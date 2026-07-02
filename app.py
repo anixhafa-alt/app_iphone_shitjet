@@ -653,9 +653,11 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (KODI I PLOTË ME MATRICËN, PDF DHE ÇMIMIN MESATAR)
+# MODULI: PLANIFIKIMI (METRIKA E HEQUR & IMPORTET E RREGULLUARA)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
+    import io
+    import base64
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
@@ -837,7 +839,6 @@ elif page == "Planifikimi" and df_raw is not None:
     )
 
     # --- LOGJIKA SHTESË PËR MATRICËN ZYRTARE DHE PDF ---
-    # Kontrolli i kolonave të kodit të agjentit dhe rajonit për matricën/PDF nga SQL bazë
     kolona_kodi_agj_sql = next(
         (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
     )
@@ -860,7 +861,6 @@ elif page == "Planifikimi" and df_raw is not None:
     if kolona_rajoni_sql not in dff.columns:
         dff[kolona_rajoni_sql] = "Rajoni"
 
-    # Përditësojmë gp për të mbajtur këto kolona të rëndësishme për PDF
     gp_detajuar_pdf = (
         dff.groupby(
             [
@@ -884,7 +884,6 @@ elif page == "Planifikimi" and df_raw is not None:
         1 + rritja / 100
     )
 
-    # Klasifikimi Zyrtar i Nën-Kategorive për matricën dhe PDF
     nen_kat_renditja = [
         "MATIK1",
         "MATIK2",
@@ -948,25 +947,22 @@ elif page == "Planifikimi" and df_raw is not None:
         gjej_nen_kategorine_zyrtare, axis=1
     )
 
-    # --- TITULLI DINAMIK DHE METRICS ---
+    # --- TITULLI DINAMIK DHE METRICS (RIKTHYED NË 4 METRIKA SIKURSE ISHTE) ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
-    cmimi_mesatar_global = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
-    # Shfaqja në 5 kolona (Shtuar Çmimi Mesatar Global)
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
-    c2.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
-    c3.metric("Çmimi Mesatar Global", f"{cmimi_mesatar_global:,.2f} L/KG")
-    c4.metric("Klientë Aktivë në Plan", f"{gp['Klienti'].nunique():,}")
-    c5.metric(
+    c2.metric("Klientë Aktivë në Plan", f"{gp['Klienti'].nunique():,}")
+    c3.metric(
         "Klientë Pasivë të Hequr",
         f"{len(df_pasive_raporti) if not df_pasive_raporti.empty else 0:,}",
     )
+    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     config_kolonave = {
         "Cmimi_Mes_Periudhes": st.column_config.NumberColumn(
@@ -1126,7 +1122,7 @@ elif page == "Planifikimi" and df_raw is not None:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
 
     # =========================================================
-    # 🔄 MATRICA ZYRTARE (SHTESA E RE)
+    # 🔄 MATRICA ZYRTARE (VETËM ME BUTON)
     # =========================================================
     st.divider()
     st.subheader("🔄 Matrica Zyrtare e Planit (Agjentët dhe Kategoritë)")
@@ -1174,7 +1170,7 @@ elif page == "Planifikimi" and df_raw is not None:
         )
 
     # =========================================================
-    # 📂 GENERATORI I PDF-VE TË TRANSPOZUARA (.ZIP) (SHTESA E RE)
+    # 📂 GENERATORI I PDF-VE TË TRANSPOZUARA (.ZIP)
     # =========================================================
     st.divider()
     st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
