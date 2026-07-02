@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (KODI I PLOTË ME EKSPORTET E RIKTHYERA)
+# MODULI: PLANIFIKIMI (KODI I PLOTË ME MATRICËN, PDF DHE ÇMIMIN MESATAR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -836,6 +836,118 @@ elif page == "Planifikimi" and df_raw is not None:
         gp["Cmimi_Mes_Periudhes"]
     )
 
+    # --- LOGJIKA SHTESË PËR MATRICËN ZYRTARE DHE PDF ---
+    # Kontrolli i kolonave të kodit të agjentit dhe rajonit për matricën/PDF nga SQL bazë
+    kolona_kodi_agj_sql = next(
+        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
+    )
+    if not kolona_kodi_agj_sql:
+        kolona_kodi_agj_sql = next(
+            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
+            "KodiForcashitese",
+        )
+    if kolona_kodi_agj_sql not in dff.columns:
+        dff[kolona_kodi_agj_sql] = "agj000"
+
+    kolona_rajoni_sql = next(
+        (
+            c
+            for c in dff.columns
+            if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()
+        ),
+        "KodZona",
+    )
+    if kolona_rajoni_sql not in dff.columns:
+        dff[kolona_rajoni_sql] = "Rajoni"
+
+    # Përditësojmë gp për të mbajtur këto kolona të rëndësishme për PDF
+    gp_detajuar_pdf = (
+        dff.groupby(
+            [
+                "ForcaShitese",
+                kolona_kodi_agj_sql,
+                kolona_rajoni_sql,
+                "Klienti",
+                "kat",
+                "KodiArt",
+                "Artikulli",
+            ]
+        )
+        .agg({"kg": "sum", "Vlera_Historike": "sum"})
+        .reset_index()
+    )
+    gp_detajuar_pdf["Cmimi_Mes_Periudhes"] = gp_detajuar_pdf[
+        "Vlera_Historike"
+    ] / gp_detajuar_pdf["kg"].replace(0, 1)
+    gp_detajuar_pdf = gp_detajuar_pdf.merge(last_prices, on="KodiArt", how="left")
+    gp_detajuar_pdf["Plani_KG"] = (gp_detajuar_pdf["kg"] / n_months) * (
+        1 + rritja / 100
+    )
+
+    # Klasifikimi Zyrtar i Nën-Kategorive për matricën dhe PDF
+    nen_kat_renditja = [
+        "MATIK1",
+        "MATIK2",
+        "DORE",
+        "LIQUID1",
+        "LIQUID2",
+        "ZBARDHUES",
+        "SOFT1",
+        "SOFT2",
+        "ENESH",
+        "XHEL",
+        "PLLAKA",
+        "KREM",
+        "SAPUN",
+        "ANTIBAKTERIAL",
+        "DEZINFEKTUES",
+        "ETJ",
+        "SET",
+    ]
+
+    def gjej_nen_kategorine_zyrtare(rresht):
+        art_up = str(rresht["Artikulli"]).upper().replace(" ", "")
+        kat_up = str(rresht["kat"]).upper().replace(" ", "")
+        if "VAJ" in kat_up or "OLIM" in kat_up:
+            return "VAJ"
+        if "MATIK" in art_up:
+            if "1" in art_up or "SUPER" in art_up:
+                return "MATIK1"
+            return "MATIK2"
+        if "DORE" in art_up or "HAND" in art_up:
+            return "DORE"
+        if "LIQUID" in art_up or "LIKUID" in art_up:
+            if "1" in art_up:
+                return "LIQUID1"
+            return "LIQUID2"
+        if "ZBARDHUES" in art_up or "ACE" in art_up or "ZBERDH" in art_up:
+            return "ZBARDHUES"
+        if "SOFT" in art_up or "ZBUTES" in art_up:
+            if "1" in art_up:
+                return "SOFT1"
+            return "SOFT2"
+        if "ENESH" in art_up or "ENVE" in art_up or "DISH" in art_up:
+            return "ENESH"
+        if "XHEL" in art_up or "GEL" in art_up:
+            return "XHEL"
+        if "PLLAKA" in art_up or "SURE" in art_up:
+            return "PLLAKA"
+        if "KREM" in art_up or "CREAM" in art_up:
+            return "KREM"
+        if "SAPUN" in art_up or "SOAP" in art_up:
+            return "SAPUN"
+        if "ANTIBAKTERIAL" in art_up:
+            return "ANTIBAKTERIAL"
+        if "DEZINFEKT" in art_up:
+            return "DEZINFEKTUES"
+        if "SET" in art_up:
+            return "SET"
+        return "ETJ"
+
+    gp_detajuar_pdf["NenKatZyrtare"] = gp_detajuar_pdf.apply(
+        gjej_nen_kategorine_zyrtare, axis=1
+    )
+
     # --- TITULLI DINAMIK DHE METRICS ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
@@ -843,15 +955,18 @@ elif page == "Planifikimi" and df_raw is not None:
 
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
+    cmimi_mesatar_global = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
-    c1, c2, c3, c4 = st.columns(4)
+    # Shfaqja në 5 kolona (Shtuar Çmimi Mesatar Global)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
-    c2.metric("Klientë Aktivë në Plan", f"{gp['Klienti'].nunique():,}")
-    c3.metric(
+    c2.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
+    c3.metric("Çmimi Mesatar Global", f"{cmimi_mesatar_global:,.2f} L/KG")
+    c4.metric("Klientë Aktivë në Plan", f"{gp['Klienti'].nunique():,}")
+    c5.metric(
         "Klientë Pasivë të Hequr",
         f"{len(df_pasive_raporti) if not df_pasive_raporti.empty else 0:,}",
     )
-    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     config_kolonave = {
         "Cmimi_Mes_Periudhes": st.column_config.NumberColumn(
@@ -1010,6 +1125,307 @@ elif page == "Planifikimi" and df_raw is not None:
             else:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
 
+    # =========================================================
+    # 🔄 MATRICA ZYRTARE (SHTESA E RE)
+    # =========================================================
+    st.divider()
+    st.subheader("🔄 Matrica Zyrtare e Planit (Agjentët dhe Kategoritë)")
+
+    if st.button("📊 Gjenero / Rifresko Matricën Zyrtare", type="secondary"):
+        if not gp_detajuar_pdf.empty:
+            with st.spinner("Duke kalkuluar matricën dhe totalet zyrtare..."):
+                df_matrica_korrigjuar = gp_detajuar_pdf.pivot_table(
+                    index="ForcaShitese",
+                    columns="NenKatZyrtare",
+                    values="Plani_KG",
+                    aggfunc="sum",
+                    fill_value=0,
+                )
+
+                renditje_finale_kolonave = [
+                    nk for nk in nen_kat_renditja if nk in df_matrica_korrigjuar.columns
+                ]
+                if "VAJ" in df_matrica_korrigjuar.columns:
+                    renditje_finale_kolonave.append("VAJ")
+
+                df_matrica_korrigjuar = df_matrica_korrigjuar.reindex(
+                    columns=renditje_finale_kolonave
+                )
+
+                # Shto Totalet
+                df_matrica_korrigjuar["TOTAL RRESHTI (KG)"] = df_matrica_korrigjuar.sum(
+                    axis=1
+                )
+                rreshti_totaleve = df_matrica_korrigjuar.sum(axis=0)
+                rreshti_totaleve.name = "TOTAL KOLONA (KG)"
+
+                st.session_state["matrica_zyrtare_KGs"] = pd.concat(
+                    [df_matrica_korrigjuar, pd.DataFrame([rreshti_totaleve])]
+                )
+
+    if "matrica_zyrtare_KGs" in st.session_state and not gp_detajuar_pdf.empty:
+        st.dataframe(
+            st.session_state["matrica_zyrtare_KGs"].style.format("{:,.0f}"),
+            width="stretch",
+        )
+    else:
+        st.info(
+            "Kliko butonin më sipër për të shfaqur matricën e plotë zyrtare të agjentëve."
+        )
+
+    # =========================================================
+    # 📂 GENERATORI I PDF-VE TË TRANSPOZUARA (.ZIP) (SHTESA E RE)
+    # =========================================================
+    st.divider()
+    st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
+
+    import zipfile
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    if not gp_detajuar_pdf.empty:
+        tot_deka_baza = gp_detajuar_pdf[
+            ~gp_detajuar_pdf["NenKatZyrtare"].isin(["VAJ"])
+        ]["Plani_KG"].sum()
+        tot_vaj_baza = gp_detajuar_pdf[gp_detajuar_pdf["NenKatZyrtare"] == "VAJ"][
+            "Plani_KG"
+        ].sum()
+
+        koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
+        koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
+
+        agjentet_unikë = gp_detajuar_pdf["ForcaShitese"].unique()
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            sukses_count = 0
+
+            for agjent in agjentet_unikë:
+                df_agj = gp_detajuar_pdf[
+                    gp_detajuar_pdf["ForcaShitese"] == agjent
+                ].copy()
+                if df_agj.empty:
+                    continue
+
+                emri_agjentit = str(agjent)
+                kodi_agjentit = str(df_agj[kolona_kodi_agj_sql].iloc[0])
+                rajoni_agjentit = str(df_agj[kolona_rajoni_sql].iloc[0])
+
+                emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
+                    " ", "_"
+                )
+                nr_klienteve_aktuale = df_agj["Klienti"].nunique()
+
+                df_agj_agreguar = (
+                    df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
+                )
+
+                pdf_buffer = io.BytesIO()
+                doc = SimpleDocTemplate(
+                    pdf_buffer,
+                    pagesize=letter,
+                    rightMargin=40,
+                    leftMargin=40,
+                    topMargin=40,
+                    bottomMargin=40,
+                )
+                story = []
+                styles = getSampleStyleSheet()
+
+                style_header = ParagraphStyle(
+                    "HStyle",
+                    parent=styles["Normal"],
+                    fontSize=12,
+                    fontName="Helvetica-Bold",
+                    textColor=colors.white,
+                )
+                style_cell = ParagraphStyle(
+                    "CStyle", parent=styles["Normal"], fontSize=10, leading=12
+                )
+                style_cell_bold = ParagraphStyle(
+                    "CBStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    leading=12,
+                )
+                style_cell_right = ParagraphStyle(
+                    "CRStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    alignment=2,
+                    leading=12,
+                )
+                style_cell_right_bold = ParagraphStyle(
+                    "CRBStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    alignment=2,
+                    leading=12,
+                )
+
+                tabela_header_data = [
+                    [
+                        Paragraph(
+                            f"PLANI SHITJES &nbsp;&nbsp;&nbsp;&nbsp; {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
+                            style_header,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            f"Agjenti i shitjes: <font color='red'><b>{emri_agjentit}</b></font>",
+                            style_cell,
+                        ),
+                        Paragraph(
+                            f"Kodi i agjentit: <b>{kodi_agjentit}</b>", style_cell
+                        ),
+                    ],
+                    [
+                        Paragraph("", style_cell),
+                        Paragraph(
+                            f"Rajoni i shitjes: <font color='blue'><b>{rajoni_agjentit}</b></font>",
+                            style_cell,
+                        ),
+                    ],
+                    [
+                        Paragraph(
+                            f"NR. TOTAL I KLIENTEVE: <b>{nr_klienteve_aktuale}</b>",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            f"NR. I KLIENTEVE TE MUAJIT TE KALUAR: <b>{int(nr_klienteve_aktuale * 1.2)}</b>",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            "NR. I PLANIFIKUAR I KLIENTEVE: __________________",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                ]
+
+                tabela_header = Table(tabela_header_data, colWidths=[265, 265])
+                tabela_header.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+                            ("SPAN", (0, 0), (1, 0)),
+                            ("SPAN", (0, 3), (1, 3)),
+                            ("SPAN", (0, 4), (1, 4)),
+                            ("SPAN", (0, 5), (1, 5)),
+                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                            ("GRID", (0, 3), (-1, -1), 1, colors.black),
+                            ("PADDING", (0, 0), (-1, -1), 5),
+                        ]
+                    )
+                )
+                story.append(tabela_header)
+                story.append(Spacer(1, 20))
+
+                tabela_plan_data = [
+                    [
+                        Paragraph("", style_cell_bold),
+                        Paragraph(
+                            "<b>SASIA (KG)<br/>PER PAGEN</b>", style_cell_right_bold
+                        ),
+                        Paragraph(
+                            "<b>SASIA (KG)<br/>PER BONUS</b>", style_cell_right_bold
+                        ),
+                    ]
+                ]
+
+                deka_bonus_tot = sum(
+                    v for k, v in df_agj_agreguar.items() if k != "VAJ"
+                )
+                deka_paga_tot = deka_bonus_tot * koef_deka_paga
+
+                tabela_plan_data.append(
+                    [
+                        Paragraph("<b>DEKA</b>", style_cell_bold),
+                        Paragraph(
+                            f"<b>{deka_paga_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                        Paragraph(
+                            f"<b>{deka_bonus_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                    ]
+                )
+
+                for nk in nen_kat_renditja:
+                    bonus_v = df_agj_agreguar.get(nk, 0)
+                    paga_v = bonus_v * koef_deka_paga if bonus_v > 0 else 0
+                    tabela_plan_data.append(
+                        [
+                            Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{nk}", style_cell),
+                            Paragraph(
+                                f"{paga_v:,.0f}" if paga_v > 0 else "-",
+                                style_cell_right,
+                            ),
+                            Paragraph(
+                                f"{bonus_v:,.0f}" if bonus_v > 0 else "-",
+                                style_cell_right,
+                            ),
+                        ]
+                    )
+
+                vaj_bonus_tot = df_agj_agreguar.get("VAJ", 0)
+                vaj_paga_tot = vaj_bonus_tot * koef_vaj_paga
+
+                tabela_plan_data.append(
+                    [
+                        Paragraph("<b>VAJ</b>", style_cell_bold),
+                        Paragraph(f"<b>{vaj_paga_tot:,.0f}</b>", style_cell_right_bold),
+                        Paragraph(
+                            f"<b>{vaj_bonus_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                    ]
+                )
+
+                tabela_plan = Table(tabela_plan_data, colWidths=[230, 150, 150])
+                tabela_plan.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F4F8")),
+                            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                            ("PADDING", (0, 0), (-1, -1), 4),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                            ("LINEBELOW", (0, 1), (-1, 1), 1.5, colors.black),
+                            ("LINEABOVE", (0, -1), (-1, -1), 1.5, colors.black),
+                        ]
+                    )
+                )
+                story.append(tabela_plan)
+
+                doc.build(story)
+                zip_file.writestr(emri_fajlit, pdf_buffer.getvalue())
+                sukses_count += 1
+
+        zip_buffer.seek(0)
+        st.download_button(
+            label=f"🚀 Shkarko {sukses_count} PDF të Transpozuara (.ZIP)",
+            data=zip_buffer.getvalue(),
+            file_name=f"Planet_Zyrtare_Te_Transpozuara_{muaji_i_zgjedhur}.zip",
+            mime="application/zip",
+            type="primary",
+        )
+
     # --- 📥 EKSPORTET E RIKTHYERA (HTML DHE EXCEL) ---
     st.sidebar.markdown("### 📥 Eksporto të dhënat")
 
@@ -1037,8 +1453,6 @@ elif page == "Planifikimi" and df_raw is not None:
             f'<a href="data:text/html;base64,{b64}" download="Plani_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
             unsafe_allow_html=True,
         )
-
-    import io
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
