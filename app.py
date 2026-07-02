@@ -653,14 +653,14 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (VERSIONI ME SHNJEMIMET DHE KLIENTËT PASIVË)
+# MODULI: PLANIFIKIMI (ME EXPANDER-IN TE KOKA E FAQES)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
 
-    # --- 📅 PËREZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
+    # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
     st.sidebar.markdown("### 📅 Periudha e Planit")
 
     lista_muajve = [
@@ -719,7 +719,6 @@ elif page == "Planifikimi" and df_raw is not None:
     )
     df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
 
-    # Ndarja në aktivë dhe pasivë
     df_aktive_kohe = df_blerja_fundit[
         df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
     ]
@@ -769,7 +768,6 @@ elif page == "Planifikimi" and df_raw is not None:
     dff[kolona_rajoni_sql] = dff[kolona_rajoni_sql].fillna("Rajoni")
     dff["kat"] = dff["kat"].fillna("ETJ")
 
-    # Filtri i Agjentit në Interface
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
         df_pasive_baze = df_pasive_baze[df_pasive_baze["ForcaShitese"] == agj_sel]
@@ -872,13 +870,36 @@ elif page == "Planifikimi" and df_raw is not None:
 
     gp["NenKatZyrtare"] = gp.apply(gjej_nen_kategorine_zyrtare, axis=1)
 
-    # --- INTERFACE: METRIKAT KRYESORE ---
+    # =========================================================
+    # 👑 KOKA E FAQES (TITULLI, INFO-BAR DHE EXPANDER-I)
+    # =========================================================
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(
         f"💾 Update i fundit në DB: **{data_fundit_db}** | Grupi i zgjedhur: **{grup_sel}**"
     )
 
+    # --- ℹ️ BLLOKU INFORMATIV VENDOSET KËTU (TE KOKA) ---
+    with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
+        st.markdown(f"""
+        Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
+        
+        1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Gjatë këtij procesi, pastrohen dublikimet e mundshme të klientëve për të parandaluar fryrjen artificiale të volumeve. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
+        
+        2. **Heqja e Klientëve Pasivë:** Sistemi analizon blerjen e fundit absolute të çdo klienti. Nëse blerja e tyre e fundit është më e vjetër se **{muajt_pasivitet} muaj** nga përditësimi i fundit i sistemit ({data_fundit_db}), ata konsiderohen pasivë dhe hiqen automatikisht nga plani.
+        
+        3. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për to gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
+           $$\\text{{Plani KG}} = \\left( \\frac{{\\text{{KG Historike}}}}{{\\text{{Numri i Muajve}}}} \\right) \\times \\left(1 + \\frac{{\\text{{Përqindja e Rritjes}}}}{{100}}\\right)$$
+        
+        4. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
+        
+        5. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar i Periudhës* së përzgjedhur:
+           $$\\text{{Vlera e Planifikuar}} = \\text{{Plani KG}} \\times \\text{{Çmimi (i Fundit ose Mesatar)}}$$
+        """)
+
+    st.divider()
+
+    # --- METRIKAT ---
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
     kliente_pasive_num = len(df_pasive_baze) if not df_pasive_baze.empty else 0
@@ -889,18 +910,9 @@ elif page == "Planifikimi" and df_raw is not None:
     c3.metric("Klientë Pasivë", f"{kliente_pasive_num:,}")
     c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
-    # =========================================================
-    # 📌 SHNËNIMI: LOGJIKA E LLOGARITJES DHE ALOKIMIT
-    # =========================================================
-    st.markdown("""
-    > 📝 **Shënime mbi Alokimin dhe Logjikën e Planit:**
-    > * **Alokimi i Agjentëve:** Planet janë kalkuluar mbi historikun e shitjeve reale të periudhës së zgjedhur, të ndara automatikisht për çdo **Agjent Aktual** bazuar në klientët që ata kanë aktualisht në menaxhim.
-    > * **Filtri i Klientëve Pasivë:** Sistemi ka skanuar blerjen e fundit për çdo klient në të gjithë historikun e bazës së të dhënave. Klientët që nuk kanë kryer asnjë blerje në **{0} muajt e fundit** janë konsideruar pasivë dhe janë **përjashtuar plotësisht** nga kalkulimi i planit të muajit aktual për të shmangur planet e fryra artificialisht.
-    """.format(muajt_pasivitet))
-
     st.divider()
 
-    # --- TABET E DETAJEVE (PËRFSHIRË KLIENTËT PASIVË) ---
+    # --- TABET E DETAJEVE SIPAS KATEGORIVE, AGJENTËVE DHE KLIENTËVE PASIVË ---
     if klientet_selected:
         st.subheader("📍 Detajet e Artikujve për Klientët e Përzgjedhur")
         st.dataframe(
