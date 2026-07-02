@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (OPTIMIZUAR ME ÇMIMIN MESATAR PËR KG)
+# MODULI: PLANIFIKIMI (METRIKAT E PËRDITËSUARA ME ÇMIMIN MESATAR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -904,20 +904,22 @@ elif page == "Planifikimi" and df_raw is not None:
 
     st.divider()
 
-    # --- METRIKAT ---
+    # --- METRIKAT (SHTUAR METRIKA E ÇMIMIT MESATAR GLOBAL) ---
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
     kliente_pasive_num = len(df_pasive_baze) if not df_pasive_baze.empty else 0
+    cmimi_mesatar_global = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Plani KG Totale (Bonus)", f"{t_kg_plan:,.0f}")
-    c2.metric("Klientë Aktivë", f"{gp['Klienti'].nunique():,}")
-    c3.metric("Klientë Pasivë", f"{kliente_pasive_num:,}")
-    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
+    c2.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
+    c3.metric("Çmimi Mesatar global", f"{cmimi_mesatar_global:,.2f} L/KG")
+    c4.metric("Klientë Aktivë", f"{gp['Klienti'].nunique():,}")
+    c5.metric("Klientë Pasivë", f"{kliente_pasive_num:,}")
 
     st.divider()
 
-    # --- TABET E DETAJEVE (KORRIGJUAR EMËRTIMET DHE SHTUAR ÇMIMI MESATAR PËR KG) ---
+    # --- TABET E DETAJEVE ---
     if klientet_selected:
         st.subheader("📍 Detajet e Artikujve për Klientët e Përzgjedhur")
         st.dataframe(
