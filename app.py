@@ -880,7 +880,235 @@ elif page == "Planifikimi" and df_raw is not None:
     df_matrica_transpozuar = df_matrica_transpozuar.reindex(renditje_finale_rreshtave)
     st.dataframe(df_matrica_transpozuar, width="stretch")
 
-    # --- 📂 GENERATORI I PDF-VE TË TRANSPOZUARA (ZGJIDHJA E KEYERROR) ---
+# ---------------------------------------------------------
+# MODULI: PLANIFIKIMI (VERSIONI ME TRANSPOZIM ZYRTAR TË MATRICËS)
+# ---------------------------------------------------------
+elif page == "Planifikimi" and df_raw is not None:
+
+    sot = datetime.now()
+    data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
+
+    # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
+    st.sidebar.markdown("### 📅 Periudha e Planit")
+
+    lista_muajve = [
+        "Janar",
+        "Shkurt",
+        "Mars",
+        "Prill",
+        "Maj",
+        "Qershor",
+        "Korrik",
+        "Gusht",
+        "Shtator",
+        "Tetor",
+        "Nëntor",
+        "Dhjetor",
+    ]
+
+    muaji_default_index = sot.month - 1
+    muaji_i_zgjedhur = st.sidebar.selectbox(
+        "Zgjidh Muajin:", lista_muajve, index=muaji_default_index
+    )
+
+    lista_viteve = list(range(sot.year - 1, sot.year + 4))
+    viti_default_index = lista_viteve.index(sot.year) if sot.year in lista_viteve else 0
+    viti_i_zgjedhur = st.sidebar.selectbox(
+        "Zgjidh Vitin:", lista_viteve, index=viti_default_index
+    )
+
+    # --- 🛑 FILTRI: PËRJASHTIMI I KLIENTËVE PASIVË ---
+    st.sidebar.markdown("### 💤 Filtri i Klientëve Pasivë")
+    muajt_pasivitet = st.sidebar.number_input(
+        "Përjashto klientët pa blerje në (muajt e fundit):",
+        min_value=1,
+        max_value=24,
+        value=3,
+        step=1,
+    )
+
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT ---
+    mask_past = (df_raw["Data"].dt.year < sot.year) | (
+        (df_raw["Data"].dt.year == sot.year) & (df_raw["Data"].dt.month < sot.month)
+    )
+    df_past = df_raw[mask_past].copy()
+    df_past["Cmimi_Rresht"] = df_past["Vlera_Historike"] / df_past["kg"].replace(0, 1)
+    last_prices = df_past.sort_values("Data").drop_duplicates("KodiArt", keep="last")[
+        ["KodiArt", "Cmimi_Rresht"]
+    ]
+    last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
+
+    # --- IDENTIFIKIMI I KLIENTËVE AKTIVË ---
+    data_maksimale_db = df_raw["Data"].max()
+    data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
+
+    df_blerja_fundit = df_raw.groupby("Klienti")["Data"].max().reset_index()
+    df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
+
+    klientet_aktive_kohe = df_blerja_fundit[
+        df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
+    ]["Klienti"].unique()
+
+    # --- FILTRIMI I PERIUDHËS HISTORIKE ---
+    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
+    dff = df_raw.loc[mask].copy()
+    dff = dff[dff["Klienti"].isin(klientet_aktive_kohe)]
+
+    if grup_sel != "Të gjitha":
+        dff = dff[dff["Grup_Filtri"] == grup_sel]
+
+    # --- 🔍 KONTROLLI AUTOMATIK I EMRAVE TË KOLONAVE TË SQL ---
+    kolona_kodi_agj_sql = next(
+        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
+    )
+    if not kolona_kodi_agj_sql:
+        kolona_kodi_agj_sql = next(
+            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
+            "KodiForcashitese",
+        )
+
+    kolona_rajoni_sql = next(
+        (
+            c
+            for c in dff.columns
+            if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()
+        ),
+        "KodZona",
+    )
+
+    if kolona_kodi_agj_sql not in dff.columns:
+        dff[kolona_kodi_agj_sql] = "agj000"
+    if kolona_rajoni_sql not in dff.columns:
+        dff[kolona_rajoni_sql] = "Rajoni"
+
+    dff["ForcaShitese"] = dff["ForcaShitese"].fillna("Pa Agjent")
+    dff[kolona_kodi_agj_sql] = dff[kolona_kodi_agj_sql].fillna("agj000")
+    dff[kolona_rajoni_sql] = dff[kolona_rajoni_sql].fillna("Rajoni")
+    dff["kat"] = dff["kat"].fillna("ETJ")
+
+    n_months = max(
+        1,
+        (end_date.year - start_date.year) * 12
+        + (end_date.month - start_date.month)
+        + 1,
+    )
+
+    # --- AGREGIMI BAZË ---
+    gp = (
+        dff.groupby(
+            [
+                "ForcaShitese",
+                kolona_kodi_agj_sql,
+                kolona_rajoni_sql,
+                "Klienti",
+                "kat",
+                "KodiArt",
+                "Artikulli",
+            ]
+        )
+        .agg({"kg": "sum", "Vlera_Historike": "sum"})
+        .reset_index()
+    )
+
+    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
+    gp = gp.merge(last_prices, on="KodiArt", how="left")
+
+    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
+    gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
+        gp["Cmimi_Mes_Periudhes"]
+    )
+
+    # --- RENDITJA ZYRTARE E NËN-KATEGORIVE ---
+    nen_kat_renditja = [
+        "MATIK1",
+        "MATIK2",
+        "DORE",
+        "LIQUID1",
+        "LIQUID2",
+        "ZBARDHUES",
+        "SOFT1",
+        "SOFT2",
+        "ENESH",
+        "XHEL",
+        "PLLAKA",
+        "KREM",
+        "SAPUN",
+        "ANTIBAKTERIAL",
+        "DEZINFEKTUES",
+        "ETJ",
+        "SET",
+    ]
+
+    # Funksioni i Mapimit për Transpozim të saktë
+    def gjej_nen_kategorine_zyrtare(rresht):
+        art_up = str(rresht["Artikulli"]).upper().replace(" ", "")
+        kat_up = str(rresht["kat"]).upper().replace(" ", "")
+
+        if "VAJ" in kat_up or "OLIM" in kat_up:
+            return "VAJ"
+        if "MATIK" in art_up:
+            if "1" in art_up or "SUPER" in art_up:
+                return "MATIK1"
+            return "MATIK2"
+        if "DORE" in art_up or "HAND" in art_up:
+            return "DORE"
+        if "LIQUID" in art_up or "LIKUID" in art_up:
+            if "1" in art_up:
+                return "LIQUID1"
+            return "LIQUID2"
+        if "ZBARDHUES" in art_up or "ACE" in art_up or "ZBERDH" in art_up:
+            return "ZBARDHUES"
+        if "SOFT" in art_up or "ZBUTES" in art_up:
+            if "1" in art_up:
+                return "SOFT1"
+            return "SOFT2"
+        if "ENESH" in art_up or "ENVE" in art_up or "DISH" in art_up:
+            return "ENESH"
+        if "XHEL" in art_up or "GEL" in art_up:
+            return "XHEL"
+        if "PLLAKA" in art_up or "SURE" in art_up:
+            return "PLLAKA"
+        if "KREM" in art_up or "CREAM" in art_up:
+            return "KREM"
+        if "SAPUN" in art_up or "SOAP" in art_up:
+            return "SAPUN"
+        if "ANTIBAKTERIAL" in art_up:
+            return "ANTIBAKTERIAL"
+        if "DEZINFEKT" in art_up:
+            return "DEZINFEKTUES"
+        if "SET" in art_up:
+            return "SET"
+        return "ETJ"
+
+    gp["NenKatZyrtare"] = gp.apply(gjej_nen_kategorine_zyrtare, axis=1)
+
+    # --- DISPLAY I MATRICËS SË TRANSPOZUAR NË INTERFACE ---
+    st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
+    st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
+    st.divider()
+
+    st.subheader("🔄 Matrica e Transpozuar Zyrtare (Sipas Agjentëve)")
+
+    # Krijojmë një pivot table ku rreshtat janë Kategoritë Zyrtare dhe kolonat janë Agjentët
+    df_matrica_transpozuar = gp.pivot_table(
+        index="NenKatZyrtare",
+        columns="ForcaShitese",
+        values="Plani_KG",
+        aggfunc="sum",
+        fill_value=0,
+    )
+
+    # Ri-renditim rreshtat ekzaktësisht sipas kërkesës zyrtare
+    renditje_finale_rreshtave = [
+        nk for nk in nen_kat_renditja if nk in df_matrica_transpozuar.index
+    ]
+    if "VAJ" in df_matrica_transpozuar.index:
+        renditje_finale_rreshtave.append("VAJ")
+
+    df_matrica_transpozuar = df_matrica_transpozuar.reindex(renditje_finale_rreshtave)
+    st.dataframe(df_matrica_transpozuar, width="stretch")
+
+    # --- 📂 GENERATORI I PDF-VE TË TRANSPOZUARA ---
     st.divider()
     st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
 
@@ -924,9 +1152,10 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 nr_klienteve_aktuale = df_agj["Klienti"].nunique()
 
-                # Agregimi pa bërë set_index në mënyrë të rrezikshme
                 df_agj_agreguar = (
-                    df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
+                    df_agj.groupby(["NenKatZyrtare"])
+                    .agg({"Plani_KG": "sum"})
+                    .set_index("NenKatZyrtare")
                 )
 
                 # Ndërtimi i PDF-së
@@ -1054,10 +1283,10 @@ elif page == "Planifikimi" and df_raw is not None:
                     ]
                 ]
 
-                # Sasi Totale DEKA duke mbledhur të gjitha përveç Vajit nga fjalori
-                deka_bonus_tot = sum(
-                    v for k, v in df_agj_agreguar.items() if k != "VAJ"
-                )
+                # Sasi Totale DEKA për agjentin aktual
+                deka_bonus_tot = df_agj_agreguar.loc[
+                    df_agj_agreguar.index != "VAJ", "Plani_KG"
+                ].sum()
                 deka_paga_tot = deka_bonus_tot * koef_deka_paga
 
                 tabela_plan_data.append(
@@ -1072,9 +1301,13 @@ elif page == "Planifikimi" and df_raw is not None:
                     ]
                 )
 
-                # Vendosja e rreshtave të transpozuar nga fjalori (Mbron nga KeyError)
+                # Vendosja e rreshtave të transpozuar
                 for nk in nen_kat_renditja:
-                    bonus_v = df_agj_agreguar.get(nk, 0)
+                    bonus_v = (
+                        df_agj_agreguar.loc[nk, "Plani_KG"]
+                        if nk in df_agj_agreguar.index
+                        else 0
+                    )
                     paga_v = bonus_v * koef_deka_paga if bonus_v > 0 else 0
 
                     tabela_plan_data.append(
@@ -1092,7 +1325,11 @@ elif page == "Planifikimi" and df_raw is not None:
                     )
 
                 # Sasi Totale VAJ për agjentin aktual
-                vaj_bonus_tot = df_agj_agreguar.get("VAJ", 0)
+                vaj_bonus_tot = (
+                    df_agj_agreguar.loc["VAJ", "Plani_KG"]
+                    if "VAJ" in df_agj_agreguar.index
+                    else 0
+                )
                 vaj_paga_tot = vaj_bonus_tot * koef_vaj_paga
 
                 tabela_plan_data.append(
