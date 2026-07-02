@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME KORRIGJIMIN E RENDITJES SË DATAVE)
+# MODULI: PLANIFIKIMI (KODI I PLOTË ME EKSPORTET E RIKTHYERA)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -973,7 +973,6 @@ elif page == "Planifikimi" and df_raw is not None:
                 column_config=config_kolonave,
             )
 
-        # TABI 4: LISTIMI I KLIENTËVE PASIVË (ME KORRIGJIMIN E RENDITJES SË DATËS)
         with t4:
             st.subheader("💤 Klientët pa aktivitet faturimi")
             st.markdown(
@@ -981,7 +980,6 @@ elif page == "Planifikimi" and df_raw is not None:
             )
 
             if not df_pasive_raporti.empty:
-                # KRITIKE: Mbajmë pastër kolonat dhe NUK e kthejmë datën në tekst këtu në Pandas, që renditja të bëhet saktë.
                 df_pasive_shfaqje = df_pasive_raporti[
                     [
                         "Klienti",
@@ -990,8 +988,6 @@ elif page == "Planifikimi" and df_raw is not None:
                         "Sasia_Mesatare_Mujore_12M",
                     ]
                 ].copy()
-
-                # Renditja fillestare bëhet sipas datës së blerjes së fundit më të re (më afër kohës sonë)
                 df_pasive_shfaqje = df_pasive_shfaqje.sort_values(
                     "Data_Blerjes_Fundit", ascending=False
                 )
@@ -1003,7 +999,6 @@ elif page == "Planifikimi" and df_raw is not None:
                     column_config={
                         "Klienti": "Emri i Klientit",
                         "ForcaShiteseAktuale": "Agjenti Aktual",
-                        # Përdorim DatetimeColumn të Streamlit. Kjo bën që formati të dalë DD/MM/YYYY por prapaskena të renditet si datë reale!
                         "Data_Blerjes_Fundit": st.column_config.DatetimeColumn(
                             "Data e Blerjes së Fundit", format="DD/MM/YYYY"
                         ),
@@ -1014,6 +1009,62 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
             else:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
+
+    # --- 📥 EKSPORTET E RIKTHYERA (HTML DHE EXCEL) ---
+    st.sidebar.markdown("### 📥 Eksporto të dhënat")
+
+    def generate_html_report(dataframe):
+        html = "<html><head><style>body{font-family:sans-serif;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;} .num{text-align:right;}</style></head><body>"
+        html += f"<h1>Raporti i Planit - {muaji_i_zgjedhur} {viti_i_zgjedhur} ({grup_sel})</h1>"
+        for agjent in sorted(dataframe["ForcaShitese"].unique()):
+            html += f"<h3>Agjenti: {agjent}</h3>"
+            agj_df = (
+                dataframe[dataframe["ForcaShitese"] == agjent]
+                .groupby("kat")
+                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
+                .reset_index()
+            )
+            html += "<table><thead><tr><th>Kategoria</th><th class='num'>Plani (KG)</th><th class='num'>Vlera</th></tr></thead><tbody>"
+            for _, row in agj_df.iterrows():
+                html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
+            html += "</tbody></table><br>"
+        html += "</body></html>"
+        return html
+
+    if st.sidebar.button("Gjenero Raportin HTML"):
+        b64 = base64.b64encode(generate_html_report(gp).encode()).decode()
+        st.sidebar.markdown(
+            f'<a href="data:text/html;base64,{b64}" download="Plani_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
+            unsafe_allow_html=True,
+        )
+
+    import io
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        gp.to_excel(writer, sheet_name="Plani Detajuar", index=False)
+        if "df_k" in locals():
+            df_k.to_excel(writer, sheet_name="Sipas Kategorive", index=False)
+        if "df_a" in locals():
+            df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
+        if "df_kl" in locals():
+            df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
+        if not df_pasive_raporti.empty:
+            df_pasive_raporti[
+                [
+                    "Klienti",
+                    "ForcaShiteseAktuale",
+                    "Data_Blerjes_Fundit",
+                    "Sasia_Mesatare_Mujore_12M",
+                ]
+            ].to_excel(writer, sheet_name="Klientet Pasive", index=False)
+
+    st.sidebar.download_button(
+        label="📊 Shkarko Planin në Excel",
+        data=buffer.getvalue(),
+        file_name=f"Plani_{grup_sel.replace(' ', '_')}_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI
