@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME EXPANDER-IN TE KOKA E FAQES)
+# MODULI: PLANIFIKIMI (ME MESATAREN 12-MUAJSHME TË KLIENTËVE PASIVË)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -727,9 +727,28 @@ elif page == "Planifikimi" and df_raw is not None:
     df_pasive_baze = df_blerja_fundit[
         df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
     ].copy()
-    df_pasive_baze["Muaj_Pa_Blerje"] = (
-        (data_maksimale_db - df_pasive_baze["Data_Blerjes_Fundit"]).dt.days / 30
-    ).round(1)
+
+    # --- 🔥 LLOGARITJA E SHITJEVE MESATARE MUJORE (12 MUAJ PARA BLERJES SË FUNDIT) ---
+    mesataret_pasive = []
+    if not df_pasive_baze.empty:
+        for idx, row in df_pasive_baze.iterrows():
+            k_emri = row["Klienti"]
+            d_fundit = row["Data_Blerjes_Fundit"]
+            d_fillimit_12m = d_fundit - pd.DateOffset(months=12)
+
+            # Filtrojmë historikun e këtij klienti për 12 muajt para blerjes së fundit
+            hist_12m = df_raw[
+                (df_raw["Klienti"] == k_emri)
+                & (df_raw["Data"] >= d_fillimit_12m)
+                & (df_raw["Data"] <= d_fundit)
+            ]
+
+            tot_kg_12m = hist_12m["kg"].sum()
+            # Pjesëtojmë me 12 për të nxjerrë mesataren mujore historike
+            mesatare_mujore = tot_kg_12m / 12
+            mesataret_pasive.append(mesatare_mujore)
+
+        df_pasive_baze["Mesatare_Mujore_12M_Para_Pasivitetit"] = mesataret_pasive
 
     # --- FILTRIMI I PERIUDHËS HISTORIKE ---
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
@@ -770,7 +789,8 @@ elif page == "Planifikimi" and df_raw is not None:
 
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
-        df_pasive_baze = df_pasive_baze[df_pasive_baze["ForcaShitese"] == agj_sel]
+        if not df_pasive_baze.empty:
+            df_pasive_baze = df_pasive_baze[df_pasive_baze["ForcaShitese"] == agj_sel]
 
     if klientet_selected:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
@@ -879,7 +899,6 @@ elif page == "Planifikimi" and df_raw is not None:
         f"💾 Update i fundit në DB: **{data_fundit_db}** | Grupi i zgjedhur: **{grup_sel}**"
     )
 
-    # --- ℹ️ BLLOKU INFORMATIV VENDOSET KËTU (TE KOKA) ---
     with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
         st.markdown(f"""
         Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
@@ -888,7 +907,7 @@ elif page == "Planifikimi" and df_raw is not None:
         
         2. **Heqja e Klientëve Pasivë:** Sistemi analizon blerjen e fundit absolute të çdo klienti. Nëse blerja e tyre e fundit është më e vjetër se **{muajt_pasivitet} muaj** nga përditësimi i fundit i sistemit ({data_fundit_db}), ata konsiderohen pasivë dhe hiqen automatikisht nga plani.
         
-        3. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për to gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
+        3. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
            $$\\text{{Plani KG}} = \\left( \\frac{{\\text{{KG Historike}}}}{{\\text{{Numri i Muajve}}}} \\right) \\times \\left(1 + \\frac{{\\text{{Përqindja e Rritjes}}}}{{100}}\\right)$$
         
         4. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
@@ -968,17 +987,35 @@ elif page == "Planifikimi" and df_raw is not None:
             )
         with t4:
             if not df_pasive_baze.empty:
+                # Formatim i tabelës me kolonën e re të shitjeve mesatare historike
+                df_shfaqje_pasive = df_pasive_baze[
+                    [
+                        "Klienti",
+                        "ForcaShitese",
+                        "Data_Blerjes_Fundit",
+                        "Mesatare_Mujore_12M_Para_Pasivitetit",
+                    ]
+                ].copy()
+
+                # Formatim vizual bukur për kolonën e KG
+                df_shfaqje_pasive["Mesatare_Mujore_12M_Para_Pasivitetit"] = (
+                    df_shfaqje_pasive["Mesatare_Mujore_12M_Para_Pasivitetit"].map(
+                        "{:,.1f} KG".format
+                    )
+                )
+
                 st.dataframe(
-                    df_pasive_baze[
-                        [
-                            "Klienti",
-                            "ForcaShitese",
-                            "Data_Blerjes_Fundit",
-                            "Muaj_Pa_Blerje",
-                        ]
-                    ].sort_values("Muaj_Pa_Blerje", ascending=False),
+                    df_shfaqje_pasive.sort_values(
+                        "Data_Blerjes_Fundit", ascending=False
+                    ),
                     width="stretch",
                     hide_index=True,
+                    column_config={
+                        "Klienti": "Klienti",
+                        "ForcaShitese": "Agjenti Aktual",
+                        "Data_Blerjes_Fundit": "Data Blerjes Fundit",
+                        "Mesatare_Mujore_12M_Para_Pasivitetit": "Shitjet Mes. Mujore (12M para Pasivitetit)",
+                    },
                 )
             else:
                 st.success("Nuk ka klientë pasivë për këtë përzgjedhje!")
