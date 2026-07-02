@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME LISTIMIN E KLIENTËVE PASIVË)
+# MODULI: PLANIFIKIMI (ME KORRIGJIMIN E RENDITJES SË DATAVE)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -715,11 +715,9 @@ elif page == "Planifikimi" and df_raw is not None:
     data_maksimale_db = df_raw["Data"].max()
     data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
 
-    # Gjejmë datën e faturës së fundit për çdo klient
     df_blerja_fundit = df_raw.groupby("Klienti")["Data"].max().reset_index()
     df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
 
-    # Ndajmë klientët në Aktivë dhe Pasivë
     klientet_aktive_kohe = df_blerja_fundit[
         df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
     ]["Klienti"].unique()
@@ -727,16 +725,14 @@ elif page == "Planifikimi" and df_raw is not None:
         df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
     ].copy()
 
-    # --- LLOGARITJA E SASISË MESATARE MUJORE PËR PASIVËT (12 Muaj para blerjes së fundit) ---
+    # --- LLOGARITJA E SASISË MESATARE MUJORE PËR PASIVËT ---
     df_pasive_raporti = pd.DataFrame()
     if not df_pasive_baze.empty:
-        # Bashkojmë me df_raw për të llogaritur historikun e tyre
         df_pasive_hist = df_raw[
             df_raw["Klienti"].isin(df_pasive_baze["Klienti"])
         ].copy()
         df_pasive_hist = df_pasive_hist.merge(df_pasive_baze, on="Klienti", how="left")
 
-        # Filtrojmë vetëm blerjet që ndodhen deri në 12 muaj para datës së tyre të fundit të blerjes
         df_pasive_hist["Data_Kufi_12M"] = df_pasive_hist[
             "Data_Blerjes_Fundit"
         ] - pd.DateOffset(months=12)
@@ -745,7 +741,6 @@ elif page == "Planifikimi" and df_raw is not None:
         )
         df_pasive_12m = df_pasive_hist[mask_12m].copy()
 
-        # Agregojmë sasinë totale të KG për këta 12 muaj aktivitet dhe pjesëtojmë për 12
         df_pasive_mesatarja = df_pasive_12m.groupby("Klienti")["kg"].sum().reset_index()
         df_pasive_mesatarja["Sasia_Mesatare_Mujore_12M"] = (
             df_pasive_mesatarja["kg"] / 12
@@ -787,13 +782,11 @@ elif page == "Planifikimi" and df_raw is not None:
                 [kolona_emri, kolona_zona]
             ].drop_duplicates(subset=[kolona_emri])
 
-            # Alokojmë agjentët aktualë për të dhënat e planit (dff)
             dff = dff.merge(
                 df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
             )
             dff["ForcaShitese"] = dff[kolona_zona].fillna(dff["ForcaShitese"])
 
-            # Alokojmë agjentët aktualë edhe për raportin e klientëve pasivë
             if not df_pasive_raporti.empty:
                 df_pasive_raporti = df_pasive_raporti.merge(
                     df_klientet_paster,
@@ -807,7 +800,7 @@ elif page == "Planifikimi" and df_raw is not None:
         else:
             st.error(f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView.")
 
-    # Filtrimi i agjentit në ndërfaqe
+    # Filtrimi i agjentit
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
         if (
@@ -896,7 +889,6 @@ elif page == "Planifikimi" and df_raw is not None:
             column_config=config_kolonave,
         )
     else:
-        # Shtojmë tabin e katërt për klientët pasivë
         t1, t2, t3, t4 = st.tabs(
             [
                 "📊 Kategoritë",
@@ -981,15 +973,15 @@ elif page == "Planifikimi" and df_raw is not None:
                 column_config=config_kolonave,
             )
 
-        # TABI I RI: LISTIMI I KLIENTËVE PASIVË
+        # TABI 4: LISTIMI I KLIENTËVE PASIVË (ME KORRIGJIMIN E RENDITJES SË DATËS)
         with t4:
             st.subheader("💤 Klientët pa aktivitet faturimi")
             st.markdown(
-                f"Më poshtë janë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit** (para datës {data_fundit_db}). Sasia mesatare mujore llogaritet mbi historikun prej 12 muajsh përpara faturës së tyre të fundit."
+                f"Më poshtë janë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit** (para datës {data_fundit_db})."
             )
 
             if not df_pasive_raporti.empty:
-                # Formatimi i kolonave për tabelën e pasivëve
+                # KRITIKE: Mbajmë pastër kolonat dhe NUK e kthejmë datën në tekst këtu në Pandas, që renditja të bëhet saktë.
                 df_pasive_shfaqje = df_pasive_raporti[
                     [
                         "Klienti",
@@ -998,22 +990,25 @@ elif page == "Planifikimi" and df_raw is not None:
                         "Sasia_Mesatare_Mujore_12M",
                     ]
                 ].copy()
-                df_pasive_shfaqje["Data_Blerjes_Fundit"] = df_pasive_shfaqje[
-                    "Data_Blerjes_Fundit"
-                ].dt.strftime("%d/%m/%Y")
+
+                # Renditja fillestare bëhet sipas datës së blerjes së fundit më të re (më afër kohës sonë)
+                df_pasive_shfaqje = df_pasive_shfaqje.sort_values(
+                    "Data_Blerjes_Fundit", ascending=False
+                )
 
                 st.dataframe(
-                    df_pasive_shfaqje.sort_values(
-                        "Sasia_Mesatare_Mujore_12M", ascending=False
-                    ),
+                    df_pasive_shfaqje,
                     width="stretch",
                     hide_index=True,
                     column_config={
                         "Klienti": "Emri i Klientit",
                         "ForcaShiteseAktuale": "Agjenti Aktual",
-                        "Data_Blerjes_Fundit": "Data e Blerjes së Fundit",
+                        # Përdorim DatetimeColumn të Streamlit. Kjo bën që formati të dalë DD/MM/YYYY por prapaskena të renditet si datë reale!
+                        "Data_Blerjes_Fundit": st.column_config.DatetimeColumn(
+                            "Data e Blerjes së Fundit", format="DD/MM/YYYY"
+                        ),
                         "Sasia_Mesatare_Mujore_12M": st.column_config.NumberColumn(
-                            "Sasia Mes. Mujore (KG) para pasivizimit", format="%d KG"
+                            "Sasia Mes. Mujore (KG)", format="%d KG"
                         ),
                     },
                 )
