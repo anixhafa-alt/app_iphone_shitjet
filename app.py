@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (OPTIMIZUAR ME BUTON PËR MATRICËN)
+# MODULI: PLANIFIKIMI (OPTIMIZUAR ME ÇMIMIN MESATAR PËR KG)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -917,7 +917,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     st.divider()
 
-    # --- TABET E DETAJEVE ---
+    # --- TABET E DETAJEVE (KORRIGJUAR EMËRTIMET DHE SHTUAR ÇMIMI MESATAR PËR KG) ---
     if klientet_selected:
         st.subheader("📍 Detajet e Artikujve për Klientët e Përzgjedhur")
         st.dataframe(
@@ -936,41 +936,77 @@ elif page == "Planifikimi" and df_raw is not None:
         )
     else:
         t1, t2, t3, t4 = st.tabs(
-            ["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët", "💤 Klientët Pasivë"]
+            [
+                "📊 Kategoritë",
+                "👤 Agjentët Aktuale",
+                "🏪 Klientët",
+                "💤 Klientët Pasivë",
+            ]
         )
+
         with t1:
             df_k = (
                 gp.groupby("kat")
                 .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
                 .reset_index()
             )
+            df_k["Cmimi Mesatar per KG"] = df_k["Vlera_Planifikuar"] / df_k[
+                "Plani_KG"
+            ].replace(0, 1)
             st.dataframe(
-                df_k.sort_values("Plani_KG", ascending=False),
+                df_k.sort_values("Plani_KG", ascending=False).style.format(
+                    {
+                        "Plani_KG": "{:,.1f}",
+                        "Vlera_Planifikuar": "{:,.0f}",
+                        "Cmimi Mesatar per KG": "{:,.2f}",
+                    }
+                ),
                 width="stretch",
                 hide_index=True,
             )
+
         with t2:
             df_a = (
                 gp.groupby("ForcaShitese")
                 .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
                 .reset_index()
             )
+            df_a["Cmimi Mesatar per KG"] = df_a["Vlera_Planifikuar"] / df_a[
+                "Plani_KG"
+            ].replace(0, 1)
             st.dataframe(
-                df_a.sort_values("Plani_KG", ascending=False),
+                df_a.sort_values("Plani_KG", ascending=False).style.format(
+                    {
+                        "Plani_KG": "{:,.1f}",
+                        "Vlera_Planifikuar": "{:,.0f}",
+                        "Cmimi Mesatar per KG": "{:,.2f}",
+                    }
+                ),
                 width="stretch",
                 hide_index=True,
             )
+
         with t3:
             df_kl = (
                 gp.groupby(["Klienti", "ForcaShitese"])
                 .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
                 .reset_index()
             )
+            df_kl["Cmimi Mesatar per KG"] = df_kl["Vlera_Planifikuar"] / df_kl[
+                "Plani_KG"
+            ].replace(0, 1)
             st.dataframe(
-                df_kl.sort_values("Plani_KG", ascending=False),
+                df_kl.sort_values("Plani_KG", ascending=False).style.format(
+                    {
+                        "Plani_KG": "{:,.1f}",
+                        "Vlera_Planifikuar": "{:,.0f}",
+                        "Cmimi Mesatar per KG": "{:,.2f}",
+                    }
+                ),
                 width="stretch",
                 hide_index=True,
             )
+
         with t4:
             if not df_pasive_baze.empty:
                 df_shfaqje_pasive = df_pasive_baze[
@@ -1004,12 +1040,11 @@ elif page == "Planifikimi" and df_raw is not None:
                 st.success("Nuk ka klientë pasivë për këtë përzgjedhje!")
 
     # =========================================================
-    # 🔄 MATRICA ZYRTARE (OPTIMIZUAR ME BUTON PËR SHPEJTËSI)
+    # 🔄 MATRICA ZYRTARE
     # =========================================================
     st.divider()
     st.subheader("🔄 Matrica Zyrtare e Planit (Agjentët dhe Kategoritë)")
 
-    # Krijojmë një buton që kontrollon shfaqjen/llogaritem e matricës
     if st.button("📊 Gjenero / Rifresko Matricën Zyrtare", type="secondary"):
         if not gp.empty:
             with st.spinner("Duke kalkuluar matricën dhe totalet..."):
@@ -1041,11 +1076,8 @@ elif page == "Planifikimi" and df_raw is not None:
                 df_matrica_finale = pd.concat(
                     [df_matrica_korrigjuar, pd.DataFrame([rreshti_totaleve])]
                 )
-
-                # Ruajmë matricën e gjeneruar në session_state që mos të zhduket nëse preket sidebar
                 st.session_state["matrica_zyrtare_KGs"] = df_matrica_finale
 
-    # Shfaq matricën e ruajtur nëse ekziston
     if "matrica_zyrtare_KGs" in st.session_state and not gp.empty:
         st.dataframe(
             st.session_state["matrica_zyrtare_KGs"].style.format("{:,.0f}"),
