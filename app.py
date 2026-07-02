@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (KODI I PLOTË DHE I KORRIGJUAR)
+# MODULI: PLANIFIKIMI (ME FILTRIMIN E KLIENTËVE PASIVË)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -689,6 +689,17 @@ elif page == "Planifikimi" and df_raw is not None:
         "Zgjidh Vitin:", lista_viteve, index=viti_default_index
     )
 
+    # --- 🛑 FILTRI I RI: PËRJASHTIMI I KLIENTËVE PASIVË ---
+    st.sidebar.markdown("### 💤 Filtri i Klientëve Pasivë")
+    muajt_pasivitet = st.sidebar.number_input(
+        "Përjashto klientët pa blerje në (muajt e fundit):",
+        min_value=1,
+        max_value=24,
+        value=3,  # vlerë fillestare 3 muaj
+        step=1,
+        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet plotësisht nga plani.",
+    )
+
     # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT ---
     with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
         st.markdown(f"""
@@ -696,12 +707,14 @@ elif page == "Planifikimi" and df_raw is not None:
         
         1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Gjatë këtij procesi, pastrohen dublikimet e mundshme të klientëve për të parandaluar fryrjen artificiale të volumeve. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
         
-        2. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
+        2. **Heqja e Klientëve Pasivë:** Sistemi analizon blerjen e fundit absolute të çdo klienti. Nëse blerja e tyre e fundit është më e vjetër se **{muajt_pasivitet} muaj** nga përditësimi i fundit i sistemit ({data_fundit_db}), ata konsiderohen pasivë dhe hiqen automatikisht nga plani.
+        
+        3. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
            $$\\text{{Plani KG}} = \\left( \\frac{{\\text{{KG Historike}}}}{{\\text{{Numri i Muajve}}}} \\right) \\times \\left(1 + \\frac{{\\text{{Përqindja e Rritjes}}}}{{100}}\\right)$$
         
-        3. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
+        4. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
         
-        4. **Vlera e Planifikuar:** Shumëzohet **Plani KG** me **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar i Periudhës* së përzgjedhur:
+        5. **Vlera e Planifikuar:** Shumëzohet **Plani KG** magnets **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar i Periudhës* së përzgjedhur:
            $$\\text{{Vlera e Planifikuar}} = \\text{{Plani KG}} \\times \\text{{Çmimi (i Fundit ose Mesatar)}}$$
         """)
 
@@ -716,9 +729,25 @@ elif page == "Planifikimi" and df_raw is not None:
     ]
     last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
+    # --- LOGJIKA E IDENTIFIKIMIT TË KLIENTËVE AKTIVË ---
+    # Gjejmë datën maksimale absolute në DB
+    data_maksimale_db = df_raw["Data"].max()
+    # Llogarisim datën kufi (p.sh. 3 ose 6 muaj para datës së fundit të DB)
+    data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
+
+    # Gjejmë datën e blerjes së fundit për çdo klient në të gjithë databazën
+    df_blerja_fundit_klientit = df_raw.groupby("Klienti")["Data"].max().reset_index()
+    # Filtrojmë vetëm klientët që kanë blerë pas datës kufi
+    klientet_aktive_sipas_kohes = df_blerja_fundit_klientit[
+        df_blerja_fundit_klientit["Data"] >= data_kufi_pasivitet
+    ]["Klienti"].unique()
+
     # --- FILTRIMI I PERIUDHËS HISTORIKE ---
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
     dff = df_raw.loc[mask].copy()
+
+    # Aplikojmë filtrin që të mbajmë vetëm klientët që kanë blerë në muajt e fundit të përcaktuar
+    dff = dff[dff["Klienti"].isin(klientet_aktive_sipas_kohes)]
 
     if grup_sel != "Të gjitha":
         dff = dff[dff["Grup_Filtri"] == grup_sel]
@@ -738,7 +767,6 @@ elif page == "Planifikimi" and df_raw is not None:
                 break
 
         if kolona_emri and kolona_zona:
-            # RREGULLIM KRITIK: Heqim çdo dublikim rreshtash nga regjistri përpara bashkimit që të mos shumëfishohet sasia
             df_klientet_paster = df_klientet_regjistri[
                 [kolona_emri, kolona_zona]
             ].drop_duplicates(subset=[kolona_emri])
@@ -746,14 +774,13 @@ elif page == "Planifikimi" and df_raw is not None:
             dff = dff.merge(
                 df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
             )
-            # Nëse klienti ekziston në regjistër, alokojmë agjentin aktual (kolona Zona), përndryshe mbajmë atë historik
             dff["ForcaShitese"] = dff[kolona_zona].fillna(dff["ForcaShitese"])
         else:
             st.error(
                 f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView. Kolonat ekzistuese janë: {list(df_klientet_regjistri.columns)}"
             )
 
-    # Filtrimi i agjentit (tani i kryer mbi agjentët aktualë të terrenit)
+    # Filtrimi i agjentit
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
 
@@ -782,7 +809,6 @@ elif page == "Planifikimi" and df_raw is not None:
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
-    # Llogaritja e saktë e planit pa fryrje të sasisë
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
@@ -952,7 +978,7 @@ elif page == "Planifikimi" and df_raw is not None:
                 column_config=config_kolonave,
             )
 
-    # --- 📥 EKSPORTET (HTML DHE EXCEL) ---
+    # --- EKSPORTET ---
     st.sidebar.markdown("### 📥 Eksporto të dhënat")
 
     def generate_html_report(dataframe):
