@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (VERSIONI ZYRTAR I PLOTË - PA ERROR)
+# MODULI: PLANIFIKIMI (VERSIONI ZYRTAR I PLOTË - I KORRIGJUAR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -940,7 +940,7 @@ elif page == "Planifikimi" and df_raw is not None:
         )
         st.dataframe(df_matrica_finale, width="stretch", hide_index=True)
 
-    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE (FORMATI YT ZYRTAR FILTRUAR) ---
+    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE (FORMATI ZYRTAR) ---
     st.divider()
     st.subheader("📂 Shkarko Planet Individuale në PDF (Formati Zyrtar)")
     st.info(
@@ -961,14 +961,14 @@ elif page == "Planifikimi" and df_raw is not None:
     from reportlab.lib import colors
 
     if not gp.empty:
-        # Llogaritja e koeficientëve për t'i zbritur/ngritur fiks në tavanet minimale globale
+        # Llogaritja e koeficientëve për t'i kthyer në tavanet minimale globale
         tot_deka_baza = gp[gp["kat"].str.upper() == "DEKA"]["Plani_KG"].sum()
         tot_vaj_baza = gp[gp["kat"].str.upper().isin(["OLIM", "VAJ"])]["Plani_KG"].sum()
 
         koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
         koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
 
-        # Lista fikse e nën-kategorive të kërkuara nga formati juaj
+        # Lista fikse e nën-kategorive të kërkuara nga formati juaj zyrtar
         nen_kat_renditja = [
             "MATIK1",
             "MATIK2",
@@ -1083,7 +1083,7 @@ elif page == "Planifikimi" and df_raw is not None:
                     leading=12,
                 )
 
-                # --- 1. HEADER-I DOKUMENTIT (Sipas fotos sate) ---
+                # --- 1. HEADER-I DOKUMENTIT (Sipas fotos) ---
                 tabela_header_data = [
                     [
                         Paragraph(
@@ -1149,15 +1149,15 @@ elif page == "Planifikimi" and df_raw is not None:
                 story.append(tabela_header)
                 story.append(Spacer(1, 20))
 
-                # --- 2. TABELA E PLANIT (3 KOLONA - PA ÇMIM) ---
+                # --- 2. TABELA E PLANIT (KORRIGJUAR ME <br/>) ---
                 tabela_plan_data = [
                     [
                         Paragraph("", style_cell_bold),
                         Paragraph(
-                            "<b>SASIA (KG)<br>PER PAGEN</b>", style_cell_right_bold
+                            "<b>SASIA (KG)<br/>PER PAGEN</b>", style_cell_right_bold
                         ),
                         Paragraph(
-                            "<b>SASIA (KG)<br>PER BONUS</b>", style_cell_right_bold
+                            "<b>SASIA (KG)<br/>PER BONUS</b>", style_cell_right_bold
                         ),
                     ]
                 ]
