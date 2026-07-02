@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (VERSIONI ZYRTAR I PLOTË - I KORRIGJUAR)
+# MODULI: PLANIFIKIMI (VERSIONI ZYRTAR I PLOTË - I KORRIGJUAR ME EMRA KOLONASH TË SAKTA SQL)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -759,7 +759,7 @@ elif page == "Planifikimi" and df_raw is not None:
     if grup_sel != "Të gjitha":
         dff = dff[dff["Grup_Filtri"] == grup_sel]
 
-    # Integrimi me regjistrin e agjentëve
+    # Integrimi me regjistrin e agjentëve duke përdorur kolonën tuaja zyrtare SQL
     if df_klientet_regjistri is not None:
         kolona_emri = next(
             (
@@ -772,7 +772,7 @@ elif page == "Planifikimi" and df_raw is not None:
         kolona_zona = next(
             (
                 k
-                for k in ["Zona", "zona", "Agjenti", "ForcaShiteseAktuale"]
+                for k in ["KodZona", "Zona", "zona"]
                 if k in df_klientet_regjistri.columns
             ),
             None,
@@ -785,27 +785,13 @@ elif page == "Planifikimi" and df_raw is not None:
             dff = dff.merge(
                 df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
             )
-            dff["ForcaShitese"] = dff[kolona_zona].fillna(dff["ForcaShitese"])
-            if not df_pasive_raporti.empty:
-                df_pasive_raporti = df_pasive_raporti.merge(
-                    df_klientet_paster,
-                    left_on="Klienti",
-                    right_on=kolona_emri,
-                    how="left",
-                )
-                df_pasive_raporti["ForcaShiteseAktuale"] = df_pasive_raporti[
-                    kolona_zona
-                ].fillna("Pa Agjent")
+            if "KodZona" in dff.columns:
+                dff["KodZona"] = dff["KodZona_y"].fillna(dff["KodZona_x"])
+            else:
+                dff["KodZona"] = dff[kolona_zona]
 
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
-        if (
-            not df_pasive_raporti.empty
-            and "ForcaShiteseAktuale" in df_pasive_raporti.columns
-        ):
-            df_pasive_raporti = df_pasive_raporti[
-                df_pasive_raporti["ForcaShiteseAktuale"] == agj_sel
-            ]
 
     if klientet_selected:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
@@ -817,9 +803,24 @@ elif page == "Planifikimi" and df_raw is not None:
         + 1,
     )
 
-    # --- AGREGIMI BAZË I PLANIT ---
+    # --- AGREGIMI BAZË I PLANIT ME KOLONAT E REJA SQL ---
+    dff["ForcaShitese"] = dff["ForcaShitese"].fillna("Pa Agjent")
+    dff["KodiForcashitese"] = dff["KodiForcashitese"].fillna("agj000")
+    dff["KodZona"] = dff["KodZona"].fillna("Pa Rajon")
+    dff["kat"] = dff["kat"].fillna("ETJ")
+
     gp = (
-        dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
+        dff.groupby(
+            [
+                "ForcaShitese",
+                "KodiForcashitese",
+                "KodZona",
+                "Klienti",
+                "kat",
+                "KodiArt",
+                "Artikulli",
+            ]
+        )
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
     )
@@ -827,7 +828,7 @@ elif page == "Planifikimi" and df_raw is not None:
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
-    # Plani_KG këtu shërben si Plani Bazë Normal (i cili do jetë SASIA PER BONUS)
+    # Plani_KG shërben si SASIA PER BONUS (Plani bazë normal)
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
@@ -852,7 +853,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     st.divider()
 
-    # --- TABET NË KRYE TË FAQES ---
+    # --- TABET ---
     if klientet_selected:
         st.subheader("📍 Detajet Artikujve")
         st.dataframe(
@@ -861,9 +862,7 @@ elif page == "Planifikimi" and df_raw is not None:
             hide_index=True,
         )
     else:
-        t1, t2, t3, t4 = st.tabs(
-            ["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët", "💤 Pasivët"]
-        )
+        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
         with t1:
             df_k = (
                 gp.groupby("kat")
@@ -897,22 +896,6 @@ elif page == "Planifikimi" and df_raw is not None:
                 width="stretch",
                 hide_index=True,
             )
-        with t4:
-            if not df_pasive_raporti.empty:
-                st.dataframe(
-                    df_pasive_raporti[
-                        [
-                            "Klienti",
-                            "ForcaShiteseAktuale",
-                            "Data_Blerjes_Fundit",
-                            "Sasia_Mesatare_Mujore_12M",
-                        ]
-                    ],
-                    width="stretch",
-                    hide_index=True,
-                )
-            else:
-                st.success("Nuk ka klientë pasivë.")
 
     # --- 🧮 MATRICA AGJENTË VS KATEGORI ---
     st.divider()
@@ -943,9 +926,6 @@ elif page == "Planifikimi" and df_raw is not None:
     # --- 📂 SEKSIONI: EKSPORTI I PDF-VE (FORMATI ZYRTAR) ---
     st.divider()
     st.subheader("📂 Shkarko Planet Individuale në PDF (Formati Zyrtar)")
-    st.info(
-        "Formati i ri: SASIA PER BONUS = Plani Bazë normal. SASIA PER PAGEN = I përpjestuar minimal (DEKA: 270,000kg, VAJ: 300,000kg). Kolona e çmimit është hequr."
-    )
 
     import io
     import zipfile
@@ -961,9 +941,13 @@ elif page == "Planifikimi" and df_raw is not None:
     from reportlab.lib import colors
 
     if not gp.empty:
-        # Llogaritja e koeficientëve për t'i kthyer në tavanet minimale globale
-        tot_deka_baza = gp[gp["kat"].str.upper() == "DEKA"]["Plani_KG"].sum()
-        tot_vaj_baza = gp[gp["kat"].str.upper().isin(["OLIM", "VAJ"])]["Plani_KG"].sum()
+        # KORRIGJIM: Përdorim .str.contains për siguri të plotë nga hapësirat
+        tot_deka_baza = gp[gp["kat"].str.upper().str.contains("DEKA", na=False)][
+            "Plani_KG"
+        ].sum()
+        tot_vaj_baza = gp[gp["kat"].str.upper().str.contains("OLIM|VAJ", na=False)][
+            "Plani_KG"
+        ].sum()
 
         koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
         koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
@@ -989,7 +973,6 @@ elif page == "Planifikimi" and df_raw is not None:
             "SET",
         ]
 
-        # Mapimi i artikujve me strukturën tuaj fikse
         def gjej_nen_kategorine_zyrtare(artikulli):
             art_up = str(artikulli).upper().replace(" ", "")
             for nk in nen_kat_renditja:
@@ -1010,6 +993,7 @@ elif page == "Planifikimi" and df_raw is not None:
             gjej_nen_kategorine_zyrtare
         )
 
+        # Çdo agjent unik do të ketë PDF e vet
         agjentet_unikë = df_pdf_baza["ForcaShitese"].unique()
         zip_buffer = io.BytesIO()
 
@@ -1017,20 +1001,20 @@ elif page == "Planifikimi" and df_raw is not None:
             sukses_count = 0
 
             for agjent in agjentet_unikë:
-                pjeset = [p.strip() for p in str(agjent).split("-")]
-                kodi_agjentit = pjeset[0] if len(pjeset) > 0 else "agj612"
-                emri_agjentit = pjeset[1] if len(pjeset) > 1 else str(agjent)
-                rajoni_agjentit = pjeset[2] if len(pjeset) > 2 else "Rajoni"
-
-                emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
-                    " ", "_"
-                )
-
                 df_agj = df_pdf_baza[df_pdf_baza["ForcaShitese"] == agjent].copy()
                 if df_agj.empty:
                     continue
 
+                # Tërheqim saktë të dhënat nga kolonat zyrtare SQL që plotësove!
+                emri_agjentit = str(agjent)
+                kodi_agjentit = str(df_agj["KodiForcashitese"].iloc[0])
+                rajoni_agjentit = str(df_agj["KodZona"].iloc[0])
+
+                emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
+                    " ", "_"
+                )
                 nr_klienteve_aktuale = df_agj["Klienti"].nunique()
+
                 df_agj_agreguar = (
                     df_agj.groupby(["kat", "NenKatZyrtare"])
                     .agg({"Plani_KG": "sum"})
@@ -1083,7 +1067,7 @@ elif page == "Planifikimi" and df_raw is not None:
                     leading=12,
                 )
 
-                # --- 1. HEADER-I DOKUMENTIT (Sipas fotos) ---
+                # --- 1. HEADER-I DOKUMENTIT ---
                 tabela_header_data = [
                     [
                         Paragraph(
@@ -1149,7 +1133,7 @@ elif page == "Planifikimi" and df_raw is not None:
                 story.append(tabela_header)
                 story.append(Spacer(1, 20))
 
-                # --- 2. TABELA E PLANIT (KORRIGJUAR ME <br/>) ---
+                # --- 2. TABELA E PLANIT ---
                 tabela_plan_data = [
                     [
                         Paragraph("", style_cell_bold),
@@ -1163,7 +1147,9 @@ elif page == "Planifikimi" and df_raw is not None:
                 ]
 
                 # --- STRUKTURA E GRUPIT: DEKA ---
-                df_deka = df_agj_agreguar[df_agj_agreguar["kat"].str.upper() == "DEKA"]
+                df_deka = df_agj_agreguar[
+                    df_agj_agreguar["kat"].str.upper().str.contains("DEKA", na=False)
+                ]
                 deka_bonus_tot = df_deka["Plani_KG"].sum()
                 deka_paga_tot = deka_bonus_tot * koef_deka_paga
 
@@ -1182,7 +1168,7 @@ elif page == "Planifikimi" and df_raw is not None:
                 for nk in nen_kat_renditja:
                     row_nk = df_deka[df_deka["NenKatZyrtare"] == nk]
                     if not row_nk.empty:
-                        bonus_v = row_nk["Plani_KG"].values[0]
+                        bonus_v = row_nk["Plani_KG"].sum()
                         paga_v = bonus_v * koef_deka_paga
                     else:
                         paga_v, bonus_v = 0, 0
@@ -1203,7 +1189,9 @@ elif page == "Planifikimi" and df_raw is not None:
 
                 # --- STRUKTURA E GRUPIT: VAJ (OLIM) ---
                 df_vaj = df_agj_agreguar[
-                    df_agj_agreguar["kat"].str.upper().isin(["OLIM", "VAJ"])
+                    df_agj_agreguar["kat"]
+                    .str.upper()
+                    .str.contains("OLIM|VAJ", na=False)
                 ]
                 vaj_bonus_tot = df_vaj["Plani_KG"].sum()
                 vaj_paga_tot = vaj_bonus_tot * koef_vaj_paga
