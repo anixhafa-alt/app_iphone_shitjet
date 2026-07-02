@@ -805,7 +805,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- AGREGIMI BAZË I PLANIT ME KOLONAT E REJA SQL ---
     dff["ForcaShitese"] = dff["ForcaShitese"].fillna("Pa Agjent")
-    dff["KodiForcashitese"] = dff["KodiForcashitese"].fillna("agj000")
+    dff["KodiForcaShitese"] = dff["KodiForcaShitese"].fillna("agj000")
     dff["KodZona"] = dff["KodZona"].fillna("Pa Rajon")
     dff["kat"] = dff["kat"].fillna("ETJ")
 
@@ -813,7 +813,7 @@ elif page == "Planifikimi" and df_raw is not None:
         dff.groupby(
             [
                 "ForcaShitese",
-                "KodiForcashitese",
+                "KodiForcaShitese",
                 "KodZona",
                 "Klienti",
                 "kat",
@@ -1007,7 +1007,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
                 # Tërheqim saktë të dhënat nga kolonat zyrtare SQL që plotësove!
                 emri_agjentit = str(agjent)
-                kodi_agjentit = str(df_agj["KodiForcashitese"].iloc[0])
+                kodi_agjentit = str(df_agj["KodiForcaShitese"].iloc[0])
                 rajoni_agjentit = str(df_agj["KodZona"].iloc[0])
 
                 emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
