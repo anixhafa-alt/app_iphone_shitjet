@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (VERSIONI PËRFUNDIMTAR ME EKSPORT ZIP)
+# MODULI: PLANIFIKIMI (VERSIONI PËRFUNDIMTAR ME PLAN MINIMAL & NËN-KATEGORI)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -835,6 +835,12 @@ elif page == "Planifikimi" and df_raw is not None:
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
     )
+
+    # Dinamikisht shtojmë NënKategorinë bazuar në fjalën e parë të Artikullit nëse nuk ekziston si kolonë
+    if "NenKategoria" not in gp.columns:
+        gp["NenKategoria"] = gp["Artikulli"].apply(
+            lambda x: str(x).split()[0] if pd.notna(x) else "ETJ"
+        )
 
     # --- TITULLI DINAMIK DHE METRICS ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
@@ -1071,12 +1077,12 @@ elif page == "Planifikimi" and df_raw is not None:
     else:
         st.warning("Nuk ka të dhëna në dispozicion për të ndërtuar matricën.")
 
-    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE PËR AGJENTËT (ZGJIDHJA SMART NË ZIP) ---
+    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE PËR AGJENTËT (ME PARASHIKIM MINIMAL / PA VLERË) ---
     st.divider()
     st.subheader("📂 Shkarko Planet Individuale në PDF për të gjithë Agjentët")
 
     st.info(
-        "Ky proces do të marrë automatikisht secilin agjent, do të filtrojë Kategoritë e mëdha dhe Nën-kategoritë, do të ndërtojë tabelën profesionale dhe do t'i paketojë ato në një skedar të vetëm ZIP të cilin mund ta ruani direkt në kompjuterin tuaj."
+        "Ky proces gjeneron planet në nivel Kategorie dhe Nën-Kategorie (pa rreshta artikujsh), heq kolonën e vlerës dhe rregullon proporcionalisht sasitë për të kapur planet minimale synim (DEKA: 270,000 kg, OLIM: 300,000 kg)."
     )
 
     import io
@@ -1093,55 +1099,79 @@ elif page == "Planifikimi" and df_raw is not None:
     from reportlab.lib import colors
 
     if not gp.empty:
-        agjentet_unikë = gp["ForcaShitese"].unique()
+        # 1. LLOGARITJA E FAKTORIT TË PËRPJESTIMIT GLOBAL PËR COMPANINË
+        plani_deka_aktual_tot = gp[gp["kat"].str.upper() == "DEKA"]["Plani_KG"].sum()
+        plani_olim_aktual_tot = gp[gp["kat"].str.upper() == "OLIM"]["Plani_KG"].sum()
 
-        # Krijohet buffer-i kryesor në RAM ku do të ruhet i gjithë ZIP-i
+        koef_deka = 270000 / plani_deka_aktual_tot if plani_deka_aktual_tot > 0 else 1
+        koef_olim = 300000 / plani_olim_aktual_tot if plani_olim_aktual_tot > 0 else 1
+
+        # Krijojmë një kopje për të izoluar llogaritjet e PDF-së pa prekur pamjen në faqe
+        df_pdf_punimi = gp.copy()
+
+        def përpjesto_sasinë(row):
+            kategoria_tekst = str(row["kat"]).upper()
+            if "DEKA" in kategoria_tekst:
+                return row["Plani_KG"] * koef_deka
+            elif "OLIM" in kategoria_tekst:
+                return row["Plani_KG"] * koef_olim
+            else:
+                return row[
+                    "Plani_KG"
+                ]  # Kategoritë ETJ mbeten siç janë llogaritur nga rritja %
+
+        df_pdf_punimi["Plani_KG_Min"] = df_pdf_punimi.apply(përpjesto_sasinë, axis=1)
+
+        agjentet_unikë = df_pdf_punimi["ForcaShitese"].unique()
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             sukses_count = 0
 
             for agjent in agjentet_unikë:
-                # Ndarja e fushës së agjentit për të nxjerrë Kodin, Emrin dhe Rajonin
                 pjeset = [p.strip() for p in str(agjent).split("-")]
                 kodi_agjentit = pjeset[0] if len(pjeset) > 0 else "KODI"
                 emri_agjentit = pjeset[1] if len(pjeset) > 1 else str(agjent)
-                rajoni_agjentit = pjeset[2] if len(pjeset) > 2 else "Rajoni_General"
+                rajoni_agjentit = pjeset[2] if len(pjeset) > 2 else "Rajoni"
 
-                # Emërtimi i skedarit fiks sipas kërkesës suaj
                 emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
                     " ", "_"
                 )
 
-                df_agj = gp[gp["ForcaShitese"] == agjent].copy()
+                df_agj = df_pdf_punimi[df_pdf_punimi["ForcaShitese"] == agjent].copy()
                 if df_agj.empty:
                     continue
 
-                # Agregimi i të dhënave për tabelën e agjentit
-                df_pdf_data = (
-                    df_agj.groupby(["kat", "Artikulli"])
-                    .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
+                # AGREGIMI I RI: Grupuar VETËM sipas Kategorisë dhe Nën-Kategorisë (Artikujt fshihen)
+                df_fajli_agreguar = (
+                    df_agj.groupby(["kat", "NenKategoria"])
+                    .agg(
+                        {
+                            "Plani_KG_Min": "sum",
+                            "Cmimi_Fundit_Artikulli": "mean",
+                            "Cmimi_Mes_Periudhes": "mean",
+                        }
+                    )
                     .reset_index()
                 )
 
-                df_pdf_data["Cmimi_Mesatar"] = df_pdf_data[
-                    "Vlera_Planifikuar"
-                ] / df_pdf_data["Plani_KG"].replace(0, 1)
+                df_fajli_agreguar["Cmimi_Final"] = df_fajli_agreguar[
+                    "Cmimi_Fundit_Artikulli"
+                ].fillna(df_fajli_agreguar["Cmimi_Mes_Periudhes"])
 
-                # Ndërtimi i PDF-së në kujtesë specifike për këtë agjent
+                # Ndërtimi i strukturës PDF në kujtesë
                 pdf_buffer = io.BytesIO()
                 doc = SimpleDocTemplate(
                     pdf_buffer,
                     pagesize=letter,
-                    rightMargin=40,
-                    leftMargin=40,
-                    topMargin=40,
-                    bottomMargin=40,
+                    rightMargin=45,
+                    leftMargin=45,
+                    topMargin=45,
+                    bottomMargin=45,
                 )
                 story = []
                 styles = getSampleStyleSheet()
 
-                # Stilet e ReportLab
                 style_title = ParagraphStyle(
                     "TitleStyle",
                     parent=styles["Heading1"],
@@ -1157,17 +1187,16 @@ elif page == "Planifikimi" and df_raw is not None:
                     leading=14,
                 )
                 style_cell = ParagraphStyle(
-                    "CellStyle", parent=styles["Normal"], fontSize=9, leading=11
+                    "CellStyle", parent=styles["Normal"], fontSize=10, leading=12
                 )
                 style_cell_bold = ParagraphStyle(
                     "CellBoldStyle",
                     parent=styles["Normal"],
-                    fontSize=9,
+                    fontSize=10,
                     fontName="Helvetica-Bold",
-                    leading=11,
+                    leading=12,
                 )
 
-                # Vendosja e Header-it të PDF-së
                 story.append(
                     Paragraph(
                         f"📋 PLANI I MUAJIT: {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
@@ -1183,72 +1212,65 @@ elif page == "Planifikimi" and df_raw is not None:
                 story.append(Paragraph(f"<b>Rajoni:</b> {rajoni_agjentit}", style_meta))
                 story.append(Spacer(1, 15))
 
-                # Struktura e Tabelës
+                # Tabela e strukturuar me 3 kolona (pa kolonën e vlerës)
                 tabela_data = [
                     [
                         Paragraph("<b>Kategoria / Nën-Kategoria</b>", style_cell_bold),
-                        Paragraph("<b>Plani (KG)</b>", style_cell_bold),
+                        Paragraph("<b>Plani Minimal (KG)</b>", style_cell_bold),
                         Paragraph("<b>Çmimi Mesatar</b>", style_cell_bold),
-                        Paragraph("<b>Vlera e Planit</b>", style_cell_bold),
                     ]
                 ]
 
-                kategorite_e_medha = df_pdf_data["kat"].unique()
+                kategorite_listë = df_fajli_agreguar["kat"].unique()
                 tot_agj_kg = 0
-                tot_agj_vlera = 0
 
-                # Ndërtimi i niveleve Kategori -> Nën-Kategori
-                for kategoria in kategorite_e_medha:
-                    df_kat = df_pdf_data[df_pdf_data["kat"] == kategoria]
+                for kategoria in kategorite_listë:
+                    df_kat = df_fajli_agreguar[df_fajli_agreguar["kat"] == kategoria]
 
-                    kat_kg = df_kat["Plani_KG"].sum()
-                    kat_vlera = df_kat["Vlera_Planifikuar"].sum()
-                    kat_cmim = kat_vlera / (kat_kg if kat_kg > 0 else 1)
+                    kat_kg = df_kat["Plani_KG_Min"].sum()
+                    kat_cmim = df_kat[
+                        "Cmimi_Final"
+                    ].mean()  # Çmimi mesatar i referuar për grupin e madh
 
-                    # Rreshti Kryesor i Kategorisë (Bold)
+                    # Shto Rreshtin Bold të Kategorisë së Madhe
                     tabela_data.append(
                         [
                             Paragraph(f"<b>{kategoria}</b>", style_cell_bold),
-                            Paragraph(f"<b>{kat_kg:,.0f}</b>", style_cell_bold),
+                            Paragraph(f"<b>{kat_kg:,.0f} KG</b>", style_cell_bold),
                             Paragraph(f"<b>{kat_cmim:,.1f} L</b>", style_cell_bold),
-                            Paragraph(f"<b>{kat_vlera:,.0f} L</b>", style_cell_bold),
                         ]
                     )
 
-                    # Rreshtat e nën-kategorive (Artikujve)
+                    # Shto rreshtat e Nën-Kategorive përkatëse
                     for _, row in df_kat.iterrows():
                         tabela_data.append(
                             [
-                                Paragraph(f"   • {row['Artikulli']}", style_cell),
-                                Paragraph(f"{row['Plani_KG']:,.0f}", style_cell),
-                                Paragraph(f"{row['Cmimi_Mesatar']:,.1f} L", style_cell),
-                                Paragraph(
-                                    f"{row['Vlera_Planifikuar']:,.0f} L", style_cell
-                                ),
+                                Paragraph(f"   • {row['NenKategoria']}", style_cell),
+                                Paragraph(f"{row['Plani_KG_Min']:,.0f} KG", style_cell),
+                                Paragraph(f"{row['Cmimi_Final']:,.1f} L", style_cell),
                             ]
                         )
 
                     tot_agj_kg += kat_kg
-                    tot_agj_vlera += kat_vlera
 
-                # Rreshti i fundit i Totalit të Përgjithshëm
-                tot_cmim_mes = tot_agj_vlera / (tot_agj_kg if tot_agj_kg > 0 else 1)
+                # Rreshti i Totalit të Përgjithshëm të Agjentit
                 tabela_data.append(
                     [
-                        Paragraph("<b>TOTALI AGJENTIT</b>", style_cell_bold),
-                        Paragraph(f"<b>{tot_agj_kg:,.0f}</b>", style_cell_bold),
-                        Paragraph(f"<b>{tot_cmim_mes:,.1f} L</b>", style_cell_bold),
-                        Paragraph(f"<b>{tot_agj_vlera:,.0f} L</b>", style_cell_bold),
+                        Paragraph(
+                            "<b>TOTALI I PLANIT PËR AGJENTIN</b>", style_cell_bold
+                        ),
+                        Paragraph(f"<b>{tot_agj_kg:,.0f} KG</b>", style_cell_bold),
+                        Paragraph("", style_cell_bold),
                     ]
                 )
 
-                # Stilimi vizual i tabelës
-                tabela_pdf = Table(tabela_data, colWidths=[240, 80, 90, 100])
+                # Konfigurimi i gjerësive të kolonave [Emri, Sasia, Çmimi]
+                tabela_pdf = Table(tabela_data, colWidths=[270, 120, 120])
                 t_style = TableStyle(
                     [
                         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F4F8")),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                        ("TOPPADDING", (0, 0), (-1, -1), 5),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                        ("TOPPADDING", (0, 0), (-1, -1), 6),
                         ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
                         ("LINEBELOW", (0, 0), (-1, 0), 1.5, colors.HexColor("#1A365D")),
                         (
@@ -1263,8 +1285,8 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
 
                 rresht_index = 1
-                for kategoria in kategorite_e_medha:
-                    df_kat = df_pdf_data[df_pdf_data["kat"] == kategoria]
+                for kategoria in kategorite_listë:
+                    df_kat = df_fajli_agreguar[df_fajli_agreguar["kat"] == kategoria]
                     t_style.add(
                         "BACKGROUND",
                         (0, rresht_index),
@@ -1283,21 +1305,17 @@ elif page == "Planifikimi" and df_raw is not None:
                 tabela_pdf.setStyle(t_style)
                 story.append(tabela_pdf)
 
-                # Ndërtimi fizik i kësaj PDF-je në buffer
                 doc.build(story)
-
-                # Shtimi i PDF-së së sapogjeneruar brenda paketës ZIP
                 zip_file.writestr(emri_fajlit, pdf_buffer.getvalue())
                 sukses_count += 1
 
-        # Kthejmë kursorin e skedarit ZIP në fillim që të mund të lexohet për shkarkim
         zip_buffer.seek(0)
 
-        # Butoni i madh i shkarkimit direkt në faqen kryesore
+        # Butoni i Shkarkimit të Paketës ZIP
         st.download_button(
-            label=f"🚀 Shkarko të gjitha planet ({sukses_count} PDF) në një skedar të vetëm .ZIP",
+            label=f"🚀 Shkarko Planet e Reja të Përpjestuara ({sukses_count} PDF) në .ZIP",
             data=zip_buffer.getvalue(),
-            file_name=f"Planet_e_Agjenteve_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.zip",
+            file_name=f"Planet_Minimale_Agjenteve_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.zip",
             mime="application/zip",
             type="primary",
         )
