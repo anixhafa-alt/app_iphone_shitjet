@@ -653,14 +653,14 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (VERSIONI TOTAL - I PLOTË DHE I RIKTHYER)
+# MODULI: PLANIFIKIMI (VERSIONI ME SHNJEMIMET DHE KLIENTËT PASIVË)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
 
-    # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
+    # --- 📅 PËREZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
     st.sidebar.markdown("### 📅 Periudha e Planit")
 
     lista_muajve = [
@@ -714,15 +714,23 @@ elif page == "Planifikimi" and df_raw is not None:
     data_maksimale_db = df_raw["Data"].max()
     data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
 
-    df_blerja_fundit = df_raw.groupby("Klienti")["Data"].max().reset_index()
+    df_blerja_fundit = (
+        df_raw.groupby(["Klienti", "ForcaShitese"])["Data"].max().reset_index()
+    )
     df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
 
-    klientet_aktive_kohe = df_blerja_fundit[
+    # Ndarja në aktivë dhe pasivë
+    df_aktive_kohe = df_blerja_fundit[
         df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
-    ]["Klienti"].unique()
+    ]
+    klientet_aktive_kohe = df_aktive_kohe["Klienti"].unique()
+
     df_pasive_baze = df_blerja_fundit[
         df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
     ].copy()
+    df_pasive_baze["Muaj_Pa_Blerje"] = (
+        (data_maksimale_db - df_pasive_baze["Data_Blerjes_Fundit"]).dt.days / 30
+    ).round(1)
 
     # --- FILTRIMI I PERIUDHËS HISTORIKE ---
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
@@ -761,8 +769,10 @@ elif page == "Planifikimi" and df_raw is not None:
     dff[kolona_rajoni_sql] = dff[kolona_rajoni_sql].fillna("Rajoni")
     dff["kat"] = dff["kat"].fillna("ETJ")
 
+    # Filtri i Agjentit në Interface
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
+        df_pasive_baze = df_pasive_baze[df_pasive_baze["ForcaShitese"] == agj_sel]
 
     if klientet_selected:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
@@ -862,13 +872,11 @@ elif page == "Planifikimi" and df_raw is not None:
 
     gp["NenKatZyrtare"] = gp.apply(gjej_nen_kategorine_zyrtare, axis=1)
 
-    # =========================================================
-    # RIKTHIMI I PJESËS SË PARË: TITULLI, INFO DHE METRIKAT
-    # =========================================================
+    # --- INTERFACE: METRIKAT KRYESORE ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(
-        f"Update i fundit në DB: **{data_fundit_db}** | Grupi i zgjedhur: **{grup_sel}**"
+        f"💾 Update i fundit në DB: **{data_fundit_db}** | Grupi i zgjedhur: **{grup_sel}**"
     )
 
     t_kg_plan = gp["Plani_KG"].sum()
@@ -881,9 +889,18 @@ elif page == "Planifikimi" and df_raw is not None:
     c3.metric("Klientë Pasivë", f"{kliente_pasive_num:,}")
     c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
+    # =========================================================
+    # 📌 SHNËNIMI: LOGJIKA E LLOGARITJES DHE ALOKIMIT
+    # =========================================================
+    st.markdown("""
+    > 📝 **Shënime mbi Alokimin dhe Logjikën e Planit:**
+    > * **Alokimi i Agjentëve:** Planet janë kalkuluar mbi historikun e shitjeve reale të periudhës së zgjedhur, të ndara automatikisht për çdo **Agjent Aktual** bazuar në klientët që ata kanë aktualisht në menaxhim.
+    > * **Filtri i Klientëve Pasivë:** Sistemi ka skanuar blerjen e fundit për çdo klient në të gjithë historikun e bazës së të dhënave. Klientët që nuk kanë kryer asnjë blerje në **{0} muajt e fundit** janë konsideruar pasivë dhe janë **përjashtuar plotësisht** nga kalkulimi i planit të muajit aktual për të shmangur planet e fryra artificialisht.
+    """.format(muajt_pasivitet))
+
     st.divider()
 
-    # --- TABET E DETAJEVE SIPAS KATEGORIVE, AGJENTËVE DHE KLIENTËVE ---
+    # --- TABET E DETAJEVE (PËRFSHIRË KLIENTËT PASIVË) ---
     if klientet_selected:
         st.subheader("📍 Detajet e Artikujve për Klientët e Përzgjedhur")
         st.dataframe(
@@ -901,7 +918,9 @@ elif page == "Planifikimi" and df_raw is not None:
             hide_index=True,
         )
     else:
-        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët"])
+        t1, t2, t3, t4 = st.tabs(
+            ["📊 Kategoritë", "👤 Agjentët", "🏪 Klientët", "💤 Klientët Pasivë"]
+        )
         with t1:
             df_k = (
                 gp.groupby("kat")
@@ -935,6 +954,22 @@ elif page == "Planifikimi" and df_raw is not None:
                 width="stretch",
                 hide_index=True,
             )
+        with t4:
+            if not df_pasive_baze.empty:
+                st.dataframe(
+                    df_pasive_baze[
+                        [
+                            "Klienti",
+                            "ForcaShitese",
+                            "Data_Blerjes_Fundit",
+                            "Muaj_Pa_Blerje",
+                        ]
+                    ].sort_values("Muaj_Pa_Blerje", ascending=False),
+                    width="stretch",
+                    hide_index=True,
+                )
+            else:
+                st.success("Nuk ka klientë pasivë për këtë përzgjedhje!")
 
     # =========================================================
     # PJESA E DYTË: MATRICA E TRANSPOZUAR DHE PDF-të
@@ -1010,7 +1045,6 @@ elif page == "Planifikimi" and df_raw is not None:
                     df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
                 )
 
-                # Ndërtimi i PDF-së
                 pdf_buffer = io.BytesIO()
                 doc = SimpleDocTemplate(
                     pdf_buffer,
@@ -1056,7 +1090,7 @@ elif page == "Planifikimi" and df_raw is not None:
                     leading=12,
                 )
 
-                # --- 1. HEADER SYNDICATE ---
+                # Header PDF
                 tabela_header_data = [
                     [
                         Paragraph(
@@ -1122,7 +1156,7 @@ elif page == "Planifikimi" and df_raw is not None:
                 story.append(tabela_header)
                 story.append(Spacer(1, 20))
 
-                # --- 2. TABELA E TRANSPOZUAR E PLANIT ---
+                # Tabela e Transpozuar në PDF
                 tabela_plan_data = [
                     [
                         Paragraph("", style_cell_bold),
@@ -1212,7 +1246,7 @@ elif page == "Planifikimi" and df_raw is not None:
             type="primary",
         )
 
-    # --- EXCEL EXPORT NË SIDEBAR ---
+    # Excel Export
     st.sidebar.markdown("### 📥 Eksporte të tjera")
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
