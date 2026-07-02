@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME MESATAREN 12-MUAJSHME TË KLIENTËVE PASIVË)
+# MODULI: PLANIFIKIMI (ME MATRICËN E RREGULLUAR: AGJENTËT SI RRESHTA)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -728,7 +728,7 @@ elif page == "Planifikimi" and df_raw is not None:
         df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
     ].copy()
 
-    # --- 🔥 LLOGARITJA E SHITJEVE MESATARE MUJORE (12 MUAJ PARA BLERJES SË FUNDIT) ---
+    # --- LLOGARITJA E SHITJEVE MESATARE MUJORE TË KLIENTËVE PASIVË ---
     mesataret_pasive = []
     if not df_pasive_baze.empty:
         for idx, row in df_pasive_baze.iterrows():
@@ -736,7 +736,6 @@ elif page == "Planifikimi" and df_raw is not None:
             d_fundit = row["Data_Blerjes_Fundit"]
             d_fillimit_12m = d_fundit - pd.DateOffset(months=12)
 
-            # Filtrojmë historikun e këtij klienti për 12 muajt para blerjes së fundit
             hist_12m = df_raw[
                 (df_raw["Klienti"] == k_emri)
                 & (df_raw["Data"] >= d_fillimit_12m)
@@ -744,7 +743,6 @@ elif page == "Planifikimi" and df_raw is not None:
             ]
 
             tot_kg_12m = hist_12m["kg"].sum()
-            # Pjesëtojmë me 12 për të nxjerrë mesataren mujore historike
             mesatare_mujore = tot_kg_12m / 12
             mesataret_pasive.append(mesatare_mujore)
 
@@ -758,7 +756,7 @@ elif page == "Planifikimi" and df_raw is not None:
     if grup_sel != "Të gjitha":
         dff = dff[dff["Grup_Filtri"] == grup_sel]
 
-    # --- 🔍 KONTROLLI AUTOMATIK I EMRAVE TË KOLONAVE TË SQL ---
+    # --- KONTROLLI AUTOMATIK I EMRAVE TË KOLONAVE TË SQL ---
     kolona_kodi_agj_sql = next(
         (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
     )
@@ -931,7 +929,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     st.divider()
 
-    # --- TABET E DETAJEVE SIPAS KATEGORIVE, AGJENTËVE DHE KLIENTËVE PASIVË ---
+    # --- TABET E DETAJEVE ---
     if klientet_selected:
         st.subheader("📍 Detajet e Artikujve për Klientët e Përzgjedhur")
         st.dataframe(
@@ -987,7 +985,6 @@ elif page == "Planifikimi" and df_raw is not None:
             )
         with t4:
             if not df_pasive_baze.empty:
-                # Formatim i tabelës me kolonën e re të shitjeve mesatare historike
                 df_shfaqje_pasive = df_pasive_baze[
                     [
                         "Klienti",
@@ -996,8 +993,6 @@ elif page == "Planifikimi" and df_raw is not None:
                         "Mesatare_Mujore_12M_Para_Pasivitetit",
                     ]
                 ].copy()
-
-                # Formatim vizual bukur për kolonën e KG
                 df_shfaqje_pasive["Mesatare_Mujore_12M_Para_Pasivitetit"] = (
                     df_shfaqje_pasive["Mesatare_Mujore_12M_Para_Pasivitetit"].map(
                         "{:,.1f} KG".format
@@ -1021,30 +1016,45 @@ elif page == "Planifikimi" and df_raw is not None:
                 st.success("Nuk ka klientë pasivë për këtë përzgjedhje!")
 
     # =========================================================
-    # PJESA E DYTË: MATRICA E TRANSPOZUAR DHE PDF-të
+    # 🔄 MATRICA E RREGULLUAR (AGJENTËT SI RRESHTA)
     # =========================================================
     st.divider()
-    st.subheader("🔄 Matrica e Transpozuar Zyrtare (Sipas Agjentëve)")
+    st.subheader("🔄 Matrica Zyrtare e Planit (Agjentët dhe Kategoritë)")
 
     if not gp.empty:
-        df_matrica_transpozuar = gp.pivot_table(
-            index="NenKatZyrtare",
-            columns="ForcaShitese",
+        # Krijojmë pivot me ForcaShitese në Rresht (index) dhe NenKatZyrtare në Kolonë
+        df_matrica_korrigjuar = gp.pivot_table(
+            index="ForcaShitese",
+            columns="NenKatZyrtare",
             values="Plani_KG",
             aggfunc="sum",
             fill_value=0,
         )
 
-        renditje_finale_rreshtave = [
-            nk for nk in nen_kat_renditja if nk in df_matrica_transpozuar.index
+        # Rendisim kolonat sipas strukturës suaj zyrtare
+        renditje_finale_kolonave = [
+            nk for nk in nen_kat_renditja if nk in df_matrica_korrigjuar.columns
         ]
-        if "VAJ" in df_matrica_transpozuar.index:
-            renditje_finale_rreshtave.append("VAJ")
+        if "VAJ" in df_matrica_korrigjuar.columns:
+            renditje_finale_kolonave.append("VAJ")
 
-        df_matrica_transpozuar = df_matrica_transpozuar.reindex(
-            renditje_finale_rreshtave
+        df_matrica_korrigjuar = df_matrica_korrigjuar.reindex(
+            columns=renditje_finale_kolonave
         )
-        st.dataframe(df_matrica_transpozuar, width="stretch")
+
+        # Shtojmë Totalet e Rreshtave dhe të Kolonave
+        df_matrica_korrigjuar["TOTAL RRESHTI (KG)"] = df_matrica_korrigjuar.sum(axis=1)
+
+        # Krijojmë rreshtin e fundit për Totalet e Kolonave
+        rreshti_totaleve = df_matrica_korrigjuar.sum(axis=0)
+        rreshti_totaleve.name = "TOTAL KOLONA (KG)"
+
+        df_matrica_finale = pd.concat(
+            [df_matrica_korrigjuar, pd.DataFrame([rreshti_totaleve])]
+        )
+
+        # Shfaqja e matricës me stil të qartë
+        st.dataframe(df_matrica_finale.style.format("{:,.0f}"), width="stretch")
 
     # --- 📂 GENERATORI I PDF-VE TË TRANSPOZUARA ---
     st.divider()
