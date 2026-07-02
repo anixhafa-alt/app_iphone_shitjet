@@ -653,702 +653,139 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (METRIKAT E PËRDITËSUARA ME ÇMIMIN MESATAR)
+# MODULI: PLANIFIKIMI (RI-ALOKIMI SIPAS AGJENTIT AKTUAL)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
 
-    # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
-    st.sidebar.markdown("### 📅 Periudha e Planit")
-
-    lista_muajve = [
-        "Janar",
-        "Shkurt",
-        "Mars",
-        "Prill",
-        "Maj",
-        "Qershor",
-        "Korrik",
-        "Gusht",
-        "Shtator",
-        "Tetor",
-        "Nëntor",
-        "Dhjetor",
-    ]
-
-    muaji_default_index = sot.month - 1
-    muaji_i_zgjedhur = st.sidebar.selectbox(
-        "Zgjidh Muajin:", lista_muajve, index=muaji_default_index
-    )
-
-    lista_viteve = list(range(sot.year - 1, sot.year + 4))
-    viti_default_index = lista_viteve.index(sot.year) if sot.year in lista_viteve else 0
-    viti_i_zgjedhur = st.sidebar.selectbox(
-        "Zgjidh Vitin:", lista_viteve, index=viti_default_index
-    )
-
-    # --- 🛑 FILTRI: PËRJASHTIMI I KLIENTËVE PASIVË ---
-    st.sidebar.markdown("### 💤 Filtri i Klientëve Pasivë")
-    muajt_pasivitet = st.sidebar.number_input(
-        "Përjashto klientët pa blerje në (muajt e fundit):",
-        min_value=1,
-        max_value=24,
-        value=3,
-        step=1,
-    )
-
-    # --- LOGJIKA E ÇMIMIT TË FUNDIT ---
+    # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
     mask_past = (df_raw["Data"].dt.year < sot.year) | (
         (df_raw["Data"].dt.year == sot.year) & (df_raw["Data"].dt.month < sot.month)
-    )
-    df_past = df_raw[mask_past].copy()
-    df_past["Cmimi_Rresht"] = df_past["Vlera_Historike"] / df_past["kg"].replace(0, 1)
+    ) [cite: 1, 2]
+    df_past = df_raw[mask_past].copy() [cite: 2]
+    df_past["Cmimi_Rresht"] = df_past["Vlera_Historike"] / df_past["kg"].replace(0, 1) [cite: 2]
     last_prices = df_past.sort_values("Data").drop_duplicates("KodiArt", keep="last")[
         ["KodiArt", "Cmimi_Rresht"]
-    ]
-    last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
-
-    # --- IDENTIFIKIMI I KLIENTËVE AKTIVË DHE PASIVË ---
-    data_maksimale_db = df_raw["Data"].max()
-    data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
-
-    df_blerja_fundit = (
-        df_raw.groupby(["Klienti", "ForcaShitese"])["Data"].max().reset_index()
-    )
-    df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
-
-    df_aktive_kohe = df_blerja_fundit[
-        df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
-    ]
-    klientet_aktive_kohe = df_aktive_kohe["Klienti"].unique()
-
-    df_pasive_baze = df_blerja_fundit[
-        df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
-    ].copy()
-
-    # --- LLOGARITJA E SHITJEVE MESATARE MUJORE TË KLIENTËVE PASIVË ---
-    mesataret_pasive = []
-    if not df_pasive_baze.empty:
-        for idx, row in df_pasive_baze.iterrows():
-            k_emri = row["Klienti"]
-            d_fundit = row["Data_Blerjes_Fundit"]
-            d_fillimit_12m = d_fundit - pd.DateOffset(months=12)
-
-            hist_12m = df_raw[
-                (df_raw["Klienti"] == k_emri)
-                & (df_raw["Data"] >= d_fillimit_12m)
-                & (df_raw["Data"] <= d_fundit)
-            ]
-
-            tot_kg_12m = hist_12m["kg"].sum()
-            mesatare_mujore = tot_kg_12m / 12
-            mesataret_pasive.append(mesatare_mujore)
-
-        df_pasive_baze["Mesatare_Mujore_12M_Para_Pasivitetit"] = mesataret_pasive
+    ] [cite: 2]
+    last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True) [cite: 2]
 
     # --- FILTRIMI I PERIUDHËS HISTORIKE ---
-    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
-    dff = df_raw.loc[mask].copy()
-    dff = dff[dff["Klienti"].isin(klientet_aktive_kohe)]
+    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date) [cite: 2]
+    dff = df_raw.loc[mask].copy() [cite: 2]
 
     if grup_sel != "Të gjitha":
-        dff = dff[dff["Grup_Filtri"] == grup_sel]
+        dff = dff[dff["Grup_Filtri"] == grup_sel] [cite: 2, 3]
 
-    # --- KONTROLLI AUTOMATIK I EMRAVE TË KOLONAVE TË SQL ---
-    kolona_kodi_agj_sql = next(
-        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
-    )
-    if not kolona_kodi_agj_sql:
-        kolona_kodi_agj_sql = next(
-            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
-            "KodiForcashitese",
+    # --- INTEGRIMI ME 'KlientetListView' PËR AGJENTIN AKTUAL ---
+    # Supozojmë se df_klientet_regjistri është tabela 'KlientetListView' e lexuar nga SQL
+    if df_klientet_regjistri is not None:
+        # Sigurohemi që kolonat kanë emrat e duhur për bashkim
+        # Lidhim shitjet historike me regjistrin aktual bazuar tek Emri i Klientit
+        dff = dff.merge(
+            df_klientet_regjistri[["Emri", "Zona"]], 
+            left_on="Klienti", 
+            right_on="Emri", 
+            how="inner" # 'inner' ose 'left' në varësi nëse doni të mbani klientët që nuk janë në regjistër
         )
-
-    kolona_rajoni_sql = next(
-        (
-            c
-            for c in dff.columns
-            if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()
-        ),
-        "KodZona",
-    )
-
-    if kolona_kodi_agj_sql not in dff.columns:
-        dff[kolona_kodi_agj_sql] = "agj000"
-    if kolona_rajoni_sql not in dff.columns:
-        dff[kolona_rajoni_sql] = "Rajoni"
-
-    dff["ForcaShitese"] = dff["ForcaShitese"].fillna("Pa Agjent")
-    dff[kolona_kodi_agj_sql] = dff[kolona_kodi_agj_sql].fillna("agj000")
-    dff[kolona_rajoni_sql] = dff[kolona_rajoni_sql].fillna("Rajoni")
-    dff["kat"] = dff["kat"].fillna("ETJ")
-
+        
+        # SAKTIËSIMI: Zëvendësojmë agjentin historik me Agjentin Aktual (kolona 'Zona')
+        dff["ForcaShitese"] = dff["Zona"]
+        
+    # Tani që 'ForcaShitese' u përditësua me agjentin aktual, aplikojmë filtrin e agjentit nëse është përzgjedhur
     if agj_sel != "Të gjithë":
-        dff = dff[dff["ForcaShitese"] == agj_sel]
-        if not df_pasive_baze.empty:
-            df_pasive_baze = df_pasive_baze[df_pasive_baze["ForcaShitese"] == agj_sel]
-
+        dff = dff[dff["ForcaShitese"] == agj_sel] [cite: 3]
+        
     if klientet_selected:
-        dff = dff[dff["Klienti"].isin(klientet_selected)]
+        dff = dff[dff["Klienti"].isin(klientet_selected)] [cite: 3]
 
     n_months = max(
         1,
         (end_date.year - start_date.year) * 12
         + (end_date.month - start_date.month)
         + 1,
-    )
+    ) [cite: 3]
 
-    # --- AGREGIMI BAZË ---
+    # Ruajmë vlerat në session_state
+    st.session_state["start_d_plani"] = start_date [cite: 4]
+    st.session_state["end_d_plani"] = end_date [cite: 4]
+    st.session_state["rritja_plani"] = rritja [cite: 4]
+    st.session_state["grup_plani"] = grup_sel [cite: 4]
+
+    # --- AGREGIMI (Tani përdor ForcaShitese që mban vlerat e kolonës 'Zona') ---
     gp = (
-        dff.groupby(
-            [
-                "ForcaShitese",
-                kolona_kodi_agj_sql,
-                kolona_rajoni_sql,
-                "Klienti",
-                "kat",
-                "KodiArt",
-                "Artikulli",
-            ]
-        )
+        dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
-    )
+    ) [cite: 4]
+    
+    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1) [cite: 7]
+    gp = gp.merge(last_prices, on="KodiArt", how="left") [cite: 7]
 
-    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
-    gp = gp.merge(last_prices, on="KodiArt", how="left")
-
-    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
+    # Llogaritja e planit dhe mesatareve të periudhës
+    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100) [cite: 7]
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
-    )
+    ) [cite: 7]
 
-    # --- RENDITJA ZYRTARE E NËN-KATEGORIVE ---
-    nen_kat_renditja = [
-        "MATIK1",
-        "MATIK2",
-        "DORE",
-        "LIQUID1",
-        "LIQUID2",
-        "ZBARDHUES",
-        "SOFT1",
-        "SOFT2",
-        "ENESH",
-        "XHEL",
-        "PLLAKA",
-        "KREM",
-        "SAPUN",
-        "ANTIBAKTERIAL",
-        "DEZINFEKTUES",
-        "ETJ",
-        "SET",
-    ]
+    # --- TITULLI DHE METRICS ---
+    st.title(f"Plani: {muajt_sq.get(sot.month)} {sot.year}") [cite: 7, 8]
+    st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**") [cite: 8]
+    st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**") [cite: 8]
 
-    def gjej_nen_kategorine_zyrtare(rresht):
-        art_up = str(rresht["Artikulli"]).upper().replace(" ", "")
-        kat_up = str(rresht["kat"]).upper().replace(" ", "")
+    t_kg_ref = gp["kg"].sum() [cite: 8]
+    t_v_ref = gp["Vlera_Historike"].sum() [cite: 8]
+    cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0 [cite: 8]
 
-        if "VAJ" in kat_up or "OLIM" in kat_up:
-            return "VAJ"
-        if "MATIK" in art_up:
-            if "1" in art_up or "SUPER" in art_up:
-                return "MATIK1"
-            return "MATIK2"
-        if "DORE" in art_up or "HAND" in art_up:
-            return "DORE"
-        if "LIQUID" in art_up or "LIKUID" in art_up:
-            if "1" in art_up:
-                return "LIQUID1"
-            return "LIQUID2"
-        if "ZBARDHUES" in art_up or "ACE" in art_up or "ZBERDH" in art_up:
-            return "ZBARDHUES"
-        if "SOFT" in art_up or "ZBUTES" in art_up:
-            if "1" in art_up:
-                return "SOFT1"
-            return "SOFT2"
-        if "ENESH" in art_up or "ENVE" in art_up or "DISH" in art_up:
-            return "ENESH"
-        if "XHEL" in art_up or "GEL" in art_up:
-            return "XHEL"
-        if "PLLAKA" in art_up or "SURE" in art_up:
-            return "PLLAKA"
-        if "KREM" in art_up or "CREAM" in art_up:
-            return "KREM"
-        if "SAPUN" in art_up or "SOAP" in art_up:
-            return "SAPUN"
-        if "ANTIBAKTERIAL" in art_up:
-            return "ANTIBAKTERIAL"
-        if "DEZINFEKT" in art_up:
-            return "DEZINFEKTUES"
-        if "SET" in art_up:
-            return "SET"
-        return "ETJ"
+    t_kg_plan = gp["Plani_KG"].sum() [cite: 8]
+    t_v_plan = gp["Vlera_Planifikuar"].sum() [cite: 8]
+    cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0 [cite: 8]
 
-    gp["NenKatZyrtare"] = gp.apply(gjej_nen_kategorine_zyrtare, axis=1)
+    c1, c2, c3, c4 = st.columns(4) [cite: 8]
+    c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}") [cite: 8]
+    c2.metric("Çmimi Mes. Periudhës", f"{cm_mes_ref:,.1f} L/kg") [cite: 8, 9]
+    c3.metric("Çmimi Fundit Mes.", f"{cm_mes_plan:,.1f} L/kg", delta=f"{cm_mes_plan - cm_mes_ref:,.1f} L") [cite: 9]
+    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L") [cite: 9]
 
-    # =========================================================
-    # 👑 KOKA E FAQES
-    # =========================================================
-    st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
-    st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
-    st.info(
-        f"💾 Update i fundit në DB: **{data_fundit_db}** | Grupi i zgjedhur: **{grup_sel}**"
-    )
+    config_kolonave = {
+        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn("Çmimi Mes. Periudhës", format="%.1f L"), [cite: 9]
+        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi i Fundit", format="%.1f L"), [cite: 9, 10]
+        "Cmimi_Mes_Grup": st.column_config.NumberColumn("Çmimi (Fundit) Mes.", format="%.1f L"), [cite: 10]
+        "Plani_KG": st.column_config.NumberColumn("Plani KG", format="%d"), [cite: 10]
+        "Vlera_Planifikuar": st.column_config.NumberColumn("Vlera Planit", format="%d"), [cite: 10]
+    }
 
-    with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
-        st.markdown(f"""
-        *(Teksti i shpjegimit mbetet i njëjtë...)*
-        """)
+    st.divider() [cite: 10]
 
-    st.divider()
-
-    # --- METRIKAT (SHTUAR METRIKA E ÇMIMIT MESATAR GLOBAL) ---
-    t_kg_plan = gp["Plani_KG"].sum()
-    t_v_plan = gp["Vlera_Planifikuar"].sum()
-    kliente_pasive_num = len(df_pasive_baze) if not df_pasive_baze.empty else 0
-    cmimi_mesatar_global = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Plani KG Totale (Bonus)", f"{t_kg_plan:,.0f}")
-    c2.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
-    c3.metric("Çmimi Mesatar global", f"{cmimi_mesatar_global:,.2f} L/KG")
-    c4.metric("Klientë Aktivë", f"{gp['Klienti'].nunique():,}")
-    c5.metric("Klientë Pasivë", f"{kliente_pasive_num:,}")
-
-    st.divider()
-
-    # --- TABET E DETAJEVE ---
+    # --- TABET (Tani shfaqin grupimet sipas Agjentit të Ri Aktual) ---
     if klientet_selected:
-        st.subheader("📍 Detajet e Artikujve për Klientët e Përzgjedhur")
+        st.subheader("📍 Detajet Artikujve") [cite: 11]
         st.dataframe(
-            gp[
-                [
-                    "Klienti",
-                    "kat",
-                    "NenKatZyrtare",
-                    "Artikulli",
-                    "Plani_KG",
-                    "Vlera_Planifikuar",
-                ]
-            ],
-            width="stretch",
-            hide_index=True,
+            gp[["Klienti", "kat", "Artikulli", "Cmimi_Mes_Periudhes", "Cmimi_Fundit_Artikulli", "Plani_KG", "Vlera_Planifikuar"]], [cite: 11, 12, 13]
+            width="stretch", hide_index=True, column_config=config_kolonave [cite: 13]
         )
     else:
-        t1, t2, t3, t4 = st.tabs(
-            [
-                "📊 Kategoritë",
-                "👤 Agjentët Aktuale",
-                "🏪 Klientët",
-                "💤 Klientët Pasivë",
-            ]
-        )
+        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët Aktualë", "🏪 Klientët"]) [cite: 13]
 
         with t1:
-            df_k = (
-                gp.groupby("kat")
-                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
-                .reset_index()
-            )
-            df_k["Cmimi Mesatar per KG"] = df_k["Vlera_Planifikuar"] / df_k[
-                "Plani_KG"
-            ].replace(0, 1)
-            st.dataframe(
-                df_k.sort_values("Plani_KG", ascending=False).style.format(
-                    {
-                        "Plani_KG": "{:,.1f}",
-                        "Vlera_Planifikuar": "{:,.0f}",
-                        "Cmimi Mesatar per KG": "{:,.2f}",
-                    }
-                ),
-                width="stretch",
-                hide_index=True,
-            )
+            df_k = gp.groupby("kat").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index() [cite: 13, 14, 15, 16]
+            df_k["Cmimi_Mes_Periudhes"] = df_k["Vlera_Historike"] / df_k["kg"].replace(0, 1) [cite: 16]
+            df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k["Plani_KG"].replace(0, 1) [cite: 16, 17]
+            st.dataframe(df_k[["kat", "Cmimi_Mes_Periudhes", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave) [cite: 17, 18, 19]
 
         with t2:
-            df_a = (
-                gp.groupby("ForcaShitese")
-                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
-                .reset_index()
-            )
-            df_a["Cmimi Mesatar per KG"] = df_a["Vlera_Planifikuar"] / df_a[
-                "Plani_KG"
-            ].replace(0, 1)
-            st.dataframe(
-                df_a.sort_values("Plani_KG", ascending=False).style.format(
-                    {
-                        "Plani_KG": "{:,.1f}",
-                        "Vlera_Planifikuar": "{:,.0f}",
-                        "Cmimi Mesatar per KG": "{:,.2f}",
-                    }
-                ),
-                width="stretch",
-                hide_index=True,
-            )
+            # Ky grupim tani automatikisht reflekton kolonën 'Zona' (Agjentin e ri)
+            df_a = gp.groupby("ForcaShitese").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index() [cite: 19, 20, 21, 22]
+            df_a["Cmimi_Mes_Periudhes"] = df_a["Vlera_Historike"] / df_a["kg"].replace(0, 1) [cite: 22]
+            df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a["Plani_KG"].replace(0, 1) [cite: 22]
+            st.dataframe(df_a[["ForcaShitese", "Cmimi_Mes_Periudhes", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave) [cite: 23, 24, 25]
 
         with t3:
-            df_kl = (
-                gp.groupby(["Klienti", "ForcaShitese"])
-                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
-                .reset_index()
-            )
-            df_kl["Cmimi Mesatar per KG"] = df_kl["Vlera_Planifikuar"] / df_kl[
-                "Plani_KG"
-            ].replace(0, 1)
-            st.dataframe(
-                df_kl.sort_values("Plani_KG", ascending=False).style.format(
-                    {
-                        "Plani_KG": "{:,.1f}",
-                        "Vlera_Planifikuar": "{:,.0f}",
-                        "Cmimi Mesatar per KG": "{:,.2f}",
-                    }
-                ),
-                width="stretch",
-                hide_index=True,
-            )
-
-        with t4:
-            if not df_pasive_baze.empty:
-                df_shfaqje_pasive = df_pasive_baze[
-                    [
-                        "Klienti",
-                        "ForcaShitese",
-                        "Data_Blerjes_Fundit",
-                        "Mesatare_Mujore_12M_Para_Pasivitetit",
-                    ]
-                ].copy()
-                df_shfaqje_pasive["Mesatare_Mujore_12M_Para_Pasivitetit"] = (
-                    df_shfaqje_pasive["Mesatare_Mujore_12M_Para_Pasivitetit"].map(
-                        "{:,.1f} KG".format
-                    )
-                )
-
-                st.dataframe(
-                    df_shfaqje_pasive.sort_values(
-                        "Data_Blerjes_Fundit", ascending=False
-                    ),
-                    width="stretch",
-                    hide_index=True,
-                    column_config={
-                        "Klienti": "Klienti",
-                        "ForcaShitese": "Agjenti Aktual",
-                        "Data_Blerjes_Fundit": "Data Blerjes Fundit",
-                        "Mesatare_Mujore_12M_Para_Pasivitetit": "Shitjet Mes. Mujore (12M para Pasivitetit)",
-                    },
-                )
-            else:
-                st.success("Nuk ka klientë pasivë për këtë përzgjedhje!")
-
-    # =========================================================
-    # 🔄 MATRICA ZYRTARE
-    # =========================================================
-    st.divider()
-    st.subheader("🔄 Matrica Zyrtare e Planit (Agjentët dhe Kategoritë)")
-
-    if st.button("📊 Gjenero / Rifresko Matricën Zyrtare", type="secondary"):
-        if not gp.empty:
-            with st.spinner("Duke kalkuluar matricën dhe totalet..."):
-                df_matrica_korrigjuar = gp.pivot_table(
-                    index="ForcaShitese",
-                    columns="NenKatZyrtare",
-                    values="Plani_KG",
-                    aggfunc="sum",
-                    fill_value=0,
-                )
-
-                renditje_finale_kolonave = [
-                    nk for nk in nen_kat_renditja if nk in df_matrica_korrigjuar.columns
-                ]
-                if "VAJ" in df_matrica_korrigjuar.columns:
-                    renditje_finale_kolonave.append("VAJ")
-
-                df_matrica_korrigjuar = df_matrica_korrigjuar.reindex(
-                    columns=renditje_finale_kolonave
-                )
-
-                # Shto Totalet
-                df_matrica_korrigjuar["TOTAL RRESHTI (KG)"] = df_matrica_korrigjuar.sum(
-                    axis=1
-                )
-                rreshti_totaleve = df_matrica_korrigjuar.sum(axis=0)
-                rreshti_totaleve.name = "TOTAL KOLONA (KG)"
-
-                df_matrica_finale = pd.concat(
-                    [df_matrica_korrigjuar, pd.DataFrame([rreshti_totaleve])]
-                )
-                st.session_state["matrica_zyrtare_KGs"] = df_matrica_finale
-
-    if "matrica_zyrtare_KGs" in st.session_state and not gp.empty:
-        st.dataframe(
-            st.session_state["matrica_zyrtare_KGs"].style.format("{:,.0f}"),
-            width="stretch",
-        )
-    else:
-        st.info(
-            "Kliko butonin më sipër për të shfaqur matricën e plotë zyrtare të agjentëve."
-        )
-
-    # --- 📂 GENERATORI I PDF-VE TË TRANSPOZUARA ---
-    st.divider()
-    st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
-
-    import io
-    import zipfile
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import (
-        SimpleDocTemplate,
-        Paragraph,
-        Spacer,
-        Table,
-        TableStyle,
-    )
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-
-    if not gp.empty:
-        tot_deka_baza = gp[~gp["NenKatZyrtare"].isin(["VAJ"])]["Plani_KG"].sum()
-        tot_vaj_baza = gp[gp["NenKatZyrtare"] == "VAJ"]["Plani_KG"].sum()
-
-        koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
-        koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
-
-        agjentet_unikë = gp["ForcaShitese"].unique()
-        zip_buffer = io.BytesIO()
-
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            sukses_count = 0
-
-            for agjent in agjentet_unikë:
-                df_agj = gp[gp["ForcaShitese"] == agjent].copy()
-                if df_agj.empty:
-                    continue
-
-                emri_agjentit = str(agjent)
-                kodi_agjentit = str(df_agj[kolona_kodi_agj_sql].iloc[0])
-                rajoni_agjentit = str(df_agj[kolona_rajoni_sql].iloc[0])
-
-                emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
-                    " ", "_"
-                )
-                nr_klienteve_aktuale = df_agj["Klienti"].nunique()
-
-                df_agj_agreguar = (
-                    df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
-                )
-
-                pdf_buffer = io.BytesIO()
-                doc = SimpleDocTemplate(
-                    pdf_buffer,
-                    pagesize=letter,
-                    rightMargin=40,
-                    leftMargin=40,
-                    topMargin=40,
-                    bottomMargin=40,
-                )
-                story = []
-                styles = getSampleStyleSheet()
-
-                style_header = ParagraphStyle(
-                    "HStyle",
-                    parent=styles["Normal"],
-                    fontSize=12,
-                    fontName="Helvetica-Bold",
-                    textColor=colors.white,
-                )
-                style_cell = ParagraphStyle(
-                    "CStyle", parent=styles["Normal"], fontSize=10, leading=12
-                )
-                style_cell_bold = ParagraphStyle(
-                    "CBStyle",
-                    parent=styles["Normal"],
-                    fontSize=10,
-                    fontName="Helvetica-Bold",
-                    leading=12,
-                )
-                style_cell_right = ParagraphStyle(
-                    "CRStyle",
-                    parent=styles["Normal"],
-                    fontSize=10,
-                    alignment=2,
-                    leading=12,
-                )
-                style_cell_right_bold = ParagraphStyle(
-                    "CRBStyle",
-                    parent=styles["Normal"],
-                    fontSize=10,
-                    fontName="Helvetica-Bold",
-                    alignment=2,
-                    leading=12,
-                )
-
-                # Header PDF
-                tabela_header_data = [
-                    [
-                        Paragraph(
-                            f"PLANI SHITJES &nbsp;&nbsp;&nbsp;&nbsp; {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
-                            style_header,
-                        ),
-                        "",
-                    ],
-                    [
-                        Paragraph(
-                            f"Agjenti i shitjes: <font color='red'><b>{emri_agjentit}</b></font>",
-                            style_cell,
-                        ),
-                        Paragraph(
-                            f"Kodi i agjentit: <b>{kodi_agjentit}</b>", style_cell
-                        ),
-                    ],
-                    [
-                        Paragraph("", style_cell),
-                        Paragraph(
-                            f"Rajoni i shitjes: <font color='blue'><b>{rajoni_agjentit}</b></font>",
-                            style_cell,
-                        ),
-                    ],
-                    [
-                        Paragraph(
-                            f"NR. TOTAL I KLIENTEVE: <b>{nr_klienteve_aktuale}</b>",
-                            style_cell,
-                        ),
-                        "",
-                    ],
-                    [
-                        Paragraph(
-                            f"NR. I KLIENTEVE TE MUAJIT TE KALUAR: <b>{int(nr_klienteve_aktuale * 1.2)}</b>",
-                            style_cell,
-                        ),
-                        "",
-                    ],
-                    [
-                        Paragraph(
-                            "NR. I PLANIFIKUAR I KLIENTEVE: __________________",
-                            style_cell,
-                        ),
-                        "",
-                    ],
-                ]
-
-                tabela_header = Table(tabela_header_data, colWidths=[265, 265])
-                tabela_header.setStyle(
-                    TableStyle(
-                        [
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.black),
-                            ("SPAN", (0, 0), (1, 0)),
-                            ("SPAN", (0, 3), (1, 3)),
-                            ("SPAN", (0, 4), (1, 4)),
-                            ("SPAN", (0, 5), (1, 5)),
-                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
-                            ("GRID", (0, 3), (-1, -1), 1, colors.black),
-                            ("PADDING", (0, 0), (-1, -1), 5),
-                        ]
-                    )
-                )
-                story.append(tabela_header)
-                story.append(Spacer(1, 20))
-
-                # Tabela në PDF
-                tabela_plan_data = [
-                    [
-                        Paragraph("", style_cell_bold),
-                        Paragraph(
-                            "<b>SASIA (KG)<br/>PER PAGEN</b>", style_cell_right_bold
-                        ),
-                        Paragraph(
-                            "<b>SASIA (KG)<br/>PER BONUS</b>", style_cell_right_bold
-                        ),
-                    ]
-                ]
-
-                deka_bonus_tot = sum(
-                    v for k, v in df_agj_agreguar.items() if k != "VAJ"
-                )
-                deka_paga_tot = deka_bonus_tot * koef_deka_paga
-
-                tabela_plan_data.append(
-                    [
-                        Paragraph("<b>DEKA</b>", style_cell_bold),
-                        Paragraph(
-                            f"<b>{deka_paga_tot:,.0f}</b>", style_cell_right_bold
-                        ),
-                        Paragraph(
-                            f"<b>{deka_bonus_tot:,.0f}</b>", style_cell_right_bold
-                        ),
-                    ]
-                )
-
-                for nk in nen_kat_renditja:
-                    bonus_v = df_agj_agreguar.get(nk, 0)
-                    paga_v = bonus_v * koef_deka_paga if bonus_v > 0 else 0
-
-                    tabela_plan_data.append(
-                        [
-                            Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{nk}", style_cell),
-                            Paragraph(
-                                f"{paga_v:,.0f}" if paga_v > 0 else "-",
-                                style_cell_right,
-                            ),
-                            Paragraph(
-                                f"{bonus_v:,.0f}" if bonus_v > 0 else "-",
-                                style_cell_right,
-                            ),
-                        ]
-                    )
-
-                vaj_bonus_tot = df_agj_agreguar.get("VAJ", 0)
-                vaj_paga_tot = vaj_bonus_tot * koef_vaj_paga
-
-                tabela_plan_data.append(
-                    [
-                        Paragraph("<b>VAJ</b>", style_cell_bold),
-                        Paragraph(f"<b>{vaj_paga_tot:,.0f}</b>", style_cell_right_bold),
-                        Paragraph(
-                            f"<b>{vaj_bonus_tot:,.0f}</b>", style_cell_right_bold
-                        ),
-                    ]
-                )
-
-                tabela_plan = Table(tabela_plan_data, colWidths=[230, 150, 150])
-                tabela_plan.setStyle(
-                    TableStyle(
-                        [
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F4F8")),
-                            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
-                            ("PADDING", (0, 0), (-1, -1), 4),
-                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                            ("LINEBELOW", (0, 1), (-1, 1), 1.5, colors.black),
-                            ("LINEABOVE", (0, -1), (-1, -1), 1.5, colors.black),
-                        ]
-                    )
-                )
-                story.append(tabela_plan)
-
-                doc.build(story)
-                zip_file.writestr(emri_fajlit, pdf_buffer.getvalue())
-                sukses_count += 1
-
-        zip_buffer.seek(0)
-        st.download_button(
-            label=f"🚀 Shkarko {sukses_count} PDF të Transpozuara (.ZIP)",
-            data=zip_buffer.getvalue(),
-            file_name=f"Planet_Zyrtare_Te_Transpozuara_{muaji_i_zgjedhur}.zip",
-            mime="application/zip",
-            type="primary",
-        )
-
-    # Excel Export
-    st.sidebar.markdown("### 📥 Eksporte të tjera")
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        gp.to_excel(writer, sheet_name="Plani", index=False)
-    st.sidebar.download_button(
-        label="📊 Shkarko Excel",
-        data=buffer.getvalue(),
-        file_name=f"Plani_{muaji_i_zgjedhur}.xlsx",
-    )
+            df_kl = gp.groupby(["Klienti", "ForcaShitese"]).agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index() [cite: 25, 26, 27, 28]
+            df_kl["Cmimi_Mes_Periudhes"] = df_kl["Vlera_Historike"] / df_kl["kg"].replace(0, 1) [cite: 28]
+            df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl["Plani_KG"].replace(0, 1) [cite: 28]
+            st.dataframe(df_kl[["Klienti", "ForcaShitese", "Cmimi_Mes_Periudhes", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave) [cite: 29, 30, 31]
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI
