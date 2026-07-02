@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME MATRICËN AGJENT VS KATEGORI)
+# MODULI: PLANIFIKIMI (ME MATRICËN DHE TOTALET E KOLONAVE)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -697,7 +697,7 @@ elif page == "Planifikimi" and df_raw is not None:
         max_value=24,
         value=3,
         step=1,
-        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet nga plani dhe do të listohet te tabi 'Klientët Pasivë'.",
+        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet nga plani.",
     )
 
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
@@ -976,7 +976,7 @@ elif page == "Planifikimi" and df_raw is not None:
         with t4:
             st.subheader("💤 Klientët pa aktivitet faturimi")
             st.markdown(
-                f"Më poshtë janë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit** (para datës {data_fundit_db})."
+                f"Më poshtë janë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit**."
             )
 
             if not df_pasive_raporti.empty:
@@ -1010,11 +1010,10 @@ elif page == "Planifikimi" and df_raw is not None:
             else:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
 
-    # --- 🎛️ SEKSIONI I RI: MATRICA AGJENTË VS KATEGORI ---
+    # --- 🧮 SEKSIONI: MATRICA AGJENTË VS KATEGORI (ME TOTALIN E KOLONAVE) ---
     st.divider()
     st.subheader("🧮 Matrica e Planit: Agjentët vs Kategoritë")
 
-    # Lejojmë përdoruesin të zgjedhë njësinë e matricës
     tipi_matrice = st.radio(
         "Zgjidh njësinë e shfaqjes për matricën:",
         ["Sasi (Plani KG)", "Vlerë (Vlera e Planifikuar)"],
@@ -1027,23 +1026,43 @@ elif page == "Planifikimi" and df_raw is not None:
     format_matrice = "%d" if tipi_matrice == "Sasi (Plani KG)" else "%d L"
 
     if not gp.empty:
-        # Ndërtimi i Pivot Table (Matricës)
+        # Përdorim margins=True për të krijuar automatikisht totalet e kolonave dhe rreshtave
         df_matrica = gp.pivot_table(
             index="ForcaShitese",
             columns="kat",
             values=kolona_metrike,
             aggfunc="sum",
             fill_value=0,
+            margins=True,  # Aktivizon rreshtin dhe kolonën e totalit
+            margins_name="All",  # Emri i përkohshëm prapaskenë
         ).reset_index()
 
-        # Llogarisim një kolonë 'Totali' për çdo agjent (rresht)
-        kategorite_kolona = [c for c in df_matrica.columns if c != "ForcaShitese"]
-        df_matrica["Totali"] = df_matrica[kategorite_kolona].sum(axis=1)
+        # Ri-emërtojmë kolonën e totalit të rreshtit (që llogarit totalin e agjentit)
+        if "All" in df_matrica.columns:
+            df_matrica.rename(columns={"All": "Totali"}, inplace=True)
 
-        # Renditim agjentët sipas totalit më të madh të planit
-        df_matrica = df_matrica.sort_values("Totali", ascending=False)
+        # Ndajmë rreshtin e totalit të përgjithshëm që të mos ngatërrohet gjatë renditjes së agjentëve
+        mask_tot_rresht = df_matrica["ForcaShitese"] == "All"
+        df_total_per_kolone = df_matrica[mask_tot_rresht].copy()
+        df_agjentet_matrice = df_matrica[~mask_tot_rresht].copy()
 
-        # Krijojmë konfigurimin e formatit dinamik për të gjitha kolonat e kategorive
+        # Zëvendësojmë tekstin "All" me diçka më përfaqësuese
+        df_total_per_kolone["ForcaShitese"] = " 📑 TOTALI PËR KATEGORINË"
+
+        # Renditim agjentët sipas volumit të tyre total (pa rreshtin e totalit)
+        df_agjentet_matrice = df_agjentet_matrice.sort_values("Totali", ascending=False)
+
+        # Bashkojmë sërish tabelën e agjentëve me rreshtin e totalit në fund
+        df_matrica_finale = pd.concat(
+            [df_agjentet_matrice, df_total_per_kolone], ignore_index=True
+        )
+
+        # Gjejmë të gjitha kolonat që përfaqësojnë kategori
+        kategorite_kolona = [
+            c for c in df_matrica_finale.columns if c not in ["ForcaShitese", "Totali"]
+        ]
+
+        # Krijojmë konfigurimin e kolonave të Streamlit
         config_matrice = {
             "ForcaShitese": "Agjenti Aktual",
             "Totali": st.column_config.NumberColumn("📊 TOTALI", format=format_matrice),
@@ -1054,7 +1073,10 @@ elif page == "Planifikimi" and df_raw is not None:
             )
 
         st.dataframe(
-            df_matrica, width="stretch", hide_index=True, column_config=config_matrice
+            df_matrica_finale,
+            width="stretch",
+            hide_index=True,
+            column_config=config_matrice,
         )
     else:
         st.warning("Nuk ka të dhëna në dispozicion për të ndërtuar matricën.")
@@ -1098,8 +1120,8 @@ elif page == "Planifikimi" and df_raw is not None:
             df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
         if "df_kl" in locals():
             df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
-        if "df_matrica" in locals():
-            df_matrica.to_excel(
+        if "df_matrica_finale" in locals():
+            df_matrica_finale.to_excel(
                 writer, sheet_name="Matrica Agjente vs Kat", index=False
             )
         if not df_pasive_raporti.empty:
