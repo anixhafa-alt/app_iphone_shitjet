@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME MATRICËN DHE TOTALET E KOLONAVE)
+# MODULI: PLANIFIKIMI (ME MATRICËN DHE EKSPORTIN E PDF-VE NË FAQE)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -1010,7 +1010,7 @@ elif page == "Planifikimi" and df_raw is not None:
             else:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
 
-    # --- 🧮 SEKSIONI: MATRICA AGJENTË VS KATEGORI (ME TOTALIN E KOLONAVE) ---
+    # --- 🧮 SEKSIONI: MATRICA AGJENTË VS KATEGORI ---
     st.divider()
     st.subheader("🧮 Matrica e Planit: Agjentët vs Kategoritë")
 
@@ -1026,43 +1026,33 @@ elif page == "Planifikimi" and df_raw is not None:
     format_matrice = "%d" if tipi_matrice == "Sasi (Plani KG)" else "%d L"
 
     if not gp.empty:
-        # Përdorim margins=True për të krijuar automatikisht totalet e kolonave dhe rreshtave
         df_matrica = gp.pivot_table(
             index="ForcaShitese",
             columns="kat",
             values=kolona_metrike,
             aggfunc="sum",
             fill_value=0,
-            margins=True,  # Aktivizon rreshtin dhe kolonën e totalit
-            margins_name="All",  # Emri i përkohshëm prapaskenë
+            margins=True,
+            margins_name="All",
         ).reset_index()
 
-        # Ri-emërtojmë kolonën e totalit të rreshtit (që llogarit totalin e agjentit)
         if "All" in df_matrica.columns:
             df_matrica.rename(columns={"All": "Totali"}, inplace=True)
 
-        # Ndajmë rreshtin e totalit të përgjithshëm që të mos ngatërrohet gjatë renditjes së agjentëve
         mask_tot_rresht = df_matrica["ForcaShitese"] == "All"
         df_total_per_kolone = df_matrica[mask_tot_rresht].copy()
         df_agjentet_matrice = df_matrica[~mask_tot_rresht].copy()
 
-        # Zëvendësojmë tekstin "All" me diçka më përfaqësuese
         df_total_per_kolone["ForcaShitese"] = " 📑 TOTALI PËR KATEGORINË"
-
-        # Renditim agjentët sipas volumit të tyre total (pa rreshtin e totalit)
         df_agjentet_matrice = df_agjentet_matrice.sort_values("Totali", ascending=False)
-
-        # Bashkojmë sërish tabelën e agjentëve me rreshtin e totalit në fund
         df_matrica_finale = pd.concat(
             [df_agjentet_matrice, df_total_per_kolone], ignore_index=True
         )
 
-        # Gjejmë të gjitha kolonat që përfaqësojnë kategori
         kategorite_kolona = [
             c for c in df_matrica_finale.columns if c not in ["ForcaShitese", "Totali"]
         ]
 
-        # Krijojmë konfigurimin e kolonave të Streamlit
         config_matrice = {
             "ForcaShitese": "Agjenti Aktual",
             "Totali": st.column_config.NumberColumn("📊 TOTALI", format=format_matrice),
@@ -1081,8 +1071,223 @@ elif page == "Planifikimi" and df_raw is not None:
     else:
         st.warning("Nuk ka të dhëna në dispozicion për të ndërtuar matricën.")
 
-    # --- 📥 EKSPORTET (HTML DHE EXCEL) ---
-    st.sidebar.markdown("### 📥 Eksporto të dhënat")
+    # --- 📂 SEKSIONI: EKSPORTI I PDF-VE PËR AGJENTËT (TANI NË FAQE KRYESORE) ---
+    st.divider()
+    st.subheader("📂 Eksporto Planin Individual në PDF për çdo Agjent")
+
+    st.info(
+        "Ky proces do të marrë çdo agjent, do të filtrojë automatikisht Kategoritë dhe Nën-kategoritë e tij, do të llogarisë çmimet mesatare dhe do të krijojë një skedar PDF me emërtimin standard profesional."
+    )
+
+    # Inputi i rrugës së folderit direkt në faqen kryesore për fushëpamje më të gjerë
+    folderi_destinacion = st.text_input(
+        "📁 Shkruani rrugën e folderit të kompjuterit ku do të ruhen PDF-të:",
+        value="C:/Plani_Agjenteve",
+        help="Shembull: C:/Plani_Agjenteve ose D:/Raporte_Planifikimi",
+    )
+
+    if st.button("🚀 Gjenero dhe Ruaj PDF-të për të gjithë Agjentët", type="primary"):
+        import os
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+
+        if not os.path.exists(folderi_destinacion):
+            try:
+                os.makedirs(folderi_destinacion)
+            except Exception as e:
+                st.error(f"Nuk u krijua dot folderi i specifikuar: {e}")
+                st.stop()
+
+        agjentet_unikë = gp["ForcaShitese"].unique()
+        sukses_count = 0
+
+        # Krijojmë një rrip progresi vizual në faqe
+        progress_bar = st.progress(0)
+        total_agj = len(agjentet_unikë)
+
+        for idx, agjent in enumerate(agjentet_unikë):
+            pjeset = [p.strip() for p in str(agjent).split("-")]
+            kodi_agjentit = pjeset[0] if len(pjeset) > 0 else "KODI"
+            emri_agjentit = pjeset[1] if len(pjeset) > 1 else str(agjent)
+            rajoni_agjentit = pjeset[2] if len(pjeset) > 2 else "Rajoni_General"
+
+            emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
+                " ", "_"
+            )
+            rruga_plote_pdf = os.path.join(folderi_destinacion, emri_fajlit)
+
+            df_agj = gp[gp["ForcaShitese"] == agjent].copy()
+            if df_agj.empty:
+                continue
+
+            df_pdf_data = (
+                df_agj.groupby(["kat", "Artikulli"])
+                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
+                .reset_index()
+            )
+
+            df_pdf_data["Cmimi_Mesatar"] = df_pdf_data[
+                "Vlera_Planifikuar"
+            ] / df_pdf_data["Plani_KG"].replace(0, 1)
+
+            # NDËRTIMI I DOKUMENTIT PDF via ReportLab
+            doc = SimpleDocTemplate(
+                rruga_plote_pdf,
+                pagesize=letter,
+                rightMargin=40,
+                leftMargin=40,
+                topMargin=40,
+                bottomMargin=40,
+            )
+            story = []
+            styles = getSampleStyleSheet()
+
+            style_title = ParagraphStyle(
+                "TitleStyle",
+                parent=styles["Heading1"],
+                fontSize=18,
+                spaceAfter=15,
+                textColor=colors.HexColor("#1A365D"),
+            )
+            style_meta = ParagraphStyle(
+                "MetaStyle",
+                parent=styles["Normal"],
+                fontSize=11,
+                spaceAfter=6,
+                leading=14,
+            )
+            style_cell = ParagraphStyle(
+                "CellStyle", parent=styles["Normal"], fontSize=9, leading=11
+            )
+            style_cell_bold = ParagraphStyle(
+                "CellBoldStyle",
+                parent=styles["Normal"],
+                fontSize=9,
+                fontName="Helvetica-Bold",
+                leading=11,
+            )
+
+            story.append(
+                Paragraph(
+                    f"📋 PLANI I MUAJIT: {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
+                    style_title,
+                )
+            )
+            story.append(
+                Paragraph(f"<b>Kodi i Agjentit:</b> {kodi_agjentit}", style_meta)
+            )
+            story.append(
+                Paragraph(f"<b>Emri i Agjentit:</b> {emri_agjentit}", style_meta)
+            )
+            story.append(Paragraph(f"<b>Rajoni:</b> {rajoni_agjentit}", style_meta))
+            story.append(Spacer(1, 15))
+
+            tabela_data = [
+                [
+                    Paragraph("<b>Kategoria / Nën-Kategoria</b>", style_cell_bold),
+                    Paragraph("<b>Plani (KG)</b>", style_cell_bold),
+                    Paragraph("<b>Çmimi Mesatar</b>", style_cell_bold),
+                    Paragraph("<b>Vlera e Planit</b>", style_cell_bold),
+                ]
+            ]
+
+            kategorite_e_medha = df_pdf_data["kat"].unique()
+            tot_agj_kg = 0
+            tot_agj_vlera = 0
+
+            for kategoria in kategorite_e_medha:
+                df_kat = df_pdf_data[df_pdf_data["kat"] == kategoria]
+
+                kat_kg = df_kat["Plani_KG"].sum()
+                kat_vlera = df_kat["Vlera_Planifikuar"].sum()
+                kat_cmim = kat_vlera / (kat_kg if kat_kg > 0 else 1)
+
+                tabela_data.append(
+                    [
+                        Paragraph(f"<b>{kategoria}</b>", style_cell_bold),
+                        Paragraph(f"<b>{kat_kg:,.0f}</b>", style_cell_bold),
+                        Paragraph(f"<b>{kat_cmim:,.1f} L</b>", style_cell_bold),
+                        Paragraph(f"<b>{kat_vlera:,.0f} L</b>", style_cell_bold),
+                    ]
+                )
+
+                for _, row in df_kat.iterrows():
+                    tabela_data.append(
+                        [
+                            Paragraph(f"   • {row['Artikulli']}", style_cell),
+                            Paragraph(f"{row['Plani_KG']:,.0f}", style_cell),
+                            Paragraph(f"{row['Cmimi_Mesatar']:,.1f} L", style_cell),
+                            Paragraph(f"{row['Vlera_Planifikuar']:,.0f} L", style_cell),
+                        ]
+                    )
+
+                tot_agj_kg += kat_kg
+                tot_agj_vlera += kat_vlera
+
+            tot_cmim_mes = tot_agj_vlera / (tot_agj_kg if tot_agj_kg > 0 else 1)
+            tabela_data.append(
+                [
+                    Paragraph("<b>TOTALI AGJENTIT</b>", style_cell_bold),
+                    Paragraph(f"<b>{tot_agj_kg:,.0f}</b>", style_cell_bold),
+                    Paragraph(f"<b>{tot_cmim_mes:,.1f} L</b>", style_cell_bold),
+                    Paragraph(f"<b>{tot_agj_vlera:,.0f} L</b>", style_cell_bold),
+                ]
+            )
+
+            tabela_pdf = Table(tabela_data, colWidths=[240, 80, 90, 100])
+            t_style = TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F4F8")),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                    ("LINEBELOW", (0, 0), (-1, 0), 1.5, colors.HexColor("#1A365D")),
+                    ("LINEBELOW", (0, -1), (-1, -1), 1.5, colors.HexColor("#1A365D")),
+                    ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E2E8F0")),
+                ]
+            )
+
+            rresht_index = 1
+            for kategoria in kategorite_e_medha:
+                df_kat = df_pdf_data[df_pdf_data["kat"] == kategoria]
+                t_style.add(
+                    "BACKGROUND",
+                    (0, rresht_index),
+                    (-1, rresht_index),
+                    colors.HexColor("#F7FAFC"),
+                )
+                rresht_index += 1 + len(df_kat)
+                t_style.add(
+                    "LINEBELOW",
+                    (0, rresht_index - 1),
+                    (-1, rresht_index - 1),
+                    0.5,
+                    colors.lightgrey,
+                )
+
+            tabela_pdf.setStyle(t_style)
+            story.append(tabela_pdf)
+
+            doc.build(story)
+            sukses_count += 1
+
+            # Përditësojmë progresin
+            progress_bar.progress((idx + 1) / total_agj)
+
+        st.success(
+            f"🎉 Sukses! U gjeneruan {sukses_count} skedarë PDF dhe u ruajtën në folderin: **'{folderi_destinacion}'**"
+        )
+
+    # --- 📥 EKSPORTET SHTESË NË SIDEBAR (EXCEL DHE HTML) ---
+    st.sidebar.markdown("### 📥 Eksporte të tjera")
 
     def generate_html_report(dataframe):
         html = "<html><head><style>body{font-family:sans-serif;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;} .num{text-align:right;}</style></head><body>"
@@ -1135,7 +1340,7 @@ elif page == "Planifikimi" and df_raw is not None:
             ].to_excel(writer, sheet_name="Klientet Pasive", index=False)
 
     st.sidebar.download_button(
-        label="📊 Shkarko Planin në Excel",
+        label="📊 Shkarko Planin e Plotë në Excel",
         data=buffer.getvalue(),
         file_name=f"Plani_{grup_sel.replace(' ', '_')}_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
