@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (RI-ALOKIMI SIPAS AGJENTIT AKTUAL)
+# MODULI: PLANIFIKIMI (KODI I PASTRUAR)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -663,129 +663,234 @@ elif page == "Planifikimi" and df_raw is not None:
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
     mask_past = (df_raw["Data"].dt.year < sot.year) | (
         (df_raw["Data"].dt.year == sot.year) & (df_raw["Data"].dt.month < sot.month)
-    ) [cite: 1, 2]
-    df_past = df_raw[mask_past].copy() [cite: 2]
-    df_past["Cmimi_Rresht"] = df_past["Vlera_Historike"] / df_past["kg"].replace(0, 1) [cite: 2]
+    )
+    df_past = df_raw[mask_past].copy()
+    df_past["Cmimi_Rresht"] = df_past["Vlera_Historike"] / df_past["kg"].replace(0, 1)
     last_prices = df_past.sort_values("Data").drop_duplicates("KodiArt", keep="last")[
         ["KodiArt", "Cmimi_Rresht"]
-    ] [cite: 2]
-    last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True) [cite: 2]
+    ]
+    last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
     # --- FILTRIMI I PERIUDHËS HISTORIKE ---
-    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date) [cite: 2]
-    dff = df_raw.loc[mask].copy() [cite: 2]
+    mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
+    dff = df_raw.loc[mask].copy()
 
     if grup_sel != "Të gjitha":
-        dff = dff[dff["Grup_Filtri"] == grup_sel] [cite: 2, 3]
+        dff = dff[dff["Grup_Filtri"] == grup_sel]
 
     # --- INTEGRIMI ME 'KlientetListView' PËR AGJENTIN AKTUAL ---
-    # Supozojmë se df_klientet_regjistri është tabela 'KlientetListView' e lexuar nga SQL
+    # df_klientet_regjistri përfaqëson tabelën tuaj SQL 'KlientetListView'
     if df_klientet_regjistri is not None:
-        # Sigurohemi që kolonat kanë emrat e duhur për bashkim
-        # Lidhim shitjet historike me regjistrin aktual bazuar tek Emri i Klientit
+        # Bashkojmë shitjet historike me regjistrin aktual të klientëve bazuar tek Emri
         dff = dff.merge(
-            df_klientet_regjistri[["Emri", "Zona"]], 
-            left_on="Klienti", 
-            right_on="Emri", 
-            how="inner" # 'inner' ose 'left' në varësi nëse doni të mbani klientët që nuk janë në regjistër
+            df_klientet_regjistri[["Emri", "Zona"]],
+            left_on="Klienti",
+            right_on="Emri",
+            how="inner",
         )
-        
-        # SAKTIËSIMI: Zëvendësojmë agjentin historik me Agjentin Aktual (kolona 'Zona')
+
+        # Zëvendësojmë agjentin e vjetër të shitjes me Agjentin Aktual (nga kolona 'Zona')
         dff["ForcaShitese"] = dff["Zona"]
-        
-    # Tani që 'ForcaShitese' u përditësua me agjentin aktual, aplikojmë filtrin e agjentit nëse është përzgjedhur
+
+    # Filtrimi i agjentit sipas përzgjedhjes në ndërfaqe (tani mbi agjentët aktualë)
     if agj_sel != "Të gjithë":
-        dff = dff[dff["ForcaShitese"] == agj_sel] [cite: 3]
-        
+        dff = dff[dff["ForcaShitese"] == agj_sel]
+
     if klientet_selected:
-        dff = dff[dff["Klienti"].isin(klientet_selected)] [cite: 3]
+        dff = dff[dff["Klienti"].isin(klientet_selected)]
 
     n_months = max(
         1,
         (end_date.year - start_date.year) * 12
         + (end_date.month - start_date.month)
         + 1,
-    ) [cite: 3]
+    )
 
-    # Ruajmë vlerat në session_state
-    st.session_state["start_d_plani"] = start_date [cite: 4]
-    st.session_state["end_d_plani"] = end_date [cite: 4]
-    st.session_state["rritja_plani"] = rritja [cite: 4]
-    st.session_state["grup_plani"] = grup_sel [cite: 4]
+    # Ruajmë vlerat në session_state për modulin Realizimi
+    st.session_state["start_d_plani"] = start_date
+    st.session_state["end_d_plani"] = end_date
+    st.session_state["rritja_plani"] = rritja
+    st.session_state["grup_plani"] = grup_sel
 
-    # --- AGREGIMI (Tani përdor ForcaShitese që mban vlerat e kolonës 'Zona') ---
+    # --- AGREGIMI (Sipas Agjentit Aktual dhe Klientit) ---
     gp = (
         dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
-    ) [cite: 4]
-    
-    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1) [cite: 7]
-    gp = gp.merge(last_prices, on="KodiArt", how="left") [cite: 7]
+    )
 
-    # Llogaritja e planit dhe mesatareve të periudhës
-    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100) [cite: 7]
+    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
+    gp = gp.merge(last_prices, on="KodiArt", how="left")
+
+    # Llogaritja e sasisë dhe vlerës së planit
+    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
     gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
         gp["Cmimi_Mes_Periudhes"]
-    ) [cite: 7]
+    )
 
     # --- TITULLI DHE METRICS ---
-    st.title(f"Plani: {muajt_sq.get(sot.month)} {sot.year}") [cite: 7, 8]
-    st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**") [cite: 8]
-    st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**") [cite: 8]
+    st.title(f"Plani: {muajt_sq.get(sot.month)} {sot.year}")
+    st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
+    st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
-    t_kg_ref = gp["kg"].sum() [cite: 8]
-    t_v_ref = gp["Vlera_Historike"].sum() [cite: 8]
-    cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0 [cite: 8]
+    t_kg_ref = gp["kg"].sum()
+    t_v_ref = gp["Vlera_Historike"].sum()
+    cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0
 
-    t_kg_plan = gp["Plani_KG"].sum() [cite: 8]
-    t_v_plan = gp["Vlera_Planifikuar"].sum() [cite: 8]
-    cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0 [cite: 8]
+    t_kg_plan = gp["Plani_KG"].sum()
+    t_v_plan = gp["Vlera_Planifikuar"].sum()
+    cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
-    c1, c2, c3, c4 = st.columns(4) [cite: 8]
-    c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}") [cite: 8]
-    c2.metric("Çmimi Mes. Periudhës", f"{cm_mes_ref:,.1f} L/kg") [cite: 8, 9]
-    c3.metric("Çmimi Fundit Mes.", f"{cm_mes_plan:,.1f} L/kg", delta=f"{cm_mes_plan - cm_mes_ref:,.1f} L") [cite: 9]
-    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L") [cite: 9]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
+    c2.metric("Çmimi Mes. Periudhës", f"{cm_mes_ref:,.1f} L/kg")
+    c3.metric(
+        "Çmimi Fundit Mes.",
+        f"{cm_mes_plan:,.1f} L/kg",
+        delta=f"{cm_mes_plan - cm_mes_ref:,.1f} L",
+    )
+    c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     config_kolonave = {
-        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn("Çmimi Mes. Periudhës", format="%.1f L"), [cite: 9]
-        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi i Fundit", format="%.1f L"), [cite: 9, 10]
-        "Cmimi_Mes_Grup": st.column_config.NumberColumn("Çmimi (Fundit) Mes.", format="%.1f L"), [cite: 10]
-        "Plani_KG": st.column_config.NumberColumn("Plani KG", format="%d"), [cite: 10]
-        "Vlera_Planifikuar": st.column_config.NumberColumn("Vlera Planit", format="%d"), [cite: 10]
+        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn(
+            "Çmimi Mes. Periudhës", format="%.1f L"
+        ),
+        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn(
+            "Çmimi i Fundit", format="%.1f L"
+        ),
+        "Cmimi_Mes_Grup": st.column_config.NumberColumn(
+            "Çmimi (Fundit) Mes.", format="%.1f L"
+        ),
+        "Plani_KG": st.column_config.NumberColumn("Plani KG", format="%d"),
+        "Vlera_Planifikuar": st.column_config.NumberColumn("Vlera Planit", format="%d"),
     }
 
-    st.divider() [cite: 10]
+    st.divider()
 
-    # --- TABET (Tani shfaqin grupimet sipas Agjentit të Ri Aktual) ---
+    # --- TABET ---
     if klientet_selected:
-        st.subheader("📍 Detajet Artikujve") [cite: 11]
+        st.subheader("📍 Detajet Artikujve")
         st.dataframe(
-            gp[["Klienti", "kat", "Artikulli", "Cmimi_Mes_Periudhes", "Cmimi_Fundit_Artikulli", "Plani_KG", "Vlera_Planifikuar"]], [cite: 11, 12, 13]
-            width="stretch", hide_index=True, column_config=config_kolonave [cite: 13]
+            gp[
+                [
+                    "Klienti",
+                    "kat",
+                    "Artikulli",
+                    "Cmimi_Mes_Periudhes",
+                    "Cmimi_Fundit_Artikulli",
+                    "Plani_KG",
+                    "Vlera_Planifikuar",
+                ]
+            ],
+            width="stretch",
+            hide_index=True,
+            column_config=config_kolonave,
         )
     else:
-        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët Aktualë", "🏪 Klientët"]) [cite: 13]
+        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët Aktualë", "🏪 Klientët"])
 
         with t1:
-            df_k = gp.groupby("kat").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index() [cite: 13, 14, 15, 16]
-            df_k["Cmimi_Mes_Periudhes"] = df_k["Vlera_Historike"] / df_k["kg"].replace(0, 1) [cite: 16]
-            df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k["Plani_KG"].replace(0, 1) [cite: 16, 17]
-            st.dataframe(df_k[["kat", "Cmimi_Mes_Periudhes", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave) [cite: 17, 18, 19]
+            df_k = (
+                gp.groupby("kat")
+                .agg(
+                    {
+                        "Plani_KG": "sum",
+                        "Vlera_Planifikuar": "sum",
+                        "kg": "sum",
+                        "Vlera_Historike": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            df_k["Cmimi_Mes_Periudhes"] = df_k["Vlera_Historike"] / df_k["kg"].replace(
+                0, 1
+            )
+            df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k[
+                "Plani_KG"
+            ].replace(0, 1)
+            st.dataframe(
+                df_k[
+                    [
+                        "kat",
+                        "Cmimi_Mes_Periudhes",
+                        "Cmimi_Mes_Grup",
+                        "Plani_KG",
+                        "Vlera_Planifikuar",
+                    ]
+                ].sort_values("Plani_KG", ascending=False),
+                width="stretch",
+                hide_index=True,
+                column_config=config_kolonave,
+            )
 
         with t2:
-            # Ky grupim tani automatikisht reflekton kolonën 'Zona' (Agjentin e ri)
-            df_a = gp.groupby("ForcaShitese").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index() [cite: 19, 20, 21, 22]
-            df_a["Cmimi_Mes_Periudhes"] = df_a["Vlera_Historike"] / df_a["kg"].replace(0, 1) [cite: 22]
-            df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a["Plani_KG"].replace(0, 1) [cite: 22]
-            st.dataframe(df_a[["ForcaShitese", "Cmimi_Mes_Periudhes", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave) [cite: 23, 24, 25]
+            df_a = (
+                gp.groupby("ForcaShitese")
+                .agg(
+                    {
+                        "Plani_KG": "sum",
+                        "Vlera_Planifikuar": "sum",
+                        "kg": "sum",
+                        "Vlera_Historike": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            df_a["Cmimi_Mes_Periudhes"] = df_a["Vlera_Historike"] / df_a["kg"].replace(
+                0, 1
+            )
+            df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a[
+                "Plani_KG"
+            ].replace(0, 1)
+            st.dataframe(
+                df_a[
+                    [
+                        "ForcaShitese",
+                        "Cmimi_Mes_Periudhes",
+                        "Cmimi_Mes_Grup",
+                        "Plani_KG",
+                        "Vlera_Planifikuar",
+                    ]
+                ].sort_values("Plani_KG", ascending=False),
+                width="stretch",
+                hide_index=True,
+                column_config=config_kolonave,
+            )
 
         with t3:
-            df_kl = gp.groupby(["Klienti", "ForcaShitese"]).agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index() [cite: 25, 26, 27, 28]
-            df_kl["Cmimi_Mes_Periudhes"] = df_kl["Vlera_Historike"] / df_kl["kg"].replace(0, 1) [cite: 28]
-            df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl["Plani_KG"].replace(0, 1) [cite: 28]
-            st.dataframe(df_kl[["Klienti", "ForcaShitese", "Cmimi_Mes_Periudhes", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave) [cite: 29, 30, 31]
+            df_kl = (
+                gp.groupby(["Klienti", "ForcaShitese"])
+                .agg(
+                    {
+                        "Plani_KG": "sum",
+                        "Vlera_Planifikuar": "sum",
+                        "kg": "sum",
+                        "Vlera_Historike": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            df_kl["Cmimi_Mes_Periudhes"] = df_kl["Vlera_Historike"] / df_kl[
+                "kg"
+            ].replace(0, 1)
+            df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl[
+                "Plani_KG"
+            ].replace(0, 1)
+            st.dataframe(
+                df_kl[
+                    [
+                        "Klienti",
+                        "ForcaShitese",
+                        "Cmimi_Mes_Periudhes",
+                        "Cmimi_Mes_Grup",
+                        "Plani_KG",
+                        "Vlera_Planifikuar",
+                    ]
+                ].sort_values("Plani_KG", ascending=False),
+                width="stretch",
+                hide_index=True,
+                column_config=config_kolonave,
+            )
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI
