@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (ME FILTRIMIN E KLIENTËVE PASIVË)
+# MODULI: PLANIFIKIMI (ME LISTIMIN E KLIENTËVE PASIVË)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -689,34 +689,16 @@ elif page == "Planifikimi" and df_raw is not None:
         "Zgjidh Vitin:", lista_viteve, index=viti_default_index
     )
 
-    # --- 🛑 FILTRI I RI: PËRJASHTIMI I KLIENTËVE PASIVË ---
+    # --- 🛑 FILTRI: PËRJASHTIMI I KLIENTËVE PASIVË ---
     st.sidebar.markdown("### 💤 Filtri i Klientëve Pasivë")
     muajt_pasivitet = st.sidebar.number_input(
         "Përjashto klientët pa blerje në (muajt e fundit):",
         min_value=1,
         max_value=24,
-        value=3,  # vlerë fillestare 3 muaj
+        value=3,
         step=1,
-        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet plotësisht nga plani.",
+        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet nga plani dhe do të listohet te tabi 'Klientët Pasivë'.",
     )
-
-    # --- BLLOKU INFORMATIV MBI LLOGARITJEN E PLANIT ---
-    with st.expander("ℹ️ Si llogaritet ky plan? (Kliko për ta hapur)"):
-        st.markdown(f"""
-        Ky modul llogarit planin e shitjeve në sasi (KG) dhe vlerë (Lekë) bazuar në hapat e mëposhtëm:
-        
-        1. **Ri-alokimi te Agjenti Aktual:** Përpara çdo llogaritjeje, të dhënat historike të shitjeve të çdo klienti kryqëzohen me regjistrin `KlientetListView` nga SQL. Gjatë këtij procesi, pastrohen dublikimet e mundshme të klientëve për të parandaluar fryrjen artificiale të volumeve. Historiku i shitjeve zhvendoset automatikisht te **Agjenti Aktual** (kolona `Zona`), duke mundësuar që plani të grupohet sipas strukturës aktuale të terrenit.
-        
-        2. **Heqja e Klientëve Pasivë:** Sistemi analizon blerjen e fundit absolute të çdo klienti. Nëse blerja e tyre e fundit është më e vjetër se **{muajt_pasivitet} muaj** nga përditësimi i fundit i sistemit ({data_fundit_db}), ata konsiderohen pasivë dhe hiqen automatikisht nga plani.
-        
-        3. **Plani në KG:** Merret sasia totale në KG e periudhës së përzgjedhur historike, pjesëtohet për numrin e muajve të asaj periudhe (për të gjetur mesataren mujore) dhe rritet me përqindjen e përzgjedhur:
-           $$\\text{{Plani KG}} = \\left( \\frac{{\\text{{KG Historike}}}}{{\\text{{Numri i Muajve}}}} \\right) \\times \\left(1 + \\frac{{\\text{{Përqindja e Rritjes}}}}{{100}}\\right)$$
-        
-        4. **Çmimi i Fundit:** Për çdo artikull merret çmimi i shitjes së fundit historike në të gjithë sistemin, duke përjashtuar muajin korrent.
-        
-        5. **Vlera e Planifikuar:** Shumëzohet **Plani KG** magnets **Çmimin e Fundit** të artikullit. Nëse artikulli nuk ka një çmim të fundit në historik, sistemi përdor si alternativë *Çmimin Mesatar i Periudhës* së përzgjedhur:
-           $$\\text{{Vlera e Planifikuar}} = \\text{{Plani KG}} \\times \\text{{Çmimi (i Fundit ose Mesatar)}}$$
-        """)
 
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
     mask_past = (df_raw["Data"].dt.year < sot.year) | (
@@ -729,25 +711,59 @@ elif page == "Planifikimi" and df_raw is not None:
     ]
     last_prices.rename(columns={"Cmimi_Rresht": "Cmimi_Fundit_Artikulli"}, inplace=True)
 
-    # --- LOGJIKA E IDENTIFIKIMIT TË KLIENTËVE AKTIVË ---
-    # Gjejmë datën maksimale absolute në DB
+    # --- LOGJIKA E IDENTIFIKIMIT TË KLIENTËVE AKTIVË DHE PASIVË ---
     data_maksimale_db = df_raw["Data"].max()
-    # Llogarisim datën kufi (p.sh. 3 ose 6 muaj para datës së fundit të DB)
     data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
 
-    # Gjejmë datën e blerjes së fundit për çdo klient në të gjithë databazën
-    df_blerja_fundit_klientit = df_raw.groupby("Klienti")["Data"].max().reset_index()
-    # Filtrojmë vetëm klientët që kanë blerë pas datës kufi
-    klientet_aktive_sipas_kohes = df_blerja_fundit_klientit[
-        df_blerja_fundit_klientit["Data"] >= data_kufi_pasivitet
-    ]["Klienti"].unique()
+    # Gjejmë datën e faturës së fundit për çdo klient
+    df_blerja_fundit = df_raw.groupby("Klienti")["Data"].max().reset_index()
+    df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
 
-    # --- FILTRIMI I PERIUDHËS HISTORIKE ---
+    # Ndajmë klientët në Aktivë dhe Pasivë
+    klientet_aktive_kohe = df_blerja_fundit[
+        df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
+    ]["Klienti"].unique()
+    df_pasive_baze = df_blerja_fundit[
+        df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
+    ].copy()
+
+    # --- LLOGARITJA E SASISË MESATARE MUJORE PËR PASIVËT (12 Muaj para blerjes së fundit) ---
+    df_pasive_raporti = pd.DataFrame()
+    if not df_pasive_baze.empty:
+        # Bashkojmë me df_raw për të llogaritur historikun e tyre
+        df_pasive_hist = df_raw[
+            df_raw["Klienti"].isin(df_pasive_baze["Klienti"])
+        ].copy()
+        df_pasive_hist = df_pasive_hist.merge(df_pasive_baze, on="Klienti", how="left")
+
+        # Filtrojmë vetëm blerjet që ndodhen deri në 12 muaj para datës së tyre të fundit të blerjes
+        df_pasive_hist["Data_Kufi_12M"] = df_pasive_hist[
+            "Data_Blerjes_Fundit"
+        ] - pd.DateOffset(months=12)
+        mask_12m = (df_pasive_hist["Data"] >= df_pasive_hist["Data_Kufi_12M"]) & (
+            df_pasive_hist["Data"] <= df_pasive_hist["Data_Blerjes_Fundit"]
+        )
+        df_pasive_12m = df_pasive_hist[mask_12m].copy()
+
+        # Agregojmë sasinë totale të KG për këta 12 muaj aktivitet dhe pjesëtojmë për 12
+        df_pasive_mesatarja = df_pasive_12m.groupby("Klienti")["kg"].sum().reset_index()
+        df_pasive_mesatarja["Sasia_Mesatare_Mujore_12M"] = (
+            df_pasive_mesatarja["kg"] / 12
+        )
+
+        df_pasive_raporti = df_pasive_baze.merge(
+            df_pasive_mesatarja[["Klienti", "Sasia_Mesatare_Mujore_12M"]],
+            on="Klienti",
+            how="left",
+        )
+        df_pasive_raporti["Sasia_Mesatare_Mujore_12M"] = df_pasive_raporti[
+            "Sasia_Mesatare_Mujore_12M"
+        ].fillna(0)
+
+    # --- FILTRIMI I PERIUDHËS HISTORIKE (VETËM PËR KLIENTËT AKTIVË) ---
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
     dff = df_raw.loc[mask].copy()
-
-    # Aplikojmë filtrin që të mbajmë vetëm klientët që kanë blerë në muajt e fundit të përcaktuar
-    dff = dff[dff["Klienti"].isin(klientet_aktive_sipas_kohes)]
+    dff = dff[dff["Klienti"].isin(klientet_aktive_kohe)]
 
     if grup_sel != "Të gjitha":
         dff = dff[dff["Grup_Filtri"] == grup_sel]
@@ -771,18 +787,36 @@ elif page == "Planifikimi" and df_raw is not None:
                 [kolona_emri, kolona_zona]
             ].drop_duplicates(subset=[kolona_emri])
 
+            # Alokojmë agjentët aktualë për të dhënat e planit (dff)
             dff = dff.merge(
                 df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
             )
             dff["ForcaShitese"] = dff[kolona_zona].fillna(dff["ForcaShitese"])
-        else:
-            st.error(
-                f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView. Kolonat ekzistuese janë: {list(df_klientet_regjistri.columns)}"
-            )
 
-    # Filtrimi i agjentit
+            # Alokojmë agjentët aktualë edhe për raportin e klientëve pasivë
+            if not df_pasive_raporti.empty:
+                df_pasive_raporti = df_pasive_raporti.merge(
+                    df_klientet_paster,
+                    left_on="Klienti",
+                    right_on=kolona_emri,
+                    how="left",
+                )
+                df_pasive_raporti["ForcaShiteseAktuale"] = df_pasive_raporti[
+                    kolona_zona
+                ].fillna("Pa Agjent")
+        else:
+            st.error(f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView.")
+
+    # Filtrimi i agjentit në ndërfaqe
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
+        if (
+            not df_pasive_raporti.empty
+            and "ForcaShiteseAktuale" in df_pasive_raporti.columns
+        ):
+            df_pasive_raporti = df_pasive_raporti[
+                df_pasive_raporti["ForcaShiteseAktuale"] == agj_sel
+            ]
 
     if klientet_selected:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
@@ -794,12 +828,7 @@ elif page == "Planifikimi" and df_raw is not None:
         + 1,
     )
 
-    st.session_state["start_d_plani"] = start_date
-    st.session_state["end_d_plani"] = end_date
-    st.session_state["rritja_plani"] = rritja
-    st.session_state["grup_plani"] = grup_sel
-
-    # --- AGREGIMI ---
+    # --- AGREGIMI I PLANIT ---
     gp = (
         dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
@@ -819,21 +848,15 @@ elif page == "Planifikimi" and df_raw is not None:
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
 
-    t_kg_ref = gp["kg"].sum()
-    t_v_ref = gp["Vlera_Historike"].sum()
-    cm_mes_ref = t_v_ref / t_kg_ref if t_kg_ref > 0 else 0
-
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
-    cm_mes_plan = t_v_plan / t_kg_plan if t_kg_plan > 0 else 0
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
-    c2.metric("Çmimi Mes. Periudhës", f"{cm_mes_ref:,.1f} L/kg")
+    c2.metric("Klientë Aktivë në Plan", f"{gp['Klienti'].nunique():,}")
     c3.metric(
-        "Çmimi Fundit Mes.",
-        f"{cm_mes_plan:,.1f} L/kg",
-        delta=f"{cm_mes_plan - cm_mes_ref:,.1f} L",
+        "Klientë Pasivë të Hequr",
+        f"{len(df_pasive_raporti) if not df_pasive_raporti.empty else 0:,}",
     )
     c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
@@ -873,7 +896,15 @@ elif page == "Planifikimi" and df_raw is not None:
             column_config=config_kolonave,
         )
     else:
-        t1, t2, t3 = st.tabs(["📊 Kategoritë", "👤 Agjentët Aktualë", "🏪 Klientët"])
+        # Shtojmë tabin e katërt për klientët pasivë
+        t1, t2, t3, t4 = st.tabs(
+            [
+                "📊 Kategoritë",
+                "👤 Agjentët Aktualë",
+                "🏪 Klientët",
+                "💤 Klientët Pasivë",
+            ]
+        )
 
         with t1:
             df_k = (
@@ -888,21 +919,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 .reset_index()
             )
-            df_k["Cmimi_Mes_Periudhes"] = df_k["Vlera_Historike"] / df_k["kg"].replace(
-                0, 1
-            )
             df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k[
                 "Plani_KG"
             ].replace(0, 1)
             st.dataframe(
                 df_k[
-                    [
-                        "kat",
-                        "Cmimi_Mes_Periudhes",
-                        "Cmimi_Mes_Grup",
-                        "Plani_KG",
-                        "Vlera_Planifikuar",
-                    ]
+                    ["kat", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]
                 ].sort_values("Plani_KG", ascending=False),
                 width="stretch",
                 hide_index=True,
@@ -922,21 +944,12 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 .reset_index()
             )
-            df_a["Cmimi_Mes_Periudhes"] = df_a["Vlera_Historike"] / df_a["kg"].replace(
-                0, 1
-            )
             df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a[
                 "Plani_KG"
             ].replace(0, 1)
             st.dataframe(
                 df_a[
-                    [
-                        "ForcaShitese",
-                        "Cmimi_Mes_Periudhes",
-                        "Cmimi_Mes_Grup",
-                        "Plani_KG",
-                        "Vlera_Planifikuar",
-                    ]
+                    ["ForcaShitese", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]
                 ].sort_values("Plani_KG", ascending=False),
                 width="stretch",
                 hide_index=True,
@@ -956,74 +969,56 @@ elif page == "Planifikimi" and df_raw is not None:
                 )
                 .reset_index()
             )
-            df_kl["Cmimi_Mes_Periudhes"] = df_kl["Vlera_Historike"] / df_kl[
-                "kg"
-            ].replace(0, 1)
             df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl[
                 "Plani_KG"
             ].replace(0, 1)
             st.dataframe(
                 df_kl[
-                    [
-                        "Klienti",
-                        "ForcaShitese",
-                        "Cmimi_Mes_Periudhes",
-                        "Cmimi_Mes_Grup",
-                        "Plani_KG",
-                        "Vlera_Planifikuar",
-                    ]
+                    ["Klienti", "ForcaShitese", "Plani_KG", "Vlera_Planifikuar"]
                 ].sort_values("Plani_KG", ascending=False),
                 width="stretch",
                 hide_index=True,
                 column_config=config_kolonave,
             )
 
-    # --- EKSPORTET ---
-    st.sidebar.markdown("### 📥 Eksporto të dhënat")
-
-    def generate_html_report(dataframe):
-        html = "<html><head><style>body{font-family:sans-serif;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;} .num{text-align:right;}</style></head><body>"
-        html += f"<h1>Raporti i Planit - {muaji_i_zgjedhur} {viti_i_zgjedhur} ({grup_sel})</h1>"
-        for agjent in sorted(dataframe["ForcaShitese"].unique()):
-            html += f"<h3>Agjenti: {agjent}</h3>"
-            agj_df = (
-                dataframe[dataframe["ForcaShitese"] == agjent]
-                .groupby("kat")
-                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
-                .reset_index()
+        # TABI I RI: LISTIMI I KLIENTËVE PASIVË
+        with t4:
+            st.subheader("💤 Klientët pa aktivitet faturimi")
+            st.markdown(
+                f"Më poshtë janë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit** (para datës {data_fundit_db}). Sasia mesatare mujore llogaritet mbi historikun prej 12 muajsh përpara faturës së tyre të fundit."
             )
-            html += "<table><thead><tr><th>Kategoria</th><th class='num'>Plani (KG)</th><th class='num'>Vlera</th></tr></thead><tbody>"
-            for _, row in agj_df.iterrows():
-                html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
-            html += "</tbody></table><br>"
-        html += "</body></html>"
-        return html
 
-    if st.sidebar.button("Gjenero Raportin HTML"):
-        b64 = base64.b64encode(generate_html_report(gp).encode()).decode()
-        st.sidebar.markdown(
-            f'<a href="data:text/html;base64,{b64}" download="Plani_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
-            unsafe_allow_html=True,
-        )
+            if not df_pasive_raporti.empty:
+                # Formatimi i kolonave për tabelën e pasivëve
+                df_pasive_shfaqje = df_pasive_raporti[
+                    [
+                        "Klienti",
+                        "ForcaShiteseAktuale",
+                        "Data_Blerjes_Fundit",
+                        "Sasia_Mesatare_Mujore_12M",
+                    ]
+                ].copy()
+                df_pasive_shfaqje["Data_Blerjes_Fundit"] = df_pasive_shfaqje[
+                    "Data_Blerjes_Fundit"
+                ].dt.strftime("%d/%m/%Y")
 
-    import io
-
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        gp.to_excel(writer, sheet_name="Plani Detajuar", index=False)
-        if "df_k" in locals():
-            df_k.to_excel(writer, sheet_name="Sipas Kategorive", index=False)
-        if "df_a" in locals():
-            df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
-        if "df_kl" in locals():
-            df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
-
-    st.sidebar.download_button(
-        label="📊 Shkarko Planin në Excel",
-        data=buffer.getvalue(),
-        file_name=f"Plani_{grup_sel.replace(' ', '_')}_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+                st.dataframe(
+                    df_pasive_shfaqje.sort_values(
+                        "Sasia_Mesatare_Mujore_12M", ascending=False
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "Klienti": "Emri i Klientit",
+                        "ForcaShiteseAktuale": "Agjenti Aktual",
+                        "Data_Blerjes_Fundit": "Data e Blerjes së Fundit",
+                        "Sasia_Mesatare_Mujore_12M": st.column_config.NumberColumn(
+                            "Sasia Mes. Mujore (KG) para pasivizimit", format="%d KG"
+                        ),
+                    },
+                )
+            else:
+                st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
 
 # ---------------------------------------------------------
 # MODULI: REALIZIMI
