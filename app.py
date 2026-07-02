@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (KODI I PLOTË ME EKSPORTET E RIKTHYERA)
+# MODULI: PLANIFIKIMI (ME MATRICËN AGJENT VS KATEGORI)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
 
@@ -1010,7 +1010,56 @@ elif page == "Planifikimi" and df_raw is not None:
             else:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
 
-    # --- 📥 EKSPORTET E RIKTHYERA (HTML DHE EXCEL) ---
+    # --- 🎛️ SEKSIONI I RI: MATRICA AGJENTË VS KATEGORI ---
+    st.divider()
+    st.subheader("🧮 Matrica e Planit: Agjentët vs Kategoritë")
+
+    # Lejojmë përdoruesin të zgjedhë njësinë e matricës
+    tipi_matrice = st.radio(
+        "Zgjidh njësinë e shfaqjes për matricën:",
+        ["Sasi (Plani KG)", "Vlerë (Vlera e Planifikuar)"],
+        horizontal=True,
+    )
+
+    kolona_metrike = (
+        "Plani_KG" if tipi_matrice == "Sasi (Plani KG)" else "Vlera_Planifikuar"
+    )
+    format_matrice = "%d" if tipi_matrice == "Sasi (Plani KG)" else "%d L"
+
+    if not gp.empty:
+        # Ndërtimi i Pivot Table (Matricës)
+        df_matrica = gp.pivot_table(
+            index="ForcaShitese",
+            columns="kat",
+            values=kolona_metrike,
+            aggfunc="sum",
+            fill_value=0,
+        ).reset_index()
+
+        # Llogarisim një kolonë 'Totali' për çdo agjent (rresht)
+        kategorite_kolona = [c for c in df_matrica.columns if c != "ForcaShitese"]
+        df_matrica["Totali"] = df_matrica[kategorite_kolona].sum(axis=1)
+
+        # Renditim agjentët sipas totalit më të madh të planit
+        df_matrica = df_matrica.sort_values("Totali", ascending=False)
+
+        # Krijojmë konfigurimin e formatit dinamik për të gjitha kolonat e kategorive
+        config_matrice = {
+            "ForcaShitese": "Agjenti Aktual",
+            "Totali": st.column_config.NumberColumn("📊 TOTALI", format=format_matrice),
+        }
+        for kat_emri in kategorite_kolona:
+            config_matrice[kat_emri] = st.column_config.NumberColumn(
+                kat_emri, format=format_matrice
+            )
+
+        st.dataframe(
+            df_matrica, width="stretch", hide_index=True, column_config=config_matrice
+        )
+    else:
+        st.warning("Nuk ka të dhëna në dispozicion për të ndërtuar matricën.")
+
+    # --- 📥 EKSPORTET (HTML DHE EXCEL) ---
     st.sidebar.markdown("### 📥 Eksporto të dhënat")
 
     def generate_html_report(dataframe):
@@ -1049,6 +1098,10 @@ elif page == "Planifikimi" and df_raw is not None:
             df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
         if "df_kl" in locals():
             df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
+        if "df_matrica" in locals():
+            df_matrica.to_excel(
+                writer, sheet_name="Matrica Agjente vs Kat", index=False
+            )
         if not df_pasive_raporti.empty:
             df_pasive_raporti[
                 [
