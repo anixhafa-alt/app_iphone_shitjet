@@ -653,7 +653,7 @@ elif page == "Historiku":
         )
 
 # ---------------------------------------------------------
-# MODULI: PLANIFIKIMI (METRIKA E HEQUR & IMPORTET E RREGULLUARA)
+# MODULI: PLANIFIKIMI (ME INFORMACIONIN E LLOGARITJES)
 # ---------------------------------------------------------
 elif page == "Planifikimi" and df_raw is not None:
     import io
@@ -947,10 +947,24 @@ elif page == "Planifikimi" and df_raw is not None:
         gjej_nen_kategorine_zyrtare, axis=1
     )
 
-    # --- TITULLI DINAMIK DHE METRICS (RIKTHYED NË 4 METRIKA SIKURSE ISHTE) ---
+    # --- TITULLI DINAMIK DHE METRICS ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
+
+    # ℹ️ SHTESA: BUTONI POP-OVER PËR INFORMACIONIN E LLOGARITJES
+    with st.popover("ℹ️ Si llogaritet Plani?"):
+        st.markdown("""
+        ### 📊 Logjika e Kalkulimit të Planit
+        Plani gjenerohet në mënyrë automatike bazuar në hapat e mëposhtëm:
+        
+        1. **Filtri i Pasivitetit:** Identifikohen dhe heqin nga plani klientët që nuk kanë kryer asnjë blerje në **{muajt_pasivitet} muajt e fundit**. Sasia e tyre mesatare 12-mujore listohet te tabi përkatës.
+        2. **Sasia e Planifikuar (Plani KG):** Llogaritet duke marrë sasinë totale historike të periudhës së zgjedhur, pjesëtuar për numrin e muajve (`{n_months} muaj`), dhe duke aplikuar përqindjen e rritjes/uljes prej **{rritja}%**.
+           * *Formula:* `Plani_KG = (Sasia_Historike / Muajt_Periudhes) * (1 + Rritja / 100)`
+        3. **Çmimi i Fundit:** Për çdo artikull merret çmimi i tij i fundit nga periudha historike (duke përjashtuar muajin korrent). Nëse nuk ekziston, përdoret çmimi mesatar i periudhës.
+        4. **Vlera e Planifikuar:** Llogaritet si produkt i sasisë së planifikuar me çmimin e fundit të artikullit.
+           * *Formula:* `Vlera_Planifikuar = Plani_KG * Cmimi_i_Fundit_Artikulli`
+        """.format(muajt_pasivitet=muajt_pasivitet, n_months=n_months, rritja=rritja))
 
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
