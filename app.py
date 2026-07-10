@@ -90,7 +90,7 @@ EMRI_FOTOS = "logo.png"
 if os.path.exists(EMRI_FOTOS):
     try:
         logo_axion = Image.open(EMRI_FOTOS)
-        st.sidebar.image(logo_axion, use_container_width=True)
+        st.sidebar.image(logo_axion, width="stretch")
     except Exception as e:
         st.sidebar.error(f"⚠️ Gabim gjatë leximit të logos: {e}")
 else:
@@ -323,7 +323,7 @@ if df_raw is not None and not df_raw.empty:
         sot_data = datetime.now().date()
 
         with st.sidebar.container(border=True):
-            if st.button("🔄 Rifresko nga SQL Server", use_container_width=True):
+            if st.button("🔄 Rifresko nga SQL Server", width="stretch"):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -434,7 +434,7 @@ def nderto_sidebar():
                 "Emri i planit (psh: Maj 2026 - R1):", key="emri_ri_txt"
             )
 
-            if st.button("➕ Ruaj Planin", use_container_width=True):
+            if st.button("➕ Ruaj Planin", width="stretch"):
                 if emri_planit_ri.strip() != "":
                     libraria_p[emri_planit_ri] = {
                         "start": st.session_state["start_d"],
@@ -459,7 +459,7 @@ def nderto_sidebar():
                     options=plane_per_fshirje,
                     key="fshirje_sel_key",
                 )
-                if st.button("❌ Fshi Planin e Zgjedhur", use_container_width=True):
+                if st.button("❌ Fshi Planin e Zgjedhur", width="stretch"):
                     del libraria_p[plani_fshirjes]
                     st.warning(f"🗑️ '{plani_fshirjes}' u fshi!")
                     st.rerun()
@@ -1598,7 +1598,7 @@ elif page == "Realizimi":
             st.title(f"Realizimi - {muajt_sq.get(sot.month)} {sot.year}")
             eshte_muaji_korrent = False  # Përdoruesi ka zgjedhur një muaj historik
 
-        if st.button("🔄 Rikthe te Realizimi Live", use_container_width=True):
+        if st.button("🔄 Rikthe te Realizimi Live", width="stretch"):
             st.session_state.tipi_muaji = "Muaji Korrent (Live)"
             st.rerun()
 
@@ -2198,7 +2198,7 @@ elif page == "Realizimi":
             data=html_report,
             file_name=file_name_custom,
             mime="text/html",
-            use_container_width=True,
+            width="stretch",
         )
 
 # ---------------------------------------------------------
@@ -2279,7 +2279,7 @@ elif page == "Mundësitë":
             # Shfaqja e tabelës pa përdorur .style (më e sigurt)
             st.dataframe(
                 tabela_finale.sort_values("KG Historike", ascending=False),
-                use_container_width=True,
+                width="stretch",
                 height=500,
             )
 
@@ -2731,7 +2731,7 @@ elif page == "Shitjet Ditore":
             hovermode="x unified",
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # --- TABELA E DETAJUAR ORIGJINALE E SHITJEVE DITORE ---
         st.markdown(
@@ -2760,7 +2760,7 @@ elif page == "Shitjet Ditore":
                     f"{emri_muaj_3} (kg)": "{:,.0f}",
                 }
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -2828,7 +2828,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             key="emri_konfig_ri",
         )
 
-        if st.button("➕ Ruaj Konfigurimin", use_container_width=True):
+        if st.button("➕ Ruaj Konfigurimin", width="stretch"):
             if txt_emri_ri.strip() != "":
                 lib_ri[txt_emri_ri] = {
                     "a_start": st.session_state.get("pl_range_a", (min_d, max_d))[0],
@@ -2899,9 +2899,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
         and isinstance(p_b, tuple)
         and len(p_b) == 2
     ):
-        if st.button(
-            "🚀 Gjenero Planin Struktural të Avancuar", use_container_width=True
-        ):
+        if st.button("🚀 Gjenero Planin Struktural të Avancuar", width="stretch"):
 
             if agjentet_zgjedhur:
                 df_proc = df_proc[df_proc["ForcaShitese"].isin(agjentet_zgjedhur)]
@@ -3017,9 +3015,9 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
             )
 
             with tab1:
-                st.dataframe(df_agj_kategori, use_container_width=True)
+                st.dataframe(df_agj_kategori, width="stretch")
             with tab2:
-                st.dataframe(df_agj_artikuj, use_container_width=True)
+                st.dataframe(df_agj_artikuj, width="stretch")
 
             # --- EKSPORTI NË EXCEL (Multi-Sheet) ---
             import io
@@ -3038,7 +3036,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                 data=out_xl.getvalue(),
                 file_name="plani_struktural_agjente.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width="stretch",
             )
 
             # --- GJENERIMI I RAPORTIT PDF ---
@@ -3114,7 +3112,7 @@ def shfaq_modul_planifikimi_artikujve(df_baze_sales):
                     data=pdf_out.getvalue(),
                     file_name="raporti_plani_struktural.pdf",
                     mime="application/pdf",
-                    use_container_width=True,
+                    width="stretch",
                 )
             except Exception as e:
                 st.info(
@@ -3277,9 +3275,7 @@ def shfaq_ai_assistant(df):
                         # Nese kodi krijoi 'rezultati_final', e shfaqim si tabele interaktive
                         if "rezultati_final" in lokalet:
                             st.success("📊 Tabela e llogaritur nga AI:")
-                            st.dataframe(
-                                lokalet["rezultati_final"], use_container_width=True
-                            )
+                            st.dataframe(lokalet["rezultati_final"], width="stretch")
 
                             # Butoni per shkarkim ne Excel
                             st.download_button(
