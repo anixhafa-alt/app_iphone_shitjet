@@ -1,10 +1,17 @@
+import os
+import matplotlib
+
+# I thotë matplotlib të mos kërkojë ndërfaqe grafike (X11)
+matplotlib.use("Agg")
+# Parandalon konfliktet e mundshme të reportlab/pango në disa mjedise Linux
+os.environ["PATH"] += os.pathsep + "/usr/bin"
+
 import base64
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 from PIL import Image
-import os
 import numpy as np
 import time
 
