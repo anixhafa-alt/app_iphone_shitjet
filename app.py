@@ -854,7 +854,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # ℹ️ SHTESA: DOKUMENTIMI I DETAJUAR I MODULIT TE INFO POP-OVER
     with st.popover("ℹ️ Dokumentimi i Detajuar: Si funksionon Moduli?"):
-        st.markdown(f"""
+        st.markdown(rf"""
         ### 📘 Logjika e Plotë Operative e Modulit të Planifikimit
 
         Ky modul është ndërtuar për të automatizuar dhe saktësuar procesin e planifikimit të shitjeve mujore duke kombinuar **historikun e shitjeve**, **çmimet më të fundit të tregut** dhe **strukturën aktuale të agjentëve**.
@@ -879,7 +879,18 @@ elif page == "Planifikimi" and df_raw is not None:
         * Pasi mblidhet sasia totale në KG për çdo çift `Klient-Artikull`, ajo pjesëtohet për numrin total të muajve të asaj periudhe (`{n_months} muaj`) për të gjetur mesataren mujore.
         * Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju (**{rritja}%**).
         * **Formula:**  
-          $$\text{{Plani KG}} = \left( \frac{\text{{Sasia Totale Historike}}}{{{n_months}}} \right) \times \left(1 + \frac{{{rritja}}}{{100}}\right)$$
+        # 1. Mbylle bllokun tënd të markdown ku ishe (nëse ishe në mes të tekstit)
+st.markdown(f"""
+Pasi mblidhet sasia totale në KG për çdo çift Klient-Artikull, ajo pjesëtohet për numrin total të muajve të asaj periudhe ({n_months} muaj) për të gjetur mesataren mujore:
+""")
+
+# 2. Shfaq formulën KËTU si r-string (raw string) që të mos përplaset me Python
+st.latex(r"\text{Plani KG} = \left( \frac{\text{Sasia Totale Historike}}{n_{months}} \right) \times \left(1 + \frac{\text{rritja}}{100}\right)")
+
+# 3. Vazhdo tekstin e mbetur më poshtë nëse ke ende dokumentim
+st.markdown(f"""
+Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({rritja}%).
+""")
 
         ---
 
