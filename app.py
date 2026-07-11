@@ -9,11 +9,19 @@ from PIL import Image
 import os
 import numpy as np
 import time
+import plotly.graph_objects as go
+import calendar
 
 reportlab_available = True
 try:
     from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+    )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
 except ImportError:
@@ -677,28 +685,42 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # --- 📅 PËRZGJEDHJA E MUAJIT DHE VITIT PËR PLANIN ---
     st.sidebar.markdown("### 📅 Periudha e Planit")
-    
+
     lista_muajve = [
-        "Janar", "Shkurt", "Mars", "Prill", "Maj", "Qershor", 
-        "Korrik", "Gusht", "Shtator", "Tetor", "Nëntor", "Dhjetor"
+        "Janar",
+        "Shkurt",
+        "Mars",
+        "Prill",
+        "Maj",
+        "Qershor",
+        "Korrik",
+        "Gusht",
+        "Shtator",
+        "Tetor",
+        "Nëntor",
+        "Dhjetor",
     ]
-    
+
     muaji_default_index = sot.month - 1
-    muaji_i_zgjedhur = st.sidebar.selectbox("Zgjidh Muajin:", lista_muajve, index=muaji_default_index)
-    
+    muaji_i_zgjedhur = st.sidebar.selectbox(
+        "Zgjidh Muajin:", lista_muajve, index=muaji_default_index
+    )
+
     lista_viteve = list(range(sot.year - 1, sot.year + 4))
     viti_default_index = lista_viteve.index(sot.year) if sot.year in lista_viteve else 0
-    viti_i_zgjedhur = st.sidebar.selectbox("Zgjidh Vitin:", lista_viteve, index=viti_default_index)
+    viti_i_zgjedhur = st.sidebar.selectbox(
+        "Zgjidh Vitin:", lista_viteve, index=viti_default_index
+    )
 
     # --- 🛑 FILTRI: PËRJASHTIMI I KLIENTËVE PASIVË ---
     st.sidebar.markdown("### 💤 Filtri i Klientëve Pasivë")
     muajt_pasivitet = st.sidebar.number_input(
-        "Përjashto klientët pa blerje në (muajt e fundit):", 
-        min_value=1, 
-        max_value=24, 
-        value=3, 
+        "Përjashto klientët pa blerje në (muajt e fundit):",
+        min_value=1,
+        max_value=24,
+        value=3,
         step=1,
-        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet nga plani dhe do të listohet te tabi 'Klientët Pasivë'."
+        help="Nëse një klient nuk ka blerë asgjë gjatë këtyre muajve të fundit nga data më e fundit e databazës, ai do të hiqet nga plani dhe do të listohet te tabi 'Klientët Pasivë'.",
     )
 
     # --- LOGJIKA E ÇMIMIT TË FUNDIT (Përjashton muajin korrent) ---
@@ -715,28 +737,46 @@ elif page == "Planifikimi" and df_raw is not None:
     # --- LOGJIKA E IDENTIFIKIMIT TË KLIENTËVE AKTIVË DHE PASIVË ---
     data_maksimale_db = df_raw["Data"].max()
     data_kufi_pasivitet = data_maksimale_db - pd.DateOffset(months=muajt_pasivitet)
-    
+
     df_blerja_fundit = df_raw.groupby("Klienti")["Data"].max().reset_index()
     df_blerja_fundit.rename(columns={"Data": "Data_Blerjes_Fundit"}, inplace=True)
-    
-    klientet_aktive_kohe = df_blerja_fundit[df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet]["Klienti"].unique()
-    df_pasive_baze = df_blerja_fundit[df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet].copy()
+
+    klientet_aktive_kohe = df_blerja_fundit[
+        df_blerja_fundit["Data_Blerjes_Fundit"] >= data_kufi_pasivitet
+    ]["Klienti"].unique()
+    df_pasive_baze = df_blerja_fundit[
+        df_blerja_fundit["Data_Blerjes_Fundit"] < data_kufi_pasivitet
+    ].copy()
 
     # --- LLOGARITJA E SASISË MESATARE MUJORE PËR PASIVËT ---
     df_pasive_raporti = pd.DataFrame()
     if not df_pasive_baze.empty:
-        df_pasive_hist = df_raw[df_raw["Klienti"].isin(df_pasive_baze["Klienti"])].copy()
+        df_pasive_hist = df_raw[
+            df_raw["Klienti"].isin(df_pasive_baze["Klienti"])
+        ].copy()
         df_pasive_hist = df_pasive_hist.merge(df_pasive_baze, on="Klienti", how="left")
-        
-        df_pasive_hist["Data_Kufi_12M"] = df_pasive_hist["Data_Blerjes_Fundit"] - pd.DateOffset(months=12)
-        mask_12m = (df_pasive_hist["Data"] >= df_pasive_hist["Data_Kufi_12M"]) & (df_pasive_hist["Data"] <= df_pasive_hist["Data_Blerjes_Fundit"])
+
+        df_pasive_hist["Data_Kufi_12M"] = df_pasive_hist[
+            "Data_Blerjes_Fundit"
+        ] - pd.DateOffset(months=12)
+        mask_12m = (df_pasive_hist["Data"] >= df_pasive_hist["Data_Kufi_12M"]) & (
+            df_pasive_hist["Data"] <= df_pasive_hist["Data_Blerjes_Fundit"]
+        )
         df_pasive_12m = df_pasive_hist[mask_12m].copy()
-        
+
         df_pasive_mesatarja = df_pasive_12m.groupby("Klienti")["kg"].sum().reset_index()
-        df_pasive_mesatarja["Sasia_Mesatare_Mujore_12M"] = df_pasive_mesatarja["kg"] / 12
-        
-        df_pasive_raporti = df_pasive_baze.merge(df_pasive_mesatarja[["Klienti", "Sasia_Mesatare_Mujore_12M"]], on="Klienti", how="left")
-        df_pasive_raporti["Sasia_Mesatare_Mujore_12M"] = df_pasive_raporti["Sasia_Mesatare_Mujore_12M"].fillna(0)
+        df_pasive_mesatarja["Sasia_Mesatare_Mujore_12M"] = (
+            df_pasive_mesatarja["kg"] / 12
+        )
+
+        df_pasive_raporti = df_pasive_baze.merge(
+            df_pasive_mesatarja[["Klienti", "Sasia_Mesatare_Mujore_12M"]],
+            on="Klienti",
+            how="left",
+        )
+        df_pasive_raporti["Sasia_Mesatare_Mujore_12M"] = df_pasive_raporti[
+            "Sasia_Mesatare_Mujore_12M"
+        ].fillna(0)
 
     # --- FILTRIMI I PERIUDHËS HISTORIKE (VETËM PËR KLIENTËT AKTIVË) ---
     mask = (df_raw["Data"].dt.date >= start_date) & (df_raw["Data"].dt.date <= end_date)
@@ -753,7 +793,7 @@ elif page == "Planifikimi" and df_raw is not None:
             if k in df_klientet_regjistri.columns:
                 kolona_emri = k
                 break
-                
+
         kolona_zona = None
         for k in ["Zona", "zona", "Agjenti", "ForcaShiteseAktuale"]:
             if k in df_klientet_regjistri.columns:
@@ -761,27 +801,48 @@ elif page == "Planifikimi" and df_raw is not None:
                 break
 
         if kolona_emri and kolona_zona:
-            df_klientet_paster = df_klientet_regjistri[[kolona_emri, kolona_zona]].drop_duplicates(subset=[kolona_emri])
-            
-            dff = dff.merge(df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left")
+            df_klientet_paster = df_klientet_regjistri[
+                [kolona_emri, kolona_zona]
+            ].drop_duplicates(subset=[kolona_emri])
+
+            dff = dff.merge(
+                df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left"
+            )
             dff["ForcaShitese"] = dff[kolona_zona].fillna(dff["ForcaShitese"])
-            
+
             if not df_pasive_raporti.empty:
-                df_pasive_raporti = df_pasive_raporti.merge(df_klientet_paster, left_on="Klienti", right_on=kolona_emri, how="left")
-                df_pasive_raporti["ForcaShiteseAktuale"] = df_pasive_raporti[kolona_zona].fillna("Pa Agjent")
+                df_pasive_raporti = df_pasive_raporti.merge(
+                    df_klientet_paster,
+                    left_on="Klienti",
+                    right_on=kolona_emri,
+                    how="left",
+                )
+                df_pasive_raporti["ForcaShiteseAktuale"] = df_pasive_raporti[
+                    kolona_zona
+                ].fillna("Pa Agjent")
         else:
             st.error(f"⚠️ Nuk u gjetën kolonat e duhura në KlientetListView.")
 
     # Filtrimi i agjentit
     if agj_sel != "Të gjithë":
         dff = dff[dff["ForcaShitese"] == agj_sel]
-        if not df_pasive_raporti.empty and "ForcaShiteseAktuale" in df_pasive_raporti.columns:
-            df_pasive_raporti = df_pasive_raporti[df_pasive_raporti["ForcaShiteseAktuale"] == agj_sel]
-        
+        if (
+            not df_pasive_raporti.empty
+            and "ForcaShiteseAktuale" in df_pasive_raporti.columns
+        ):
+            df_pasive_raporti = df_pasive_raporti[
+                df_pasive_raporti["ForcaShiteseAktuale"] == agj_sel
+            ]
+
     if klientet_selected:
         dff = dff[dff["Klienti"].isin(klientet_selected)]
 
-    n_months = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1)
+    n_months = max(
+        1,
+        (end_date.year - start_date.year) * 12
+        + (end_date.month - start_date.month)
+        + 1,
+    )
 
     # --- AGREGIMI I PLANIT ---
     gp = (
@@ -789,63 +850,123 @@ elif page == "Planifikimi" and df_raw is not None:
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
     )
-    
+
     gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
     gp = gp.merge(last_prices, on="KodiArt", how="left")
 
     gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
-    gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(gp["Cmimi_Mes_Periudhes"])
+    gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
+        gp["Cmimi_Mes_Periudhes"]
+    )
 
     # --- LOGJIKA SHTESË PËR MATRICËN ZYRTARE DHE PDF ---
-    kolona_kodi_agj_sql = next((c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None)
+    kolona_kodi_agj_sql = next(
+        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
+    )
     if not kolona_kodi_agj_sql:
-        kolona_kodi_agj_sql = next((c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()), "KodiForcashitese")
-    if kolona_kodi_agj_sql not in dff.columns: dff[kolona_kodi_agj_sql] = "agj000"
+        kolona_kodi_agj_sql = next(
+            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
+            "KodiForcashitese",
+        )
+    if kolona_kodi_agj_sql not in dff.columns:
+        dff[kolona_kodi_agj_sql] = "agj000"
 
-    kolona_rajoni_sql = next((c for c in dff.columns if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()), "KodZona")
-    if kolona_rajoni_sql not in dff.columns: dff[kolona_rajoni_sql] = "Rajoni"
+    kolona_rajoni_sql = next(
+        (
+            c
+            for c in dff.columns
+            if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()
+        ),
+        "KodZona",
+    )
+    if kolona_rajoni_sql not in dff.columns:
+        dff[kolona_rajoni_sql] = "Rajoni"
 
     gp_detajuar_pdf = (
-        dff.groupby(["ForcaShitese", kolona_kodi_agj_sql, kolona_rajoni_sql, "Klienti", "kat", "KodiArt", "Artikulli"])
+        dff.groupby(
+            [
+                "ForcaShitese",
+                kolona_kodi_agj_sql,
+                kolona_rajoni_sql,
+                "Klienti",
+                "kat",
+                "KodiArt",
+                "Artikulli",
+            ]
+        )
         .agg({"kg": "sum", "Vlera_Historike": "sum"})
         .reset_index()
     )
-    gp_detajuar_pdf["Cmimi_Mes_Periudhes"] = gp_detajuar_pdf["Vlera_Historike"] / gp_detajuar_pdf["kg"].replace(0, 1)
+    gp_detajuar_pdf["Cmimi_Mes_Periudhes"] = gp_detajuar_pdf[
+        "Vlera_Historike"
+    ] / gp_detajuar_pdf["kg"].replace(0, 1)
     gp_detajuar_pdf = gp_detajuar_pdf.merge(last_prices, on="KodiArt", how="left")
-    gp_detajuar_pdf["Plani_KG"] = (gp_detajuar_pdf["kg"] / n_months) * (1 + rritja / 100)
-    
+    gp_detajuar_pdf["Plani_KG"] = (gp_detajuar_pdf["kg"] / n_months) * (
+        1 + rritja / 100
+    )
+
     nen_kat_renditja = [
-        "MATIK1", "MATIK2", "DORE", "LIQUID1", "LIQUID2", "ZBARDHUES", 
-        "SOFT1", "SOFT2", "ENESH", "XHEL", "PLLAKA", "KREM", "SAPUN", 
-        "ANTIBAKTERIAL", "DEZINFEKTUES", "ETJ", "SET"
+        "MATIK1",
+        "MATIK2",
+        "DORE",
+        "LIQUID1",
+        "LIQUID2",
+        "ZBARDHUES",
+        "SOFT1",
+        "SOFT2",
+        "ENESH",
+        "XHEL",
+        "PLLAKA",
+        "KREM",
+        "SAPUN",
+        "ANTIBAKTERIAL",
+        "DEZINFEKTUES",
+        "ETJ",
+        "SET",
     ]
 
     def gjej_nen_kategorine_zyrtare(rresht):
         art_up = str(rresht["Artikulli"]).upper().replace(" ", "")
         kat_up = str(rresht["kat"]).upper().replace(" ", "")
-        if "VAJ" in kat_up or "OLIM" in kat_up: return "VAJ"
+        if "VAJ" in kat_up or "OLIM" in kat_up:
+            return "VAJ"
         if "MATIK" in art_up:
-            if "1" in art_up or "SUPER" in art_up: return "MATIK1"
+            if "1" in art_up or "SUPER" in art_up:
+                return "MATIK1"
             return "MATIK2"
-        if "DORE" in art_up or "HAND" in art_up: return "DORE"
+        if "DORE" in art_up or "HAND" in art_up:
+            return "DORE"
         if "LIQUID" in art_up or "LIKUID" in art_up:
-            if "1" in art_up: return "LIQUID1"
+            if "1" in art_up:
+                return "LIQUID1"
             return "LIQUID2"
-        if "ZBARDHUES" in art_up or "ACE" in art_up or "ZBERDH" in art_up: return "ZBARDHUES"
+        if "ZBARDHUES" in art_up or "ACE" in art_up or "ZBERDH" in art_up:
+            return "ZBARDHUES"
         if "SOFT" in art_up or "ZBUTES" in art_up:
-            if "1" in art_up: return "SOFT1"
+            if "1" in art_up:
+                return "SOFT1"
             return "SOFT2"
-        if "ENESH" in art_up or "ENVE" in art_up or "DISH" in art_up: return "ENESH"
-        if "XHEL" in art_up or "GEL" in art_up: return "XHEL"
-        if "PLLAKA" in art_up or "SURE" in art_up: return "PLLAKA"
-        if "KREM" in art_up or "CREAM" in art_up: return "KREM"
-        if "SAPUN" in art_up or "SOAP" in art_up: return "SAPUN"
-        if "ANTIBAKTERIAL" in art_up: return "ANTIBAKTERIAL"
-        if "DEZINFEKT" in art_up: return "DEZINFEKTUES"
-        if "SET" in art_up: return "SET"
+        if "ENESH" in art_up or "ENVE" in art_up or "DISH" in art_up:
+            return "ENESH"
+        if "XHEL" in art_up or "GEL" in art_up:
+            return "XHEL"
+        if "PLLAKA" in art_up or "SURE" in art_up:
+            return "PLLAKA"
+        if "KREM" in art_up or "CREAM" in art_up:
+            return "KREM"
+        if "SAPUN" in art_up or "SOAP" in art_up:
+            return "SAPUN"
+        if "ANTIBAKTERIAL" in art_up:
+            return "ANTIBAKTERIAL"
+        if "DEZINFEKT" in art_up:
+            return "DEZINFEKTUES"
+        if "SET" in art_up:
+            return "SET"
         return "ETJ"
 
-    gp_detajuar_pdf["NenKatZyrtare"] = gp_detajuar_pdf.apply(gjej_nen_kategorine_zyrtare, axis=1)
+    gp_detajuar_pdf["NenKatZyrtare"] = gp_detajuar_pdf.apply(
+        gjej_nen_kategorine_zyrtare, axis=1
+    )
 
     # --- TITULLI DINAMIK DHE METRICS ---
     st.title(f"Plani: {muaji_i_zgjedhur} {viti_i_zgjedhur}")
@@ -854,7 +975,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
     # ℹ️ SHTESA: DOKUMENTIMI I DETAJUAR I MODULIT TE INFO POP-OVER
     with st.popover("ℹ️ Dokumentimi i Detajuar: Si funksionon Moduli?"):
-        st.markdown(rf"""
+        st.markdown(f"""
         ### 📘 Logjika e Plotë Operative e Modulit të Planifikimit
 
         Ky modul është ndërtuar për të automatizuar dhe saktësuar procesin e planifikimit të shitjeve mujore duke kombinuar **historikun e shitjeve**, **çmimet më të fundit të tregut** dhe **strukturën aktuale të agjentëve**.
@@ -869,7 +990,7 @@ elif page == "Planifikimi" and df_raw is not None:
         ---
 
         #### 2. 🔄 Integrimi me Regjistrin 'KlientetListView' (Përditësimi Dinamik)
-        * **Problemi Historik:** Nëse një klient në të kaluarën ka blerë nga Agjenti X, por sot ka kaluar tek Agjenti Y, shitjet historike do t'i ngreheshin gabimisht Agjentit X.
+        * **Problemi Historik:** Nëse një klient në të kaluarën ka blerë nga Agjenti X, batë sot ka kaluar tek Agjenti Y, shitjet historike do t'i ngreheshin gabimisht Agjentit X.
         * **Zgjidhja:** Ky modul bën përditësim dinamik në kohë reale. Ai merr strukturën më të fundit të klientëve nga regjistri `KlientetListView` (Agjentin dhe Zonën aktuale) dhe **mbishkruan plotësisht** agjentin e vjetër historik. Plani i llogaritur i shkon 100% agjentit që menaxhon klientin **sot**.
 
         ---
@@ -877,21 +998,19 @@ elif page == "Planifikimi" and df_raw is not None:
         #### 3. 📊 Llogaritja e Sasisë së Planifikuar (Plani KG)
         * Plani bazohet te periudha historike e përzgjedhur në filtrat kryesorë të aplikacionit. 
         * Pasi mblidhet sasia totale në KG për çdo çift `Klient-Artikull`, ajo pjesëtohet për numrin total të muajve të asaj periudhe (`{n_months} muaj`) për të gjetur mesataren mujore.
-        * Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju (**{rritja}%**).
-        * **Formula:**  
-        # 1. Mbylle bllokun tënd të markdown ku ishe (nëse ishe në mes të tekstit)
-st.markdown(f"""
-Pasi mblidhet sasia totale në KG për çdo çift Klient-Artikull, ajo pjesëtohet për numrin total të muajve të asaj periudhe ({n_months} muaj) për të gjetur mesataren mujore:
-""")
+        """)
 
-# 2. Shfaq formulën KËTU si r-string (raw string) që të mos përplaset me Python
-st.latex(r"\text{Plani KG} = \left( \frac{\text{Sasia Totale Historike}}{n_{months}} \right) \times \left(1 + \frac{\text{rritja}}{100}\right)")
+        st.markdown(
+            f"Pasi mblidhet sasia totale në KG për çdo çift Klient-Artikull, ajo pjesëtohet për numrin total të muajve të asaj periudhe ({n_months} muaj) për të gjetur mesataren mujore:"
+        )
+        st.latex(
+            r"\text{Plani KG} = \left( \frac{\text{Sasia Totale Historike}}{n_{months}} \right) \times \left(1 + \frac{\text{rritja}}{100}\right)"
+        )
+        st.markdown(
+            f"Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({rritja}%)."
+        )
 
-# 3. Vazhdo tekstin e mbetur më poshtë nëse ke ende dokumentim
-st.markdown(f"""
-Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({rritja}%).
-""")
-
+        st.markdown(r"""
         ---
 
         #### 4. 💰 Logjika e Çmimit të Fundit dhe Vlerës së Planit
@@ -899,14 +1018,14 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
         * **Si veprohet:** Moduli izolon të gjitha shitjet e kaluara (duke përjashtuar muajin korrent për të shmangur devijimet e faturimeve të paplota) dhe gjen **çmimin e fundit me të cilin është faturuar çdo artikull**.
         * Nëse një artikull nuk ka çmim të fundit specifik, sistemi përdor si zëvendësues çmimin mesatar të periudhës së zgjedhur.
         * **Formula e Vlerës:**  
-          $$\text{{Vlera Planifikuar}} = \text{{Plani KG}} \times \text{{Çmimi i Fundit të Artikullit}}$$
+          $$\text{Vlera Planifikuar} = \text{Plani KG} \times \text{Çmimi i Fundit të Artikullit}$$
 
         ---
 
         #### 5. 📑 Matrica Zyrtare dhe Eksporti PDF (Formati Adnan Elezi)
         * Pasi klikohet butoni i gjenerimit, artikujt klasifikohen automatikisht në **17 nën-kategori zyrtare** (si MATIK1, LIQUID1, etj.) përmes analizës së tekstit të emrit të artikullit.
         * Sistemet aplikojnë koeficientët specifikë për ndarjen e planeve në **Sasi për Pagë** dhe **Sasi për Bonus** bazuar në tavanet totale të kompanisë (270K për Deka dhe 300K për Vaj), duke mundësuar printimin e raporteve gati për dorëzim.
-        """);
+        """)
 
     t_kg_plan = gp["Plani_KG"].sum()
     t_v_plan = gp["Vlera_Planifikuar"].sum()
@@ -914,13 +1033,22 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Plani KG Totale", f"{t_kg_plan:,.0f}")
     c2.metric("Klientë Aktivë në Plan", f"{gp['Klienti'].nunique():,}")
-    c3.metric("Klientë Pasivë të Hequr", f"{len(df_pasive_raporti) if not df_pasive_raporti.empty else 0:,}")
+    c3.metric(
+        "Klientë Pasivë të Hequr",
+        f"{len(df_pasive_raporti) if not df_pasive_raporti.empty else 0:,}",
+    )
     c4.metric("Vlera Totale Plani", f"{t_v_plan:,.0f} L")
 
     config_kolonave = {
-        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn("Çmimi Mes. Periudhës", format="%.1f L"),
-        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn("Çmimi i Fundit", format="%.1f L"),
-        "Cmimi_Mes_Grup": st.column_config.NumberColumn("Çmimi (Fundit) Mes.", format="%.1f L"),
+        "Cmimi_Mes_Periudhes": st.column_config.NumberColumn(
+            "Çmimi Mes. Periudhës", format="%.1f L"
+        ),
+        "Cmimi_Fundit_Artikulli": st.column_config.NumberColumn(
+            "Çmimi i Fundit", format="%.1f L"
+        ),
+        "Cmimi_Mes_Grup": st.column_config.NumberColumn(
+            "Çmimi (Fundit) Mes.", format="%.1f L"
+        ),
         "Plani_KG": st.column_config.NumberColumn("Plani KG", format="%d"),
         "Vlera_Planifikuar": st.column_config.NumberColumn("Vlera Planit", format="%d"),
     }
@@ -931,35 +1059,125 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
     if klientet_selected:
         st.subheader("📍 Detajet Artikujve")
         st.dataframe(
-            gp[["Klienti", "kat", "Artikulli", "Cmimi_Mes_Periudhes", "Cmimi_Fundit_Artikulli", "Plani_KG", "Vlera_Planifikuar"]],
-            width="stretch", hide_index=True, column_config=config_kolonave
+            gp[
+                [
+                    "Klienti",
+                    "kat",
+                    "Artikulli",
+                    "Cmimi_Mes_Periudhes",
+                    "Cmimi_Fundit_Artikulli",
+                    "Plani_KG",
+                    "Vlera_Planifikuar",
+                ]
+            ],
+            width="stretch",
+            hide_index=True,
+            column_config=config_kolonave,
         )
     else:
-        t1, t2, t3, t4 = st.tabs(["📊 Kategoritë", "👤 Agjentët Aktualë", "🏪 Klientët", "💤 Klientët Pasivë"])
+        t1, t2, t3, t4 = st.tabs(
+            [
+                "📊 Kategoritë",
+                "👤 Agjentët Aktualë",
+                "🏪 Klientët",
+                "💤 Klientët Pasivë",
+            ]
+        )
 
         with t1:
-            df_k = gp.groupby("kat").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index()
-            df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k["Plani_KG"].replace(0, 1)
-            st.dataframe(df_k[["kat", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave)
+            df_k = (
+                gp.groupby("kat")
+                .agg(
+                    {
+                        "Plani_KG": "sum",
+                        "Vlera_Planifikuar": "sum",
+                        "kg": "sum",
+                        "Vlera_Historike": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            df_k["Cmimi_Mes_Grup"] = df_k["Vlera_Planifikuar"] / df_k[
+                "Plani_KG"
+            ].replace(0, 1)
+            st.dataframe(
+                df_k[
+                    ["kat", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]
+                ].sort_values("Plani_KG", ascending=False),
+                width="stretch",
+                hide_index=True,
+                column_config=config_kolonave,
+            )
 
         with t2:
-            df_a = gp.groupby("ForcaShitese").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index()
-            df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a["Plani_KG"].replace(0, 1)
-            st.dataframe(df_a[["ForcaShitese", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave)
+            df_a = (
+                gp.groupby("ForcaShitese")
+                .agg(
+                    {
+                        "Plani_KG": "sum",
+                        "Vlera_Planifikuar": "sum",
+                        "kg": "sum",
+                        "Vlera_Historike": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            df_a["Cmimi_Mes_Grup"] = df_a["Vlera_Planifikuar"] / df_a[
+                "Plani_KG"
+            ].replace(0, 1)
+            st.dataframe(
+                df_a[
+                    ["ForcaShitese", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]
+                ].sort_values("Plani_KG", ascending=False),
+                width="stretch",
+                hide_index=True,
+                column_config=config_kolonave,
+            )
 
         with t3:
-            df_kl = gp.groupby(["Klienti", "ForcaShitese"]).agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum", "kg": "sum", "Vlera_Historike": "sum"}).reset_index()
-            df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl["Plani_KG"].replace(0, 1)
-            st.dataframe(df_kl[["Klienti", "ForcaShitese", "Plani_KG", "Vlera_Planifikuar"]].sort_values("Plani_KG", ascending=False), width="stretch", hide_index=True, column_config=config_kolonave)
+            df_kl = (
+                gp.groupby(["Klienti", "ForcaShitese"])
+                .agg(
+                    {
+                        "Plani_KG": "sum",
+                        "Vlera_Planifikuar": "sum",
+                        "kg": "sum",
+                        "Vlera_Historike": "sum",
+                    }
+                )
+                .reset_index()
+            )
+            df_kl["Cmimi_Mes_Grup"] = df_kl["Vlera_Planifikuar"] / df_kl[
+                "Plani_KG"
+            ].replace(0, 1)
+            st.dataframe(
+                df_kl[
+                    ["Klienti", "ForcaShitese", "Plani_KG", "Vlera_Planifikuar"]
+                ].sort_values("Plani_KG", ascending=False),
+                width="stretch",
+                hide_index=True,
+                column_config=config_kolonave,
+            )
 
         with t4:
             st.subheader("💤 Klientët pa aktivitet faturimi")
-            st.markdown(f"Më poshtë janë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit** (para datës {data_fundit_db}).")
-            
+            st.markdown(
+                f"Më poshtë zijnë klientët që nuk kanë kryer blerje në **{muajt_pasivitet} muajt e fundit** (para datës {data_fundit_db})."
+            )
+
             if not df_pasive_raporti.empty:
-                df_pasive_shfaqje = df_pasive_raporti[["Klienti", "ForcaShiteseAktuale", "Data_Blerjes_Fundit", "Sasia_Mesatare_Mujore_12M"]].copy()
-                df_pasive_shfaqje = df_pasive_shfaqje.sort_values("Data_Blerjes_Fundit", ascending=False)
-                
+                df_pasive_shfaqje = df_pasive_raporti[
+                    [
+                        "Klienti",
+                        "ForcaShiteseAktuale",
+                        "Data_Blerjes_Fundit",
+                        "Sasia_Mesatare_Mujore_12M",
+                    ]
+                ].copy()
+                df_pasive_shfaqje = df_pasive_shfaqje.sort_values(
+                    "Data_Blerjes_Fundit", ascending=False
+                )
+
                 st.dataframe(
                     df_pasive_shfaqje,
                     width="stretch",
@@ -967,9 +1185,13 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
                     column_config={
                         "Klienti": "Emri i Klientit",
                         "ForcaShiteseAktuale": "Agjenti Aktual",
-                        "Data_Blerjes_Fundit": st.column_config.DatetimeColumn("Data e Blerjes së Fundit", format="DD/MM/YYYY"),
-                        "Sasia_Mesatare_Mujore_12M": st.column_config.NumberColumn("Sasia Mes. Mujore (KG)", format="%d KG")
-                    }
+                        "Data_Blerjes_Fundit": st.column_config.DatetimeColumn(
+                            "Data e Blerjes së Fundit", format="DD/MM/YYYY"
+                        ),
+                        "Sasia_Mesatare_Mujore_12M": st.column_config.NumberColumn(
+                            "Sasia Mes. Mujore (KG)", format="%d KG"
+                        ),
+                    },
                 )
             else:
                 st.success("🎉 Nuk ka asnjë klient pasiv për periudhën e përzgjedhur!")
@@ -979,35 +1201,48 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
     # =========================================================
     st.divider()
     st.subheader("🔄 Matrica Zyrtare e Planit (Agjentët dhe Kategoritë)")
-    
+
     if st.button("📊 Gjenero / Rifresko Matricën Zyrtare", type="secondary"):
         if not gp_detajuar_pdf.empty:
             with st.spinner("Duke kalkuluar matricën dhe totalet zyrtare..."):
                 df_matrica_korrigjuar = gp_detajuar_pdf.pivot_table(
-                    index="ForcaShitese", 
-                    columns="NenKatZyrtare", 
-                    values="Plani_KG", 
-                    aggfunc="sum", 
-                    fill_value=0
+                    index="ForcaShitese",
+                    columns="NenKatZyrtare",
+                    values="Plani_KG",
+                    aggfunc="sum",
+                    fill_value=0,
                 )
-                
-                renditje_finale_kolonave = [nk for nk in nen_kat_renditja if nk in df_matrica_korrigjuar.columns]
+
+                renditje_finale_kolonave = [
+                    nk for nk in nen_kat_renditja if nk in df_matrica_korrigjuar.columns
+                ]
                 if "VAJ" in df_matrica_korrigjuar.columns:
                     renditje_finale_kolonave.append("VAJ")
-                    
-                df_matrica_korrigjuar = df_matrica_korrigjuar.reindex(columns=renditje_finale_kolonave)
-                
+
+                df_matrica_korrigjuar = df_matrica_korrigjuar.reindex(
+                    columns=renditje_finale_kolonave
+                )
+
                 # Shto Totalet
-                df_matrica_korrigjuar["TOTAL RRESHTI (KG)"] = df_matrica_korrigjuar.sum(axis=1)
+                df_matrica_korrigjuar["TOTAL RRESHTI (KG)"] = df_matrica_korrigjuar.sum(
+                    axis=1
+                )
                 rreshti_totaleve = df_matrica_korrigjuar.sum(axis=0)
                 rreshti_totaleve.name = "TOTAL KOLONA (KG)"
-                
-                st.session_state["matrica_zyrtare_KGs"] = pd.concat([df_matrica_korrigjuar, pd.DataFrame([rreshti_totaleve])])
+
+                st.session_state["matrica_zyrtare_KGs"] = pd.concat(
+                    [df_matrica_korrigjuar, pd.DataFrame([rreshti_totaleve])]
+                )
 
     if "matrica_zyrtare_KGs" in st.session_state and not gp_detajuar_pdf.empty:
-        st.dataframe(st.session_state["matrica_zyrtare_KGs"].style.format("{:,.0f}"), width="stretch")
+        st.dataframe(
+            st.session_state["matrica_zyrtare_KGs"].style.format("{:,.0f}"),
+            width="stretch",
+        )
     else:
-        st.info("Kliko butonin më sipër për të shfaqur matricën e plotë zyrtare të agjentëve.")
+        st.info(
+            "Kliko butonin më sipër për të shfaqur matricën e plotë zyrtare të agjentëve."
+        )
 
     # =========================================================
     # 📂 GENERATORI I PDF-VE TË TRANSPOZUARA (.ZIP)
@@ -1018,110 +1253,229 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
     # reportlab imports are managed at module load time
 
     if not reportlab_available:
-        st.error("⚠️ Libraria reportlab nuk është instaluar. Instaloni `reportlab` për të përdorur eksportin PDF.")
+        st.error(
+            "⚠️ Libraria reportlab nuk është instaluar. Instaloni `reportlab` për të përdorur eksportin PDF."
+        )
     elif not gp_detajuar_pdf.empty:
-        tot_deka_baza = gp_detajuar_pdf[~gp_detajuar_pdf["NenKatZyrtare"].isin(["VAJ"])]["Plani_KG"].sum()
-        tot_vaj_baza = gp_detajuar_pdf[gp_detajuar_pdf["NenKatZyrtare"] == "VAJ"]["Plani_KG"].sum()
+        tot_deka_baza = gp_detajuar_pdf[
+            ~gp_detajuar_pdf["NenKatZyrtare"].isin(["VAJ"])
+        ]["Plani_KG"].sum()
+        tot_vaj_baza = gp_detajuar_pdf[gp_detajuar_pdf["NenKatZyrtare"] == "VAJ"][
+            "Plani_KG"
+        ].sum()
 
         koef_deka_paga = 270000 / tot_deka_baza if tot_deka_baza > 0 else 0.85
         koef_vaj_paga = 300000 / tot_vaj_baza if tot_vaj_baza > 0 else 0.80
 
         agjentet_unikë = gp_detajuar_pdf["ForcaShitese"].unique()
         zip_buffer = io.BytesIO()
-        
+
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             sukses_count = 0
 
             for agjent in agjentet_unikë:
-                df_agj = gp_detajuar_pdf[gp_detajuar_pdf["ForcaShitese"] == agjent].copy()
-                if df_agj.empty: continue
+                df_agj = gp_detajuar_pdf[
+                    gp_detajuar_pdf["ForcaShitese"] == agjent
+                ].copy()
+                if df_agj.empty:
+                    continue
 
                 emri_agjentit = str(agjent)
                 kodi_agjentit = str(df_agj[kolona_kodi_agj_sql].iloc[0])
                 rajoni_agjentit = str(df_agj[kolona_rajoni_sql].iloc[0])
 
-                emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(" ", "_")
+                emri_fajlit = f"{kodi_agjentit}_{emri_agjentit}_{rajoni_agjentit}_{muaji_i_zgjedhur}.pdf".replace(
+                    " ", "_"
+                )
                 nr_klienteve_aktuale = df_agj["Klienti"].nunique()
-                
-                df_agj_agreguar = df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
+
+                df_agj_agreguar = (
+                    df_agj.groupby("NenKatZyrtare")["Plani_KG"].sum().to_dict()
+                )
 
                 pdf_buffer = io.BytesIO()
-                doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+                doc = SimpleDocTemplate(
+                    pdf_buffer,
+                    pagesize=letter,
+                    rightMargin=40,
+                    leftMargin=40,
+                    topMargin=40,
+                    bottomMargin=40,
+                )
                 story = []
                 styles = getSampleStyleSheet()
 
-                style_header = ParagraphStyle('HStyle', parent=styles['Normal'], fontSize=12, fontName='Helvetica-Bold', textColor=colors.white)
-                style_cell = ParagraphStyle('CStyle', parent=styles['Normal'], fontSize=10, leading=12)
-                style_cell_bold = ParagraphStyle('CBStyle', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', leading=12)
-                style_cell_right = ParagraphStyle('CRStyle', parent=styles['Normal'], fontSize=10, alignment=2, leading=12)
-                style_cell_right_bold = ParagraphStyle('CRBStyle', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=2, leading=12)
+                style_header = ParagraphStyle(
+                    "HStyle",
+                    parent=styles["Normal"],
+                    fontSize=12,
+                    fontName="Helvetica-Bold",
+                    textColor=colors.white,
+                )
+                style_cell = ParagraphStyle(
+                    "CStyle", parent=styles["Normal"], fontSize=10, leading=12
+                )
+                style_cell_bold = ParagraphStyle(
+                    "CBStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    leading=12,
+                )
+                style_cell_right = ParagraphStyle(
+                    "CRStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    alignment=2,
+                    leading=12,
+                )
+                style_cell_right_bold = ParagraphStyle(
+                    "CRBStyle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    alignment=2,
+                    leading=12,
+                )
 
                 tabela_header_data = [
-                    [Paragraph(f"PLANI SHITJES &nbsp;&nbsp;&nbsp;&nbsp; {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}", style_header), ""],
-                    [Paragraph(f"Agjenti i shitjes: <font color='red'><b>{emri_agjentit}</b></font>", style_cell), Paragraph(f"Kodi i agjentit: <b>{kodi_agjentit}</b>", style_cell)],
-                    [Paragraph("", style_cell), Paragraph(f"Rajoni i shitjes: <font color='blue'><b>{rajoni_agjentit}</b></font>", style_cell)],
-                    [Paragraph(f"NR. TOTAL I KLIENTEVE: <b>{nr_klienteve_aktuale}</b>", style_cell), ""],
-                    [Paragraph(f"NR. I KLIENTEVE TE MUAJIT TE KALUAR: <b>{int(nr_klienteve_aktuale * 1.2)}</b>", style_cell), ""], 
-                    [Paragraph("NR. I PLANIFIKUAR I KLIENTEVE: __________________", style_cell), ""]
+                    [
+                        Paragraph(
+                            f"PLANI SHITJES &nbsp;&nbsp;&nbsp;&nbsp; {muaji_i_zgjedhur.upper()} {viti_i_zgjedhur}",
+                            style_header,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            f"Agjenti i shitjes: <font color='red'><b>{emri_agjentit}</b></font>",
+                            style_cell,
+                        ),
+                        Paragraph(
+                            f"Kodi i agjentit: <b>{kodi_agjentit}</b>", style_cell
+                        ),
+                    ],
+                    [
+                        Paragraph("", style_cell),
+                        Paragraph(
+                            f"Rajoni i shitjes: <font color='blue'><b>{rajoni_agjentit}</b></font>",
+                            style_cell,
+                        ),
+                    ],
+                    [
+                        Paragraph(
+                            f"NR. TOTAL I KLIENTEVE: <b>{nr_klienteve_aktuale}</b>",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            f"NR. I KLIENTEVE TE MUAJIT TE KALUAR: <b>{int(nr_klienteve_aktuale * 1.2)}</b>",
+                            style_cell,
+                        ),
+                        "",
+                    ],
+                    [
+                        Paragraph(
+                            "NR. I PLANIFIKUAR I KLIENTEVE: __________________",
+                            style_cell,
+                        ),
+                        "",
+                    ],
                 ]
-                
+
                 tabela_header = Table(tabela_header_data, colWidths=[265, 265])
-                tabela_header.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.black),
-                    ('SPAN', (0, 0), (1, 0)),
-                    ('SPAN', (0, 3), (1, 3)),
-                    ('SPAN', (0, 4), (1, 4)),
-                    ('SPAN', (0, 5), (1, 5)),
-                    ('BOX', (0, 0), (-1, -1), 1, colors.black),
-                    ('GRID', (0, 3), (-1, -1), 1, colors.black),
-                    ('PADDING', (0, 0), (-1, -1), 5),
-                ]))
+                tabela_header.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+                            ("SPAN", (0, 0), (1, 0)),
+                            ("SPAN", (0, 3), (1, 3)),
+                            ("SPAN", (0, 4), (1, 4)),
+                            ("SPAN", (0, 5), (1, 5)),
+                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                            ("GRID", (0, 3), (-1, -1), 1, colors.black),
+                            ("PADDING", (0, 0), (-1, -1), 5),
+                        ]
+                    )
+                )
                 story.append(tabela_header)
                 story.append(Spacer(1, 20))
 
-                tabela_plan_data = [[
-                    Paragraph("", style_cell_bold),
-                    Paragraph("<b>SASIA (KG)<br/>PER PAGEN</b>", style_cell_right_bold),
-                    Paragraph("<b>SASIA (KG)<br/>PER BONUS</b>", style_cell_right_bold)
-                ]]
+                tabela_plan_data = [
+                    [
+                        Paragraph("", style_cell_bold),
+                        Paragraph(
+                            "<b>SASIA (KG)<br/>PER PAGEN</b>", style_cell_right_bold
+                        ),
+                        Paragraph(
+                            "<b>SASIA (KG)<br/>PER BONUS</b>", style_cell_right_bold
+                        ),
+                    ]
+                ]
 
-                deka_bonus_tot = sum(v for k, v in df_agj_agreguar.items() if k != "VAJ")
+                deka_bonus_tot = sum(
+                    v for k, v in df_agj_agreguar.items() if k != "VAJ"
+                )
                 deka_paga_tot = deka_bonus_tot * koef_deka_paga
 
-                tabela_plan_data.append([
-                    Paragraph("<b>DEKA</b>", style_cell_bold),
-                    Paragraph(f"<b>{deka_paga_tot:,.0f}</b>", style_cell_right_bold),
-                    Paragraph(f"<b>{deka_bonus_tot:,.0f}</b>", style_cell_right_bold)
-                ])
+                tabela_plan_data.append(
+                    [
+                        Paragraph("<b>DEKA</b>", style_cell_bold),
+                        Paragraph(
+                            f"<b>{deka_paga_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                        Paragraph(
+                            f"<b>{deka_bonus_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                    ]
+                )
 
                 for nk in nen_kat_renditja:
                     bonus_v = df_agj_agreguar.get(nk, 0)
                     paga_v = bonus_v * koef_deka_paga if bonus_v > 0 else 0
-                    tabela_plan_data.append([
-                        Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{nk}", style_cell),
-                        Paragraph(f"{paga_v:,.0f}" if paga_v > 0 else "-", style_cell_right),
-                        Paragraph(f"{bonus_v:,.0f}" if bonus_v > 0 else "-", style_cell_right)
-                    ])
+                    tabela_plan_data.append(
+                        [
+                            Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;{nk}", style_cell),
+                            Paragraph(
+                                f"{paga_v:,.0f}" if paga_v > 0 else "-",
+                                style_cell_right,
+                            ),
+                            Paragraph(
+                                f"{bonus_v:,.0f}" if bonus_v > 0 else "-",
+                                style_cell_right,
+                            ),
+                        ]
+                    )
 
                 vaj_bonus_tot = df_agj_agreguar.get("VAJ", 0)
                 vaj_paga_tot = vaj_bonus_tot * koef_vaj_paga
 
-                tabela_plan_data.append([
-                    Paragraph("<b>VAJ</b>", style_cell_bold),
-                    Paragraph(f"<b>{vaj_paga_tot:,.0f}</b>", style_cell_right_bold),
-                    Paragraph(f"<b>{vaj_bonus_tot:,.0f}</b>", style_cell_right_bold)
-                ])
+                tabela_plan_data.append(
+                    [
+                        Paragraph("<b>VAJ</b>", style_cell_bold),
+                        Paragraph(f"<b>{vaj_paga_tot:,.0f}</b>", style_cell_right_bold),
+                        Paragraph(
+                            f"<b>{vaj_bonus_tot:,.0f}</b>", style_cell_right_bold
+                        ),
+                    ]
+                )
 
                 tabela_plan = Table(tabela_plan_data, colWidths=[230, 150, 150])
-                tabela_plan.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F2F4F8')),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-                    ('BOX', (0, 0), (-1, -1), 1, colors.black),
-                    ('PADDING', (0, 0), (-1, -1), 4),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('LINEBELOW', (0, 1), (-1, 1), 1.5, colors.black),
-                    ('LINEABOVE', (0, -1), (-1, -1), 1.5, colors.black)
-                ]))
+                tabela_plan.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F4F8")),
+                            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                            ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                            ("PADDING", (0, 0), (-1, -1), 4),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                            ("LINEBELOW", (0, 1), (-1, 1), 1.5, colors.black),
+                            ("LINEABOVE", (0, -1), (-1, -1), 1.5, colors.black),
+                        ]
+                    )
+                )
                 story.append(tabela_plan)
 
                 doc.build(story)
@@ -1134,7 +1488,7 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
             data=zip_buffer.getvalue(),
             file_name=f"Planet_Zyrtare_Te_Transpozuara_{muaji_i_zgjedhur}.zip",
             mime="application/zip",
-            type="primary"
+            type="primary",
         )
 
     # --- 📥 EKSPORTET E RIKTHYERA (HTML DHE EXCEL) ---
@@ -1145,7 +1499,12 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
         html += f"<h1>Raporti i Planit - {muaji_i_zgjedhur} {viti_i_zgjedhur} ({grup_sel})</h1>"
         for agjent in sorted(dataframe["ForcaShitese"].unique()):
             html += f"<h3>Agjenti: {agjent}</h3>"
-            agj_df = dataframe[dataframe["ForcaShitese"] == agjent].groupby("kat").agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"}).reset_index()
+            agj_df = (
+                dataframe[dataframe["ForcaShitese"] == agjent]
+                .groupby("kat")
+                .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
+                .reset_index()
+            )
             html += "<table><thead><tr><th>Kategoria</th><th class='num'>Plani (KG)</th><th class='num'>Vlera</th></tr></thead><tbody>"
             for _, row in agj_df.iterrows():
                 html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
@@ -1155,25 +1514,35 @@ Mbi këtë mesatare aplikohet përqindja e rritjes/uljes së vendosur nga ju ({r
 
     if st.sidebar.button("Gjenero Raportin HTML"):
         b64 = base64.b64encode(generate_html_report(gp).encode()).decode()
-        st.sidebar.markdown(f'<a href="data:text/html;base64,{b64}" download="Plani_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>', unsafe_allow_html=True)
+        st.sidebar.markdown(
+            f'<a href="data:text/html;base64,{b64}" download="Plani_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.html" style="padding:10px; background-color:#2e75b6; color:white; text-decoration:none; border-radius:5px; display:inline-block; margin-bottom:10px;">Shkarko Raportin HTML</a>',
+            unsafe_allow_html=True,
+        )
 
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        gp.to_excel(writer, sheet_name='Plani Detajuar', index=False)
-        if 'df_k' in locals():
-            df_k.to_excel(writer, sheet_name='Sipas Kategorive', index=False)
-        if 'df_a' in locals():
-            df_a.to_excel(writer, sheet_name='Sipas Agjenteve', index=False)
-        if 'df_kl' in locals():
-            df_kl.to_excel(writer, sheet_name='Sipas Klienteve', index=False)
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        gp.to_excel(writer, sheet_name="Plani Detajuar", index=False)
+        if "df_k" in locals():
+            df_k.to_excel(writer, sheet_name="Sipas Kategorive", index=False)
+        if "df_a" in locals():
+            df_a.to_excel(writer, sheet_name="Sipas Agjenteve", index=False)
+        if "df_kl" in locals():
+            df_kl.to_excel(writer, sheet_name="Sipas Klienteve", index=False)
         if not df_pasive_raporti.empty:
-            df_pasive_raporti[["Klienti", "ForcaShiteseAktuale", "Data_Blerjes_Fundit", "Sasia_Mesatare_Mujore_12M"]].to_excel(writer, sheet_name='Klientet Pasive', index=False)
+            df_pasive_raporti[
+                [
+                    "Klienti",
+                    "ForcaShiteseAktuale",
+                    "Data_Blerjes_Fundit",
+                    "Sasia_Mesatare_Mujore_12M",
+                ]
+            ].to_excel(writer, sheet_name="Klientet Pasive", index=False)
 
     st.sidebar.download_button(
         label="📊 Shkarko Planin në Excel",
         data=buffer.getvalue(),
         file_name=f"Plani_{grup_sel.replace(' ', '_')}_{muaji_i_zgjedhur}_{viti_i_zgjedhur}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 # ---------------------------------------------------------
@@ -2153,798 +2522,39 @@ elif page == "Shitjet Ditore":
             cmimi_mesatar_periudhe = (
                 (vlera_kumulative / sasia_kumulative) if sasia_kumulative > 0 else 0.0
             )
-            return sasia_kumulative, cmimi_mesatar_periudhe
+            return sasia_kumulative, vlera_kumulative, cmimi_mesatar_periudhe
 
-        totali_aktual = sum(y_aktual)
-        totali_para_muaj_l2l, cm_mes_para_muaj_l2l = llogarit_kumulativ_deri_diten(
-            data_para_muaj, dita_korrente, ditet_totale_m2
-        )
-        totali_para_vit_l2l, cm_mes_para_vit_l2l = llogarit_kumulativ_deri_diten(
-            data_para_vit, dita_korrente, ditet_totale_m3
-        )
-
-        # --- LLOGARITJA E SASIVE MESATARE PËR DITË PUNE (Hënë - Shtunë) ---
-        def llogarit_mesatare_dite_pune(vit, muaj, max_day, limit_muaji, data_dict):
-            kufiri_real = min(max_day, limit_muaji)
-            ditet_punes = [
-                d
-                for d in range(1, kufiri_real + 1)
-                if datetime(vit, muaj, d).weekday() != 6
-            ]
-            nr_dite_pune = len(ditet_punes)
-            sasia_totale_pune = sum(
-                data_dict.get(d, {kolona_kg: 0.0})[kolona_kg] for d in ditet_punes
-            )
-            return (sasia_totale_pune / nr_dite_pune) if nr_dite_pune > 0 else 0.0
-
-        # Llogaritja e mesatareve ditore operative dhe të plota
-        mes_dite_l2l_m1 = llogarit_mesatare_dite_pune(
-            sel_vit_1, sel_muaj_1, dita_korrente, ditet_totale_m1, data_aktual
-        )
-        mes_dite_l2l_m2 = llogarit_mesatare_dite_pune(
-            sel_vit_2, sel_muaj_2, dita_korrente, ditet_totale_m2, data_para_muaj
-        )
-        mes_dite_l2l_m3 = llogarit_mesatare_dite_pune(
-            sel_vit_3, sel_muaj_3, dita_korrente, ditet_totale_m3, data_para_vit
-        )
-
-        mes_dite_plote_m1 = llogarit_mesatare_dite_pune(
-            sel_vit_1, sel_muaj_1, ditet_totale_m1, ditet_totale_m1, data_aktual
-        )
-        mes_dite_plote_m2 = llogarit_mesatare_dite_pune(
-            sel_vit_2, sel_muaj_2, ditet_totale_m2, ditet_totale_m2, data_para_muaj
-        )
-        mes_dite_plote_m3 = llogarit_mesatare_dite_pune(
-            sel_vit_3, sel_muaj_3, ditet_totale_m3, ditet_totale_m3, data_para_vit
-        )
-
-        # --- SHFAQJA E METRIKAVE ---
-        st.markdown(
-            "<h4 style='color: #2c3e50; font-size:18px; margin-top:15px; margin-bottom:15px;'>📊 Përmbledhje e Performancës Mujore</h4>",
-            unsafe_allow_html=True,
-        )
-
-        # Rreshti 1: Volumet totale sipas përzgjedhjes
-        c1, c2, c3 = st.columns(3)
-        c1.metric(
-            label=f"Sasia {emri_muaj_1}",
-            value=f"{totali_aktual:,.0f} kg",
-            delta=f"Ø Çmimi: {cm_mes_aktual:,.1f} L/kg",
-            delta_color="off",
-        )
-        c2.metric(
-            label=f"Sasia e Plotë {emri_muaj_2}",
-            value=f"{sum(y_para_muaj):,.0f} kg",
-            delta=f"Ø Çmimi: {cm_mes_para_muaj:,.1f} L/kg",
-            delta_color="off",
-        )
-        c3.metric(
-            label=f"Sasia e Plotë {emri_muaj_3}",
-            value=f"{sum(y_para_vit):,.0f} kg",
-            delta=f"Ø Çmimi: {cm_mes_para_vit:,.1f} L/kg",
-            delta_color="off",
-        )
-
-        st.write("")
-        # Rreshti 2: Krahasimi Like-to-Like deri në ditën korrente
-        ndryshimi_m2_l2l = (
-            ((totali_aktual - totali_para_muaj_l2l) / totali_para_muaj_l2l * 100)
-            if totali_para_muaj_l2l > 0
-            else 0
-        )
-        ndryshimi_m3_l2l = (
-            ((totali_aktual - totali_para_vit_l2l) / totali_para_vit_l2l * 100)
-            if totali_para_vit_l2l > 0
-            else 0
-        )
-
-        cc1, cc2, cc3 = st.columns(3)
-        cc1.markdown(
-            f"<div style='text-align:center; background:#e9ecef; padding:12px; border-radius:6px; font-size:13px; font-weight:bold; color:#495057; margin-top:5px;'>Krahasimi Like-to-Like<br>(Deri në ditën {dita_korrente} pa të Diela)</div>",
-            unsafe_allow_html=True,
-        )
-        cc2.metric(
-            label=f"vs {emri_muaj_2} (Dita 1-{min(dita_korrente, ditet_totale_m2)})",
-            value=f"{totali_para_muaj_l2l:,.0f} kg",
-            delta=f"{ndryshimi_m2_l2l:+.1f}% (Ø: {cm_mes_para_muaj_l2l:,.1f} L)",
-        )
-        cc3.metric(
-            label=f"vs {emri_muaj_3} (Dita 1-{min(dita_korrente, ditet_totale_m3)})",
-            value=f"{totali_para_vit_l2l:,.0f} kg",
-            delta=f"{ndryshimi_m3_l2l:+.1f}% (Ø: {cm_mes_para_vit_l2l:,.1f} L)",
-        )
-
-        st.write("")
-
-        # Rreshti 3: Tabela e pastër e Mesatareve të zgjedhura
-        st.markdown(
-            "<h5 style='color: #2c3e50; font-size:15px; margin-top:15px; margin-bottom:10px;'>📈 Sasia Mesatare për Ditë Pune (Hënë - Shtunë, pa të Diela)</h5>",
-            unsafe_allow_html=True,
-        )
-
-        status_m1_plote = (
-            f"{mes_dite_plote_m1:,.0f} kg/ditë"
-            if (
-                sel_vit_1 < sot.year
-                or (sel_vit_1 == sot.year and sel_muaj_1 < sot.month)
-            )
-            else "Muaj në progres"
-        )
-
-        html_tabela_mesatareve = f"""
-        <table style="width:100%; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <thead>
-                <tr style="background-color: #1a237e; color: #ffffff; text-align: left; font-size: 14px;">
-                    <th style="padding: 12px 15px;">Periudha / Muaji i Përzgjedhur</th>
-                    <th style="padding: 12px 15px; text-align: center;">⏱️ Live (Dita 1-{dita_korrente})</th>
-                    <th style="padding: 12px 15px; text-align: center;">🏁 Gjithë Muajin e Plotë</th>
-                </tr>
-            </thead>
-            <tbody style="font-size: 14px; color: #333333;">
-                <tr style="border-bottom: 1px solid #dddddd; background-color: #fcfcfd;">
-                    <td style="padding: 12px 15px; font-weight: bold; color: #1a237e;">{emri_muaj_1}</td>
-                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; font-size: 16px; color: #2e7d32;">{mes_dite_l2l_m1:,.0f} kg/ditë</td>
-                    <td style="padding: 12px 15px; text-align: center; color: #555;">{status_m1_plote}</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #dddddd;">
-                    <td style="padding: 12px 15px; font-weight: bold;">{emri_muaj_2}</td>
-                    <td style="padding: 12px 15px; text-align: center;">{mes_dite_l2l_m2:,.0f} kg/ditë</td>
-                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; color: #111;">{mes_dite_plote_m2:,.0f} kg/ditë</td>
-                </tr>
-                <tr style="border-bottom: none;">
-                    <td style="padding: 12px 15px; font-weight: bold;">{emri_muaj_3}</td>
-                    <td style="padding: 12px 15px; text-align: center;">{mes_dite_l2l_m3:,.0f} kg/ditë</td>
-                    <td style="padding: 12px 15px; text-align: center; font-weight: bold; color: #111;">{mes_dite_plote_m3:,.0f} kg/ditë</td>
-                </tr>
-            </tbody>
-        </table>
-        """
-        st.markdown(html_tabela_mesatareve, unsafe_allow_html=True)
-        st.write("")
-
-        st.divider()
-
-        # --- NDËRTIMI I GRAFIKUT FINAL ---
+        # Ndërtimi i grafikut Plotly për Shitjet Ditore
+        st.subheader("📊 Krahasimi Grafik i Ecurisë Ditore (KG)")
         fig = go.Figure()
-        gjeresia_kolones = 0.6
-
         fig.add_trace(
-            go.Bar(
-                x=ditet_numerik,
-                y=y_para_vit[:ditet_totale_m1],
-                base=base_para_vit[:ditet_totale_m1],
-                name=emri_muaj_3,
-                width=gjeresia_kolones,
-                marker_color="rgba(141, 211, 199, 0.55)",
-                textposition="none",
-                hovertemplate="%{y:,.0f} kg<extra></extra>",
-            )
-        )
-
-        fig.add_trace(
-            go.Bar(
-                x=ditet_numerik,
-                y=y_para_muaj[:ditet_totale_m1],
-                base=base_para_muaj[:ditet_totale_m1],
-                name=emri_muaj_2,
-                width=gjeresia_kolones,
-                marker_color="rgba(0, 105, 92, 0.55)",
-                textposition="none",
-                hovertemplate="%{y:,.0f} kg<extra></extra>",
-            )
-        )
-
-        fig.add_trace(
-            go.Bar(
-                x=ditet_numerik,
-                y=y_aktual,
-                base=base_aktual,
+            go.Scatter(
+                x=ditet_etiketa,
+                y=np.cumsum(y_aktual),
                 name=emri_muaj_1,
-                width=gjeresia_kolones,
-                marker_color="rgba(255, 193, 7, 0.65)",
-                text=[f"{v:,.0f}" if v > 0 else "" for v in y_aktual],
-                textposition="outside",
-                hovertemplate="%{y:,.0f} kg<extra></extra>",
+                line=dict(color="blue", width=3),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=ditet_etiketa,
+                y=np.cumsum(y_para_muaj[: len(ditet_etiketa)]),
+                name=emri_muaj_2,
+                line=dict(color="orange", width=2, dash="dash"),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=ditet_etiketa,
+                y=np.cumsum(y_para_vit[: len(ditet_etiketa)]),
+                name=emri_muaj_3,
+                line=dict(color="green", width=2, dash="dot"),
             )
         )
 
         fig.update_layout(
-            title=f"KASKADA KRAHASUESE E SHITJEVE DITORE ({emri_muaj_1})",
-            barmode="overlay",
-            plot_bgcolor="#eef2f3",
-            height=650,
-            xaxis=dict(
-                title=f"Ditët e muajit ({muajt_sq.get(sel_muaj_1)})",
-                tickangle=0,
-                type="linear",
-                tickmode="array",
-                tickvals=ditet_numerik,
-                ticktext=ditet_etiketa,
-                range=[0.4, ditet_totale_m1 + 0.6],
-            ),
-            yaxis=dict(title="Shitjet (kg)", gridcolor="#ffffff"),
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
-            ),
-            hovermode="x unified",
+            xaxis_title="Ditët e Muajit",
+            yaxis_title="KG Kumulative",
+            margin=dict(l=20, r=20, t=20, b=20),
         )
-
         st.plotly_chart(fig, use_container_width=True)
-
-        # --- TABELA E DETAJUAR ORIGJINALE E SHITJEVE DITORE ---
-        st.markdown(
-            "<h4 style='color: #2c3e50; font-size:18px; margin-top:20px;'>📋 Tabela Krahasuese e të Dhënave Ditore</h4>",
-            unsafe_allow_html=True,
-        )
-
-        tabela_df = pd.DataFrame(
-            {
-                "Dita": ditet_etiketa,
-                f"{emri_muaj_1} (kg)": y_aktual,
-                f"{emri_muaj_2} (kg)": [
-                    data_para_muaj.get(d, {}).get(kolona_kg, 0.0) for d in ditet_numerik
-                ],
-                f"{emri_muaj_3} (kg)": [
-                    data_para_vit.get(d, {}).get(kolona_kg, 0.0) for d in ditet_numerik
-                ],
-            }
-        )
-
-        st.dataframe(
-            tabela_df.style.format(
-                {
-                    f"{emri_muaj_1} (kg)": "{:,.0f}",
-                    f"{emri_muaj_2} (kg)": "{:,.0f}",
-                    f"{emri_muaj_3} (kg)": "{:,.0f}",
-                }
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    else:
-        st.error("Të dhënat nuk u ngarkuan dot.")
-
-# ---------------------------------------------------------
-# MODULI I PLANIFIKIMIT STRUKTURAL (VETËM ARTIKUJT E SHITUR NË B)
-# ---------------------------------------------------------
-
-
-# 1. HAPI I PARË: Deklarojmë funksionin në mënyrë që Python ta njohë
-def shfaq_modul_planifikimi_artikujve(df_baze_sales):
-    st.title("🎯 Planifikimi i Artikujve sipas Strukturës së re (Periudha A ➔ B)")
-    st.markdown(
-        "Konverton shitjet mesatare të kategorive nga **Periudha A** në artikuj specifikë bazuar **VETËM** në mix-in e ri të shitjeve nga **Periudha B**."
-    )
-    df_proc = df_baze_sales.copy()
-    df_proc["KodiArt"] = df_proc["KodiArt"].astype(str).str.strip()
-    df_proc["KodiKlient"] = df_proc["KodiKlient"].astype(str).str.strip()
-    df_proc["ForcaShitese"] = (
-        df_proc["ForcaShitese"].fillna("Pa Agjent").astype(str).str.strip()
-    )
-    df_proc["kat"] = df_proc["kat"].fillna("Pa Kategori")
-    df_proc["VitiMuaji"] = df_proc["Data"].dt.to_period("M")
-
-    min_d = df_proc["Data"].min().date() if not df_proc.empty else datetime.now().date()
-    max_d = df_proc["Data"].max().date() if not df_proc.empty else datetime.now().date()
-
-    # --- LIBRARIA E RUAJTJES PËR MODULIN E RI ---
-    if "libraria_modulit_ri" not in st.session_state:
-        st.session_state["libraria_modulit_ri"] = {
-            "Zgjedhje Manuale (Pa Ruajtje)": None
-        }
-
-    lib_ri = st.session_state["libraria_modulit_ri"]
-
-    # --- KONTROLLI I NGARKIMIT TË PLANIT TË RUAJTUR ---
-    with st.expander(
-        "💾 Thirr ose Ruaj një Konfigurim të Planit (Periudha A, B dhe % Rritje)"
-    ):
-        c_l1, c_l2 = st.columns([2, 1])
-        with c_l1:
-            zgjedhje_plani = st.selectbox(
-                "Thirr konfigurim të ruajtur më parë:",
-                options=list(lib_ri.keys()),
-                key="sel_lib_ri_key",
-            )
-
-        if (
-            zgjedhje_plani != "Zgjedhje Manuale (Pa Ruajtje)"
-            and lib_ri[zgjedhje_plani] is not None
-        ):
-            konfig = lib_ri[zgjedhje_plani]
-            st.session_state["p_a_start"] = konfig["a_start"]
-            st.session_state["p_a_end"] = konfig["a_end"]
-            st.session_state["p_b_start"] = konfig["b_start"]
-            st.session_state["p_b_end"] = konfig["b_end"]
-            st.session_state["rritja_modul_ri"] = konfig["rritja"]
-
-        st.divider()
-        st.markdown("**Ruaj Konfigurimin Aktual:**")
-        txt_emri_ri = st.text_input(
-            "Vendos një emër për këtë konfigurim (psh: Plani Sezonit Vjeshtë):",
-            key="emri_konfig_ri",
-        )
-
-        if st.button("➕ Ruaj Konfigurimin", use_container_width=True):
-            if txt_emri_ri.strip() != "":
-                lib_ri[txt_emri_ri] = {
-                    "a_start": st.session_state.get("pl_range_a", (min_d, max_d))[0],
-                    "a_end": st.session_state.get("pl_range_a", (min_d, max_d))[1],
-                    "b_start": st.session_state.get("pl_range_b", (min_d, max_d))[0],
-                    "b_end": st.session_state.get("pl_range_b", (min_d, max_d))[1],
-                    "rritja": st.session_state.get("rritja_modul_ri", 0.0),
-                }
-                st.success(f"✅ Konfigurimi '{txt_emri_ri}' u ruajt me sukses!")
-                st.rerun()
-            else:
-                st.error("Ju lutem vendosni një emër përpara se ta ruani.")
-
-    # Inicializimi i vlerave nëse nuk ekzistojnë në session_state
-    if "p_a_start" not in st.session_state:
-        st.session_state["p_a_start"] = min_d
-    if "p_a_end" not in st.session_state:
-        st.session_state["p_a_end"] = max_d
-    if "p_b_start" not in st.session_state:
-        st.session_state["p_b_start"] = min_d
-    if "p_b_end" not in st.session_state:
-        st.session_state["p_b_end"] = max_d
-    if "rritja_modul_ri" not in st.session_state:
-        st.session_state["rritja_modul_ri"] = 0.0
-
-    # --- INPUTET E PERIUDHAVE DHE % SË RRITJES ---
-    st.subheader("⚙️ Parametrat e Gjenerimit")
-    col_a, col_b, col_c = st.columns(3)
-
-    with col_a:
-        st.markdown("##### 📅 Periudha A (Kapaciteti)")
-        p_a = st.date_input(
-            "Rreza e datave për Periudhën A:",
-            value=(st.session_state["p_a_start"], st.session_state["p_a_end"]),
-            min_value=min_d,
-            max_value=max_d,
-            key="pl_range_a",
-        )
-    with col_b:
-        st.markdown("##### 📅 Periudha B (Mix-i i Ri)")
-        p_b = st.date_input(
-            "Rreza e datave për Periudhën B:",
-            value=(st.session_state["p_b_start"], st.session_state["p_b_end"]),
-            min_value=min_d,
-            max_value=max_d,
-            key="pl_range_b",
-        )
-    with col_c:
-        st.markdown("##### 📈 % e Rritjes së Planit")
-        rritja_p = st.number_input(
-            "Vendos përqindjen e rritjes target:",
-            value=st.session_state["rritja_modul_ri"],
-            step=1.0,
-            key="rritja_modul_ri",
-        )
-
-    # --- FILTRIMI SIPAS AGJENTËVE ---
-    st.subheader("👤 Filtrimi i Agjentëve")
-    lista_agjenteve = sorted(df_proc["ForcaShitese"].unique())
-    agjentet_zgjedhur = st.multiselect(
-        "Zgjidh agjentët që dëshiron të përfshish në plan (Lëre bosh për të gjithë):",
-        options=lista_agjenteve,
-    )
-
-    if (
-        isinstance(p_a, tuple)
-        and len(p_a) == 2
-        and isinstance(p_b, tuple)
-        and len(p_b) == 2
-    ):
-        if st.button(
-            "🚀 Gjenero Planin Struktural të Avancuar", use_container_width=True
-        ):
-
-            if agjentet_zgjedhur:
-                df_proc = df_proc[df_proc["ForcaShitese"].isin(agjentet_zgjedhur)]
-
-            df_A = df_proc[
-                (df_proc["Data"] >= pd.to_datetime(p_a[0]))
-                & (df_proc["Data"] <= pd.to_datetime(p_a[1]))
-            ]
-            df_B = df_proc[
-                (df_proc["Data"] >= pd.to_datetime(p_b[0]))
-                & (df_proc["Data"] <= pd.to_datetime(p_b[1]))
-            ]
-
-            if df_A.empty or df_B.empty:
-                st.warning(
-                    "⚠️ Nuk u gjetën shitje në njërën prej periudhave të përzgjedhura. Ndryshoni datat."
-                )
-                return
-
-            # FAZA 1: Mesatarja e Klientit dhe Agjentit për Kategori në Periudhën A
-            muaj_unike_A = df_A["VitiMuaji"].nunique()
-            nr_muajve_A = muaj_unike_A if muaj_unike_A > 0 else 1
-
-            df_klient_A = (
-                df_A.groupby(["ForcaShitese", "KodiKlient", "Klienti", "kat"])["kg"]
-                .sum()
-                .reset_index()
-            )
-            df_klient_A["Mesatare_KG_Kategori"] = df_klient_A["kg"] / nr_muajve_A
-            df_klient_A = df_klient_A.drop(columns=["kg"])
-
-            # FAZA 2: Mix-i i shitjeve të artikujve në Periudhën B brenda kategorisë
-            tot_kat_B = (
-                df_B.groupby("kat")["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "Tot_Kat_B"})
-            )
-            tot_art_B = (
-                df_B.groupby(["kat", "KodiArt", "Artikulli"])["kg"]
-                .sum()
-                .reset_index()
-                .rename(columns={"kg": "Tot_Art_B"})
-            )
-
-            df_mix_B = pd.merge(tot_art_B, tot_kat_B, on="kat")
-            df_mix_B["Pesha_Artikullit"] = np.where(
-                df_mix_B["Tot_Kat_B"] > 0,
-                df_mix_B["Tot_Art_B"] / df_mix_B["Tot_Kat_B"],
-                0,
-            )
-            df_mix_B = df_mix_B[["kat", "KodiArt", "Artikulli", "Pesha_Artikullit"]]
-
-            # 🔥 FILTRI KRITIK: Mbajmë VETËM artikujt që kanë pasur shitje reale (peshë > 0) në Periudhën B
-            df_mix_B = df_mix_B[df_mix_B["Pesha_Artikullit"] > 0]
-
-            # FAZA 3: Kombinimi Matematik i Planit (inner join siguron që mbeten vetëm artikujt e filtruar mësipër)
-            df_plani = pd.merge(df_klient_A, df_mix_B, on="kat", how="inner")
-
-            faktor_rritje = 1 + (rritja_p / 100.0)
-            df_plani["Plani_KG"] = (
-                df_plani["Mesatare_KG_Kategori"]
-                * df_plani["Pesha_Artikullit"]
-                * faktor_rritje
-            )
-
-            # Konvertimi në Copa sipas peshës nominale
-            try:
-                df_peshat = df_proc[["KodiArt", "KG/SKU"]].drop_duplicates()
-                df_plani = pd.merge(df_plani, df_peshat, on="KodiArt", how="left")
-                df_plani["Plani_Cope"] = np.where(
-                    df_plani["KG/SKU"] > 0, df_plani["Plani_KG"] / df_plani["KG/SKU"], 0
-                )
-            except Exception:
-                df_plani["Plani_Cope"] = 0
-
-            # --- KRIJIMI I TABELAVE TË NDARA (KATEGORI DHE ARTIKUJ) ---
-            df_agj_kategori = (
-                df_plani.groupby(["ForcaShitese", "kat"])[["Plani_KG", "Plani_Cope"]]
-                .sum()
-                .reset_index()
-            )
-            df_agj_kategori.columns = [
-                "Agjenti",
-                "Kategoria",
-                "Plani Target (KG)",
-                "Plani Target (Copa)",
-            ]
-
-            df_agj_artikuj = (
-                df_plani.groupby(["ForcaShitese", "kat", "KodiArt", "Artikulli"])[
-                    ["Plani_KG", "Plani_Cope"]
-                ]
-                .sum()
-                .reset_index()
-            )
-            df_agj_artikuj.columns = [
-                "Agjenti",
-                "Kategoria",
-                "Kodi Art.",
-                "Artikulli",
-                "Plani Target (KG)",
-                "Plani Target (Copa)",
-            ]
-
-            st.success(
-                f"✅ Plani i ri struktural u kalkulua me sukses! Përfshihen vetëm artikujt aktivë të shitur në Periudhën B me +{rritja_p}% rritje."
-            )
-
-            # --- SHFAQJA NË TABS ---
-            tab1, tab2 = st.tabs(
-                ["📊 Përmbledhja sipas Kategorive", "📦 Detajet sipas Artikujve"]
-            )
-
-            with tab1:
-                st.dataframe(df_agj_kategori, use_container_width=True)
-            with tab2:
-                st.dataframe(df_agj_artikuj, use_container_width=True)
-
-            # --- EKSPORTI NË EXCEL (Multi-Sheet) ---
-            import io
-
-            out_xl = io.BytesIO()
-            with pd.ExcelWriter(out_xl, engine="xlsxwriter") as wr:
-                df_agj_kategori.to_excel(
-                    wr, index=False, sheet_name="Plani_sipas_Kategorive"
-                )
-                df_agj_artikuj.to_excel(
-                    wr, index=False, sheet_name="Plani_sipas_Artikujve"
-                )
-
-            st.download_button(
-                label="📥 Shkarko të dyja tabelat në Excel",
-                data=out_xl.getvalue(),
-                file_name="plani_struktural_agjente.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-
-            # --- GJENERIMI I RAPORTIT PDF ---
-            st.subheader("📄 Gjenerimi i Raportit PDF")
-
-            html_content = f"""
-            <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; color: #333; margin: 20px; }}
-                    h1 {{ text-align: center; color: #1f4e78; font-size: 24px; }}
-                    h2 {{ color: #2e74b5; border-bottom: 2px solid #2e74b5; padding-bottom: 5px; font-size: 16px; margin-top: 30px; }}
-                    .meta-box {{ background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 12px; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
-                    th {{ background-color: #1f4e78; color: white; padding: 6px; text-align: left; border: 1px solid #ddd; }}
-                    td {{ padding: 5px; border: 1px solid #ddd; text-align: left; }}
-                    .num {{ text-align: right; }}
-                    .footer {{ text-align: center; font-size: 10px; color: #7f7f7f; margin-top: 40px; }}
-                </style>
-            </head>
-            <body>
-                <h1>RAPORTI I PLANIFIKIMIT STRUKTURAL STRATEGJIK</h1>
-                <div class="meta-box">
-                    <strong>Konfigurimi i Sistemit:</strong><br>
-                    • Periudha A (Kapaciteti): {p_a[0].strftime('%d/%m/%Y')} - {p_a[1].strftime('%d/%m/%Y')}<br>
-                    • Periudha B (Filtri i Mix-it të Ri): {p_b[0].strftime('%d/%m/%Y')} - {p_b[1].strftime('%d/%m/%Y')}<br>
-                    • Rritja e Aplikuar Target: <strong>+{rritja_p}%</strong><br>
-                    • Shënim Logjik: Përfshihen vetëm artikujt me performancë aktive në Periudhën B.<br>
-                    • Data e Gjenerimit: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-                </div>
-
-                <h2>1. Përmbledhja e Planeve sipas Agjentëve dhe Kategorive</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Agjenti</th>
-                            <th>Kategoria</th>
-                            <th class="num">Plani Target (KG)</th>
-                            <th class="num">Plani Target (Copa)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            """
-
-            for _, row in df_agj_kategori.head(200).iterrows():
-                html_content += f"""
-                        <tr>
-                            <td>{row['Agjenti']}</td>
-                            <td>{row['Kategoria']}</td>
-                            <td class="num">{row['Plani Target (KG)']:,.1f}</td>
-                            <td class="num">{row['Plani Target (Copa)']:,.0f}</td>
-                        </tr>
-                """
-
-            html_content += """
-                    </tbody>
-                </table>
-                <div class="footer">Sistemi i Menaxhimit të Planifikimit © AXION - DEKA SQL</div>
-            </body>
-            </html>
-            """
-
-            import io
-
-            try:
-                from weasyprint import HTML
-
-                pdf_out = io.BytesIO()
-                HTML(string=html_content).write_pdf(pdf_out)
-
-                st.download_button(
-                    label="📕 Shkarko Raportin Ekzekutiv në format PDF",
-                    data=pdf_out.getvalue(),
-                    file_name="raporti_plani_struktural.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-            except Exception as e:
-                st.info(
-                    "💡 Për të shkarkuar versionin PDF direkt në Streamlit Cloud, sigurohuni që keni shtuar 'weasyprint' te requirements.txt. Ndërkohë, skedari i plotë i detajuar Excel i mësipërm është gati për përdorim."
-                )
-    else:
-        st.info(
-            "💡 Ju lutem përzgjedhni rrezen e plotë të datave për të dyja periudhat që të aktivizohet butoni i kalkulimit."
-        )
-
-
-# 2. HAPI I DYTË: Kushti "if" vendoset VETËM pasi funksioni është krijuar plotësisht më lart!
-if page == "🎯 Plani sipas Strukturës B":
-    shfaq_modul_planifikimi_artikujve(df_raw)
-    st.stop()  # Ndalon përplasjen me modulin e vjetër poshtë
-
-# endregion
-
-# =========================================================
-# MODULI: AI DATA ASSISTANT (VERSIONI TEKNIK I PASTRUAR)
-# region ==================================================
-import anthropic
-import streamlit as st
-import pandas as pd
-
-
-def shfaq_ai_assistant(df):
-    st.subheader("🤖 AXION AI – Asistenti Inteligjent i Planeve dhe Analizave")
-    st.markdown(
-        "Bisedo me AI për të ndërtuar plane biznesi. AI i llogarit shifrat vetë dhe mban mend bisedën."
-    )
-
-    # 1. Konfigurimi i API Key
-    api_key = st.secrets.get("CLAUDE_API_KEY", "")
-    if not api_key:
-        api_key = st.sidebar.text_input(
-            "Vendos Anthropic API Key (sk-ant-...):", type="password"
-        )
-        if not api_key:
-            st.info(
-                "🔑 Ju lutem vendosni API Key-n tuaj të Anthropic në sidebar për të aktivizuar Asistentin AI."
-            )
-            st.stop()
-
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-    except Exception as e:
-        st.error(f"Gabim gjate konfigurimit te Anthropic: {e}")
-        st.stop()
-
-    # Informojme AI-n per strukturen ekzakte te te dhenave tuaja
-    emrat_kolonave = ", ".join(df.columns.tolist())
-
-    system_instruction = f"""
-    Ti je AXION AI, ekspert ne analizen e shitjeve ERP. Perdoruesi deshiren plane komplekse si ai i Qershorit 2026.
-    Ne shembullin e tij te fundit, rezultati doli 30 here me i larte sepse u be nje Cross-Join i gabuar midis muajve dhe artikujve. 
-    Duhet te jesh shume i kujdesshem me matematiken dhe agregimet.
-    
-    Nese te duhet te besh llogaritje mbi tabelen (e cila quhet 'df'), ti duhet te shkruash nje kod Python qe filtron dhe agregon te dhenat sakte.
-    
-    Kolonat e tabeles 'df' jane: {emrat_kolonave}
-    - Data (format datetime)
-    - ForcaShitese (agjentet)
-    - Klienti / KodiKlient
-    - kat (Kategorite e produkteve)
-    - Sasia (Sasia e shitur)
-    - kg (Sasia ne kilograme)
-    - Vlera_Historike (Vlera ne Leke)
-    - Grup_Filtri (DEKA, OLIM, ETJ)
-
-    RREGULLI I PERGJIGJES:
-    Pergjigju ne gjuhen shqipe duke i shpjeguar logjiken perdoruesit. Nese ke llogaritur nje tabele, shfaqe kodin e llogaritjes brenda bllokut standard:
-```python
-    # Kodi duhet te krijoje GJITHMONE nje variabel te quajtur 'rezultati_final'
-    df_filtered = df[df['Grup_Filtri'] == 'DEKA']
-    rezultati_final = df_filtered.groupby('Artikulli').agg(Vlera=('Vlera_Historike', 'sum')).reset_index()
-    ```
-    Mos harro: variabla finale e rezultatit duhet te quhet ekzaktesisht 'rezultati_final' qe aplikacioni ta shfaqe ne ekran.
-    """
-
-    # Inicializimi i historikut te bisedes
-    if "messages_chat" not in st.session_state:
-        st.session_state.messages_chat = [
-            {
-                "role": "assistant",
-                "content": "Pershendetje! Jam AXION AI. Jam gati te rregullojme planin e Qershorit 2026 hap pas hapi qe te mos kemi rritje artificiale shifrash. Cfare deshironi te llogarisim si fillim?",
-            }
-        ]
-
-    # Shfaq biseden e deritanishme
-    for msg in st.session_state.messages_chat:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
-
-    # Kutia e Chat-it ne fund te faqes
-    if prompt := st.chat_input("Shkruaj kerkesen tuaj ketu..."):
-        st.session_state.messages_chat.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Duke analizuar dhe llogaritur..."):
-                try:
-                    # Pergatitja e historikut per Claude
-                    api_messages = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in st.session_state.messages_chat
-                    ]
-
-                    # Ndryshojme pak instruksionin lokal qe Claude te na jape edhe tekst edhe kod
-                    instruksioni_ri = (
-                        system_instruction
-                        + "\nKujdes: Shpjegoni rezultatin ne gjuhen shqipe normalisht. Por kodin Python futeni VETEM brenda tagit [KODI] dhe [/KODI]."
-                    )
-
-                    response = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=1500,
-                        system=instruksioni_ri,
-                        messages=api_messages,
-                    )
-
-                    pergjigje_ai = response.content[0].text
-
-                    # 1. Pastrojme tekstin nga tagu i kodit qe t'i shfaqet perdoruesit vetem shpjegimi njerëzor
-                    tekst_per_shfaqje = pergjigje_ai
-                    if "[KODI]" in tekst_per_shfaqje:
-                        tekst_per_shfaqje = (
-                            tekst_per_shfaqje.split("[KODI]")[0]
-                            + "\n*(Tabela u llogarit me sukses me poshte)*"
-                        )
-
-                    st.write(tekst_per_shfaqje)
-
-                    # Ruajme mesazhin ne historik
-                    st.session_state.messages_chat.append(
-                        {"role": "assistant", "content": pergjigje_ai}
-                    )
-
-                    # 2. Izolojme dhe ekzekutojme kodin Python ne prapaskene
-                    if "[KODI]" in pergjigje_ai:
-                        pjesa_kodit = (
-                            pergjigje_ai.split("[KODI]")[1].split("[/KODI]")[0].strip()
-                        )
-
-                        # Pastrim nese ka mbetur ndonje shenje markdown-i ```python
-                        if "```python" in pjesa_kodit:
-                            pjesa_kodit = (
-                                pjesa_kodit.split("```python")[1]
-                                .split("```")[0]
-                                .strip()
-                            )
-                        elif "```" in pjesa_kodit:
-                            pjesa_kodit = pjesa_kodit.split("```")[1].strip()
-
-                        # Executojme kodin e gjeneruar
-                        lokalet = {"df": df, "pd": pd}
-                        exec(pjesa_kodit, globals(), lokalet)
-
-                        # Nese kodi krijoi 'rezultati_final', e shfaqim si tabele interaktive
-                        if "rezultati_final" in lokalet:
-                            st.success("📊 Tabela e llogaritur nga AI:")
-                            st.dataframe(
-                                lokalet["rezultati_final"], use_container_width=True
-                            )
-
-                            # Butoni per shkarkim ne Excel
-                            st.download_button(
-                                label="📥 Shkarko kete tabele ne Excel",
-                                data=lokalet["rezultati_final"]
-                                .to_csv(index=False)
-                                .encode("utf-8"),
-                                file_name="analiza_axion_ai.csv",
-                                mime="text/csv",
-                            )
-                except Exception as e:
-                    st.error(f"⚠️ Ndodhi nje gabim brenda bisedes: {e}")
-
-
-# KOD INTEGRIMI I SIGURUAR (Nuk varet nga variabla 'page' nese ajo ka gabim)
-try:
-    if page == "AI Assistant":
-        if "df_raw" in locals() or "df_raw" in globals():
-            if df_raw is not None:
-                shfaq_ai_assistant(df_raw)
-            else:
-                st.error("❌ Nuk u gjeten te dhena valide nga SQL Server.")
-        else:
-            st.warning("⚠️ Prisni ngarkimin e te dhenave...")
-        st.stop()
-except NameError:
-    # Nese variabla 'page' nuk ekziston ne kodin tend, kjo parandalon faqen e bardhe
-    pass
-
-# endregion
