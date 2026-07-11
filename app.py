@@ -1,4 +1,6 @@
 import base64
+import io
+import zipfile
 
 import streamlit as st
 import pandas as pd
@@ -7,6 +9,17 @@ from PIL import Image
 import os
 import numpy as np
 import time
+
+reportlab_available = True
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+except ImportError:
+    reportlab_available = False
+except Exception:
+    reportlab_available = False
 
 # --- Moduli i unifikuar AI (v3.0) ---
 from ai_modules_improved import render_plan_ditor
@@ -991,13 +1004,11 @@ elif page == "Planifikimi" and df_raw is not None:
     st.divider()
     st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
 
-    import zipfile
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
+    # reportlab imports are managed at module load time
 
-    if not gp_detajuar_pdf.empty:
+    if not reportlab_available:
+        st.error("⚠️ Libraria reportlab nuk është instaluar. Instaloni `reportlab` për të përdorur eksportin PDF.")
+    elif not gp_detajuar_pdf.empty:
         tot_deka_baza = gp_detajuar_pdf[~gp_detajuar_pdf["NenKatZyrtare"].isin(["VAJ"])]["Plani_KG"].sum()
         tot_vaj_baza = gp_detajuar_pdf[gp_detajuar_pdf["NenKatZyrtare"] == "VAJ"]["Plani_KG"].sum()
 
