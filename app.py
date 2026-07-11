@@ -2,6 +2,11 @@ import base64
 import io
 import zipfile
 
+import matplotlib
+
+matplotlib.use("Agg")  # Detyron matplotlib të mos përdorë ndërfaqe grafike (GUI)
+import matplotlib.pyplot as plt
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
