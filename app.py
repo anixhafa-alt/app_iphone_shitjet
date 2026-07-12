@@ -28,8 +28,8 @@ except Exception:
     reportlab_available = False
 
 # --- Moduli i unifikuar AI (v3.0) ---
- from ai_modules_improved import render_plan_ditor
- from analiza_module import render_analiza
+from ai_modules_improved import render_plan_ditor
+from analiza_module import render_analiza
 
 # =========================================================
 # region ==================================================
