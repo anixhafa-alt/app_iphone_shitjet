@@ -677,6 +677,17 @@ elif page == "Historiku":
 elif page == "Planifikimi" and df_raw is not None:
     import io
     import base64
+    import zipfile
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Table,
+        TableStyle,
+        Paragraph,
+        Spacer,
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
     sot = datetime.now()
     data_fundit_db = df_raw["Data"].max().strftime("%d/%m/%Y")
@@ -842,67 +853,9 @@ elif page == "Planifikimi" and df_raw is not None:
         + 1,
     )
 
-    # --- AGREGIMI I PLANIT ---
-    gp = (
-        dff.groupby(["ForcaShitese", "Klienti", "kat", "KodiArt", "Artikulli"])
-        .agg({"kg": "sum", "Vlera_Historike": "sum"})
-        .reset_index()
-    )
-
-    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
-    gp = gp.merge(last_prices, on="KodiArt", how="left")
-
-    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
-    gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
-        gp["Cmimi_Mes_Periudhes"]
-    )
-
-    # --- LOGJIKA SHTESË PËR MATRICËN ZYRTARE DHE PDF ---
-    kolona_kodi_agj_sql = next(
-        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
-    )
-    if not kolona_kodi_agj_sql:
-        kolona_kodi_agj_sql = next(
-            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
-            "KodiForcashitese",
-        )
-    if kolona_kodi_agj_sql not in dff.columns:
-        dff[kolona_kodi_agj_sql] = "agj000"
-
-    kolona_rajoni_sql = next(
-        (
-            c
-            for c in dff.columns
-            if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()
-        ),
-        "KodZona",
-    )
-    if kolona_rajoni_sql not in dff.columns:
-        dff[kolona_rajoni_sql] = "Rajoni"
-
-    gp_detajuar_pdf = (
-        dff.groupby(
-            [
-                "ForcaShitese",
-                kolona_kodi_agj_sql,
-                kolona_rajoni_sql,
-                "Klienti",
-                "kat",
-                "KodiArt",
-                "Artikulli",
-            ]
-        )
-        .agg({"kg": "sum", "Vlera_Historike": "sum"})
-        .reset_index()
-    )
-    gp_detajuar_pdf["Cmimi_Mes_Periudhes"] = gp_detajuar_pdf[
-        "Vlera_Historike"
-    ] / gp_detajuar_pdf["kg"].replace(0, 1)
-    gp_detajuar_pdf = gp_detajuar_pdf.merge(last_prices, on="KodiArt", how="left")
-    gp_detajuar_pdf["Plani_KG"] = (gp_detajuar_pdf["kg"] / n_months) * (
-        1 + rritja / 100
-    )
-
+    # =========================================================
+    # 🆕 KLASIFIKIMI UNIFORM I NËN-KATEGORIVE ZYRTARE
+    # =========================================================
     nen_kat_renditja = [
         "MATIK1",
         "MATIK2",
@@ -962,8 +915,69 @@ elif page == "Planifikimi" and df_raw is not None:
             return "SET"
         return "ETJ"
 
-    gp_detajuar_pdf["NenKatZyrtare"] = gp_detajuar_pdf.apply(
-        gjej_nen_kategorine_zyrtare, axis=1
+    dff["NenKatZyrtare"] = dff.apply(gjej_nen_kategorine_zyrtare, axis=1)
+
+    # --- AGREGIMI I PLANIT (Përdor Kategoritë e Reja) ---
+    gp = (
+        dff.groupby(
+            ["ForcaShitese", "Klienti", "NenKatZyrtare", "KodiArt", "Artikulli"]
+        )
+        .agg({"kg": "sum", "Vlera_Historike": "sum"})
+        .reset_index()
+    )
+
+    gp["Cmimi_Mes_Periudhes"] = gp["Vlera_Historike"] / gp["kg"].replace(0, 1)
+    gp = gp.merge(last_prices, on="KodiArt", how="left")
+
+    gp["Plani_KG"] = (gp["kg"] / n_months) * (1 + rritja / 100)
+    gp["Vlera_Planifikuar"] = gp["Plani_KG"] * gp["Cmimi_Fundit_Artikulli"].fillna(
+        gp["Cmimi_Mes_Periudhes"]
+    )
+
+    # --- LOGJIKA SHTESË PËR MATRICËN ZYRTARE DHE PDF ---
+    kolona_kodi_agj_sql = next(
+        (c for c in dff.columns if "KODI" in c.upper() and "FORCA" in c.upper()), None
+    )
+    if not kolona_kodi_agj_sql:
+        kolona_kodi_agj_sql = next(
+            (c for c in dff.columns if "KODI" in c.upper() and "AGJ" in c.upper()),
+            "KodiForcashitese",
+        )
+    if kolona_kodi_agj_sql not in dff.columns:
+        dff[kolona_kodi_agj_sql] = "agj000"
+
+    kolona_rajoni_sql = next(
+        (
+            c
+            for c in dff.columns
+            if "ZONA" in c.upper() or "RAJON" in c.upper() or "KODZONA" in c.upper()
+        ),
+        "KodZona",
+    )
+    if kolona_rajoni_sql not in dff.columns:
+        dff[kolona_rajoni_sql] = "Rajoni"
+
+    gp_detajuar_pdf = (
+        dff.groupby(
+            [
+                "ForcaShitese",
+                kolona_kodi_agj_sql,
+                kolona_rajoni_sql,
+                "Klienti",
+                "NenKatZyrtare",
+                "KodiArt",
+                "Artikulli",
+            ]
+        )
+        .agg({"kg": "sum", "Vlera_Historike": "sum"})
+        .reset_index()
+    )
+    gp_detajuar_pdf["Cmimi_Mes_Periudhes"] = gp_detajuar_pdf[
+        "Vlera_Historike"
+    ] / gp_detajuar_pdf["kg"].replace(0, 1)
+    gp_detajuar_pdf = gp_detajuar_pdf.merge(last_prices, on="KodiArt", how="left")
+    gp_detajuar_pdf["Plani_KG"] = (gp_detajuar_pdf["kg"] / n_months) * (
+        1 + rritja / 100
     )
 
     # --- TITULLI DINAMIK DHE METRICS ---
@@ -971,7 +985,7 @@ elif page == "Planifikimi" and df_raw is not None:
     st.markdown(f"### 👤 Agjenti Aktual: **{agj_sel}**")
     st.info(f"Update i fundit: **{data_fundit_db}** | Grupi: **{grup_sel}**")
     # ----------------------------------------------------------------------
-    # ℹ️ DOKUMENTIMI I DETAJUAR (I rishkruar pa gabime sintakse)
+    # ℹ️ DOKUMENTIMI I DETAJUAR
     # ----------------------------------------------------------------------
     with st.popover("ℹ️ Dokumentimi i Detajuar: Si funksionon Moduli?"):
 
@@ -1002,7 +1016,7 @@ elif page == "Planifikimi" and df_raw is not None:
         * **Formula:**
         """)
 
-        # Formula shfaqet me r"..." që të mos ketë konflikt me karakteret \ n ose \ t
+        # Formula shfaqet me r"..."
         st.latex(
             r"\text{Plani KG} = \left( \frac{\text{Sasia Totale Historike}}{n_{months}} \right) \times \left(1 + \frac{\text{rritja}}{100}\right)"
         )
@@ -1064,7 +1078,7 @@ elif page == "Planifikimi" and df_raw is not None:
             gp[
                 [
                     "Klienti",
-                    "kat",
+                    "NenKatZyrtare",
                     "Artikulli",
                     "Cmimi_Mes_Periudhes",
                     "Cmimi_Fundit_Artikulli",
@@ -1088,7 +1102,7 @@ elif page == "Planifikimi" and df_raw is not None:
 
         with t1:
             df_k = (
-                gp.groupby("kat")
+                gp.groupby("NenKatZyrtare")
                 .agg(
                     {
                         "Plani_KG": "sum",
@@ -1104,7 +1118,7 @@ elif page == "Planifikimi" and df_raw is not None:
             ].replace(0, 1)
             st.dataframe(
                 df_k[
-                    ["kat", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]
+                    ["NenKatZyrtare", "Cmimi_Mes_Grup", "Plani_KG", "Vlera_Planifikuar"]
                 ].sort_values("Plani_KG", ascending=False),
                 width="stretch",
                 hide_index=True,
@@ -1252,7 +1266,13 @@ elif page == "Planifikimi" and df_raw is not None:
     st.divider()
     st.subheader("📂 Shkarko Planet e Transpozuara në PDF (Formati Adnan Elezi)")
 
-    # reportlab imports are managed at module load time
+    # Pjesa e PDF mbetet e pandryshuar sepse përdor NenKatZyrtare saktë
+    try:
+        import reportlab
+
+        reportlab_available = True
+    except ImportError:
+        reportlab_available = False
 
     if not reportlab_available:
         st.error(
@@ -1503,13 +1523,13 @@ elif page == "Planifikimi" and df_raw is not None:
             html += f"<h3>Agjenti: {agjent}</h3>"
             agj_df = (
                 dataframe[dataframe["ForcaShitese"] == agjent]
-                .groupby("kat")
+                .groupby("NenKatZyrtare")
                 .agg({"Plani_KG": "sum", "Vlera_Planifikuar": "sum"})
                 .reset_index()
             )
             html += "<table><thead><tr><th>Kategoria</th><th class='num'>Plani (KG)</th><th class='num'>Vlera</th></tr></thead><tbody>"
             for _, row in agj_df.iterrows():
-                html += f"<tr><td>{row['kat']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
+                html += f"<tr><td>{row['NenKatZyrtare']}</td><td class='num'>{row['Plani_KG']:,.0f}</td><td class='num'>{row['Vlera_Planifikuar']:,.0f} L</td></tr>"
             html += "</tbody></table><br>"
         html += "</body></html>"
         return html
